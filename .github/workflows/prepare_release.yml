@@ -93,7 +93,7 @@ jobs:
           import os, sys, urllib.error, urllib.request
 
           new = os.environ["NEW"]
-          url = f"https://pypi.org/pypi/em-database/{new}/json"
+          url = f"https://pypi.org/pypi/emdatabase/{new}/json"
           try:
               urllib.request.urlopen(url, timeout=30)
           except urllib.error.HTTPError as error:
@@ -105,7 +105,7 @@ jobs:
               print(f"::warning::could not reach PyPI ({error.reason}), skipping the check")
               sys.exit(0)
           sys.exit(
-              f"em-database {new} is already on PyPI. A version can only ever be "
+              f"emdatabase {new} is already on PyPI. A version can only ever be "
               f"uploaded once, so pick a higher one."
           )
           PY

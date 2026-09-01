@@ -25,14 +25,14 @@ jobs:
 
       - name: Parse issue and write YAML
         run: |
-          python .github/scripts/issue_to_yaml.py issue_body.txt em_database/datasets/
+          python .github/scripts/issue_to_yaml.py issue_body.txt emdatabase/index/
 
       - name: Commit new YAML
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b add-dataset-${{ github.run_id }}
-          git add em_database/datasets/*.yaml
+          git add emdatabase/index/*.yaml
           git commit -m "Add new dataset YAML from issue"
 
       - name: Create Pull Request

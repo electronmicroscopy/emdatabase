@@ -3,8 +3,6 @@ description: Add a new dataset to the EM Database
 title: "[New Dataset]: "
 labels:
   - "new_dataset"
-assignees:
-  - CSSFrancis
 body:
   - type: markdown
     attributes:

@@ -1,0 +1,21 @@
+# $schema: ./json-schema.json
+SPEDAg:
+  description: A 4D STEM dataset of polycrystalline Ag including twins and grain boundaries.
+  source: https://zenodo.org/records/15490547/files
+  checksum: md5:8556346543fc19f0ef9bdc0f4a6619b5
+  file: SPED-Ag.zspy
+  size_bytes: 213985149
+  detector_manufacturer: Quantum Detectors
+  detector: Merlin
+  microscope_vendor: JEOL
+  voltage: 200 kV
+  license: CC-BY-4.0
+  technique: 4D-STEM
+  tags:
+    - Orientation Mapping
+    - Grain Boundaries
+    - Twins
+    - Precession
+  authors:
+    Tina Bergh:
+      affiliation: Norwegian University of Science and Technology

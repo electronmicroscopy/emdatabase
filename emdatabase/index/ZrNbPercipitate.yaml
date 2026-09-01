@@ -1,0 +1,20 @@
+# $schema: ./json-schema.json
+ZrNbPrecipitate:
+  description: A 4D STEM dataset of ZrNb precipitate in ZrNb alloy.
+  source: https://zenodo.org/records/15490547/files
+  checksum: md5:7012a2bdf564f4fb25299af05412723f
+  file: ZrNbPercipitate.zspy
+  size_bytes: 394213247
+  detector_manufacturer: Direct Electron
+  detector: DE-16
+  microscope_vendor: Thermo Fisher Scientific
+  microscope_model: Gen 1 Titan
+  voltage: 200 kV
+  license: CC-BY-4.0
+  technique: 4D-STEM
+  tags:
+    - Strain Mapping
+  authors:
+    Chenyu Zhang:
+      affiliation: University of Wisconsin, Madison
+

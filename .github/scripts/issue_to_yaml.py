@@ -1,7 +1,7 @@
 """Turn a filled-in "New Dataset" issue into a dataset YAML file.
 
 Run by ``.github/workflows/on_new_issue.yml``. The output is validated against
-``em_database/datasets/json-schema.json`` before it is written, so a malformed
+``emdatabase/index/json-schema.json`` before it is written, so a malformed
 issue fails here rather than in the pull request the workflow opens.
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from em_database.metadata import check_vendor, load_schema, load_vendors
+from emdatabase.metadata import check_vendor, load_schema, load_vendors
 
 FIELDS = {
     "Dataset Name": r"--Dataset Name--\s*(.*)",
@@ -57,7 +57,7 @@ def content_length(url):
     request = urllib.request.Request(
         url,
         method="HEAD",
-        headers={"User-Agent": "em_database (https://github.com/CSSFrancis/em_data)"},
+        headers={"User-Agent": "emdatabase (https://github.com/electronmicroscopy/emdatabase)"},
     )
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
@@ -125,6 +125,6 @@ if __name__ == "__main__":
 
     out_path = out_dir / f"{dataset_name}.yaml"
     with open(out_path, "w") as f:
-        f.write("# $schema: ../json-schema.json\n")
+        f.write("# $schema: ./json-schema.json\n")
         yaml.dump(document, f, sort_keys=False)
     print(f"wrote {out_path}")

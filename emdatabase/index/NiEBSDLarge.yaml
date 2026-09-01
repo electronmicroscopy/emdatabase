@@ -1,0 +1,17 @@
+# $schema: ./json-schema.json
+NiEBSDLarge:
+  description: 4125 EBSD patterns in a (55, 75) navigation shape of (60, 60) pixels from nickel,
+    acquired on a NORDIF UF-1100 detector
+  source: https://raw.githubusercontent.com/pyxem/kikuchipy-data/bcab8f7a4ffdb86a97f14e2327a4813d3156a85e/nickel_ebsd_large/
+  checksum: md5:51d6bc0f5ff23dcb0c1a8e1f4c52d4d4
+  file: patterns_v2.h5
+  size_bytes: 15368325
+  detector_manufacturer: NORDIF
+  detector: UF-1100
+  technique: EBSD
+  license: CC-BY-4.0
+  tags:
+    - Large Dataset
+  authors:
+    Håkon Wiik Ånes:
+      affiliation: Norwegian University of Science and Technology

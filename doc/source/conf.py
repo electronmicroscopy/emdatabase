@@ -6,8 +6,13 @@
 import sys
 from pathlib import Path
 
-# Import and run the build script
-from em_database._build_docs import (
+# Sphinx no longer puts the config directory on sys.path, and the script that
+# generates the app pages is a sibling of this file.
+sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from _build_docs import (  # noqa: E402
     generate_add_dataset_html,
     generate_all_data_html,
     generate_browser_html,
@@ -16,16 +21,13 @@ from em_database._build_docs import (
     parse_datasets,
 )
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "em_database"
+project = "emdatabase"
 copyright = "2026, Carter Francis"
 author = "Carter Francis"
-release = "0.4.0"
+release = "0.5.0.dev0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -78,7 +80,7 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/CSSFrancis/em_data",
+            "url": "https://github.com/electronmicroscopy/emdatabase",
             "icon": "fa-brands fa-github",
         },
     ],
@@ -98,7 +100,7 @@ def build_datasets_html(app, exception):
     """Generate datasets.html during Sphinx build"""
     if exception is not None:
         print(f"Build exception: {exception}")
-    datasets_path = Path(__file__).parent.parent.parent / "em_database" / "datasets"
+    datasets_path = Path(__file__).parent.parent.parent / "emdatabase" / "index"
     print(f"Looking for datasets at: {datasets_path.absolute()}")
     print(f"Path exists: {datasets_path.exists()}")
     if datasets_path.exists():
@@ -116,7 +118,7 @@ def build_datasets_html(app, exception):
     # Generated, self-contained Catppuccin "app" pages. Each is written into the
     # build output (overwriting the Sphinx-rendered page where names collide:
     # index.html, all_data.html, add_dataset.html) so the whole site looks like
-    # em_database.browse(). Each is guarded so a failure never kills the build.
+    # emdatabase.browse(). Each is guarded so a failure never kills the build.
     outdir = Path(app.outdir)
     pages = {
         "index.html": generate_landing_html,

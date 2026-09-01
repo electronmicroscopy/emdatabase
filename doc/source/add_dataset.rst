@@ -12,4 +12,4 @@ dataset's YAML file.
    ``build-finished`` in ``conf.py``); this text is a fallback that only shows if
    that generation step fails. You can also submit a dataset via the
    `new-dataset issue form
-   <https://github.com/CSSFrancis/em_data/issues/new?template=new_dataset.yaml>`_.
+   <https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml>`_.
