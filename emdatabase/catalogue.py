@@ -21,6 +21,10 @@ from emdatabase.metadata import DatasetMetadata
 # collection is built around first, then anything else alphabetically.
 TECHNIQUE_ORDER = ("4D-STEM", "EELS", "EDS", "EBSD", "STEM", "In-situ TEM", "Cryo-EM")
 
+# Model weights are grouped under one heading of their own rather than by
+# technique, and it goes after every technique.
+WEIGHTS_GROUP = "Model weights"
+
 
 def datasets() -> list[tuple[str, DownloadableDataset]]:
     """``(name, dataset)`` for every dataset ``emdatabase.data`` exposes.
@@ -97,6 +101,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
     user_path = next((p for p in found if _location(p) == "user"), None)
     row = {
         "name": name,
+        "kind": md.kind,
         "technique": _technique(md),
         "size": md.size,
         "downloaded": path is not None,
@@ -113,6 +118,10 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         "doi": md.doi or "",
         "source": md.source,
         "file": md.file,
+        "version": md.version or "",
+        "model_class": md.model.class_ if md.model else "",
+        "model_framework": md.model.framework if md.model else "",
+        "model_quantem": (md.model.quantem or "") if md.model else "",
     }
     # One lowercased blob the search box matches against, so a query like
     # "Carter Francis" (an author) or "Direct Electron" (an affiliation) finds
@@ -130,32 +139,47 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         " ".join(row["tags"]),
         " ".join(row["authors"]),
         " ".join(a.affiliation for a in md.authors.values()),
+        row["model_class"],
+        row["model_framework"],
     ]
     row["search"] = " ".join(str(s) for s in searchable if s).lower()
     return row
 
 
 def _order(technique: str):
+    if technique == WEIGHTS_GROUP:
+        return (2, "")
     try:
         return (0, TECHNIQUE_ORDER.index(technique))
     except ValueError:
         return (1, technique.lower())
 
 
-def catalogue() -> dict:
+def _group(row: dict) -> str:
+    return WEIGHTS_GROUP if row["kind"] == "weights" else row["technique"]
+
+
+def catalogue(kind: str | None = None) -> dict:
     """The whole browser payload, grouped by technique.
 
     ``{"data_dir", "stores", "groups": [{"technique", "items"}], "n_downloaded",
     "n_total"}`` - one group per technique in :data:`TECHNIQUE_ORDER`, then any
-    others alphabetically.
+    others alphabetically, then :data:`WEIGHTS_GROUP` holding every weights
+    entry whatever its technique. ``kind`` limits the payload to one kind of
+    entry; with no ``kind`` it holds both.
+
+    The group key is ``"technique"`` for the weights group too, so a UI can draw
+    every group the same way and does not need to know weights exist.
     """
     from emdatabase import config
 
     items = [entry(name, ds) for name, ds in datasets()]
-    by_tech: dict[str, list[dict]] = {}
+    if kind is not None:
+        items = [it for it in items if it["kind"] == kind]
+    by_group: dict[str, list[dict]] = {}
     for it in items:
-        by_tech.setdefault(it["technique"], []).append(it)
-    groups = [{"technique": t, "items": by_tech[t]} for t in sorted(by_tech, key=_order)]
+        by_group.setdefault(_group(it), []).append(it)
+    groups = [{"technique": g, "items": by_group[g]} for g in sorted(by_group, key=_order)]
     return {
         "data_dir": str(config.data_dir()),
         "stores": {name: str(path) for name, path in config.stores().items()},

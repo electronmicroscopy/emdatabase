@@ -264,7 +264,9 @@ function render({ model, el: root }) {
     const active = activeNames().has(item.name);
 
     const head = el("div", "emdb-d-head");
-    head.appendChild(el("div", "emdb-d-title", esc(item.name)));
+    const title = el("div", "emdb-d-title", esc(item.name));
+    if (item.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
+    head.appendChild(title);
     const sub = [item.technique, item.size, item.shape].filter(Boolean).join("  ·  ");
     head.appendChild(el("div", "emdb-d-sub", esc(sub)));
     detailsEl.appendChild(head);
@@ -310,6 +312,10 @@ function render({ model, el: root }) {
       ["License", item.license],
       ["File", item.file],
       ["DOI", item.doi],
+      ["Version", item.version],
+      ["Model", item.model_class],
+      ["Framework", item.model_framework],
+      ["quantem", item.model_quantem],
     ];
     const meta = el("div", "emdb-d-meta");
     for (const [key, value] of pairs) {

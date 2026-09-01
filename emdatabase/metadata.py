@@ -9,13 +9,17 @@ parsed YAML mapping into the record and refuses anything the schema would.
 This module also owns the small amount of shared knowledge about where the
 dataset files live - :func:`dataset_files`, :func:`load_schema`,
 :func:`load_vendors` - so the loader, the stub generator, the docs form and the
-tests all read the same directory the same way.
+tests all read the same directory the same way, and the one check a candidate
+file has to pass - :func:`validate_document`, :func:`validate_file` - so the
+test suite, the issue-form workflow and ``emdatabase.new_dataset`` accept and
+reject exactly the same files.
 """
 
 from __future__ import annotations
 
 import difflib
 import textwrap
+import warnings
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -26,9 +30,10 @@ import yaml
 INDEX_DIR = Path(__file__).parent / "index"
 SCHEMA_PATH = INDEX_DIR / "json-schema.json"
 VENDORS_PATH = INDEX_DIR / "vendors.yaml"
+TEMPLATE_PATH = INDEX_DIR / "TEMPLATE.yaml"
 
 # Files in index/ that are not dataset collections.
-NON_DATASET_FILES = frozenset({VENDORS_PATH.name})
+NON_DATASET_FILES = frozenset({VENDORS_PATH.name, TEMPLATE_PATH.name})
 
 REQUIRED_FIELDS = ("description", "source", "file")
 
@@ -84,6 +89,61 @@ def _fold(value: str) -> str:
     return "".join(value.split()).casefold()
 
 
+def validate_document(
+    document: Mapping[str, Any], *, origin: Path | str | None = None
+) -> list[str]:
+    """Everything wrong with a parsed dataset YAML document, as readable lines.
+
+    An empty list means the document is valid. The schema is the first check
+    and the vendor names are the second: a name close to a known one is a
+    misspelling and is listed as a problem, while one that is nothing like any
+    of them is a new vendor and goes out through :mod:`warnings` instead.
+
+    Nothing is printed and nothing is raised for a bad document - the caller
+    decides whether a problem is a failed test, a comment on an issue or a
+    non-zero exit.
+    """
+    try:
+        from jsonschema.validators import validator_for
+    except ImportError as error:  # pragma: no cover - depends on the environment
+        raise ImportError(
+            "validating a dataset YAML needs jsonschema: pip install emdatabase[dev]"
+        ) from error
+
+    schema = load_schema()
+    validator = validator_for(schema)(schema)
+    problems = [
+        f"{_where(origin)}: {'.'.join(str(p) for p in error.absolute_path) or 'document'}: "
+        f"{error.message}"
+        for error in sorted(validator.iter_errors(document), key=lambda e: list(e.absolute_path))
+    ]
+
+    vendors = load_vendors()
+    for name, spec in document.items():
+        if not isinstance(spec, Mapping):
+            continue
+        for name_field, known in (
+            ("detector_manufacturer", vendors["detector_manufacturer"]),
+            ("microscope_vendor", vendors["microscope_vendor"]),
+        ):
+            result = check_vendor(spec.get(name_field) or "", known)
+            if result is None:
+                continue
+            level, message = result
+            line = f"{_where(origin)}: {name}: {name_field}: {message}"
+            if level == "error":
+                problems.append(line)
+            else:
+                warnings.warn(line, stacklevel=2)
+    return problems
+
+
+def validate_file(path: Path | str) -> list[str]:
+    """Everything wrong with a dataset YAML file; empty if there is nothing."""
+    path = Path(path)
+    return validate_document(yaml.safe_load(path.read_text(encoding="utf-8")), origin=path)
+
+
 _SIZE_UNITS = ("B", "kB", "MB", "GB", "TB", "PB")
 
 
@@ -131,6 +191,40 @@ class Author:
         return cls(affiliation=str(spec["affiliation"]), orcid=spec.get("orcid"))
 
 
+@dataclass(frozen=True)
+class ModelInfo:
+    """The model a ``kind: weights`` entry is a checkpoint for.
+
+    ``class_`` carries the YAML's ``class`` key, which is a Python keyword and
+    so cannot be a field name; :meth:`from_spec` is where the two are tied
+    together.
+    """
+
+    class_: str
+    framework: str
+    quantem: str | None = None
+
+    @classmethod
+    def from_spec(cls, spec: Mapping[str, Any], origin: Path | str | None = None) -> ModelInfo:
+        allowed = ("class", "framework", "quantem")
+        unknown = sorted(set(spec) - set(allowed))
+        if unknown:
+            raise TypeError(
+                f"{_where(origin)}: model has unknown field(s) "
+                f"{', '.join(repr(k) for k in unknown)}; allowed: {', '.join(allowed)}"
+            )
+        missing = [name for name in ("class", "framework") if not spec.get(name)]
+        if missing:
+            raise TypeError(
+                f"{_where(origin)}: model is missing {', '.join(repr(k) for k in missing)}"
+            )
+        return cls(
+            class_=str(spec["class"]),
+            framework=str(spec["framework"]),
+            quantem=spec.get("quantem"),
+        )
+
+
 @dataclass(frozen=True, repr=False)
 class DatasetMetadata:
     """Everything a dataset YAML entry declares.
@@ -160,6 +254,9 @@ class DatasetMetadata:
     doi: str | None = None
     tags: tuple[str, ...] = ()
     authors: Mapping[str, Author] = field(default_factory=dict)
+    kind: str = "dataset"
+    version: str | None = None
+    model: ModelInfo | None = None
 
     @classmethod
     def from_spec(
@@ -192,6 +289,11 @@ class DatasetMetadata:
             str(name): Author.from_spec(str(name), entry or {}, origin)
             for name, entry in (values.get("authors") or {}).items()
         }
+        values["kind"] = str(values.get("kind") or "dataset")
+        version = values.get("version")
+        values["version"] = None if version is None else str(version)
+        model = values.get("model")
+        values["model"] = None if model is None else ModelInfo.from_spec(model, origin)
         return cls(**values)
 
     @property
@@ -219,10 +321,14 @@ class DatasetMetadata:
             value = getattr(self, entry.name)
             if not value:
                 continue
+            if entry.name == "kind" and value == "dataset":
+                continue  # the default, and true of all but the weights entries
             if entry.name == "authors":
                 value = "; ".join(f"{n} ({a.affiliation})" for n, a in value.items())
             elif entry.name == "tags":
                 value = ", ".join(value)
+            elif entry.name == "model":
+                value = " · ".join(p for p in (value.class_, value.framework, value.quantem) if p)
             rows.append((entry.name, str(value)))
         if self.size_bytes is not None:
             rows.append(("size_bytes", f"{self.size_bytes} ({self.size})"))

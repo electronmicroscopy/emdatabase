@@ -6,7 +6,9 @@
   Examples <examples/index.rst>
   API <reference/index>
   All Data <all_data.rst>
+  Model Weights <weights.rst>
   Add Dataset <add_dataset.rst>
+  Contributing <contributing.rst>
 
 EM-Database
 ===========

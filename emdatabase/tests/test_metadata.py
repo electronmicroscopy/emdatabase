@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from emdatabase.metadata import (
+    TEMPLATE_PATH,
     Author,
     DatasetMetadata,
     check_vendor,
@@ -19,9 +20,11 @@ from emdatabase.metadata import (
     format_size,
     load_schema,
     load_vendors,
+    validate_document,
+    validate_file,
 )
 
-jsonschema = pytest.importorskip("jsonschema")
+pytest.importorskip("jsonschema")
 
 DATASET_FILES = dataset_files()
 SCHEMA = load_schema()
@@ -46,8 +49,14 @@ def test_datasets_are_found():
 
 
 @pytest.mark.parametrize("path", DATASET_FILES, ids=lambda p: p.name)
-def test_yaml_matches_schema(path):
-    jsonschema.validate(yaml.safe_load(path.read_text(encoding="utf-8")), SCHEMA)
+def test_yaml_is_valid(path):
+    assert validate_file(path) == []
+
+
+def test_template_is_valid():
+    """The template is not a dataset, so nothing else here looks at it; a
+    placeholder that does not validate is a contributor's first impression."""
+    assert validate_file(TEMPLATE_PATH) == []
 
 
 @pytest.mark.parametrize("name", [name for _, name, _ in ENTRIES])
@@ -138,6 +147,23 @@ def test_declared_vendors_are_spelled_correctly(path, name, spec):
             continue
         level, message = result
         assert level != "error", f"{path.name}: {name}: {field}: {message}"
+
+
+def test_validate_document_names_the_file_and_the_field():
+    problems = validate_document({"X": {"description": "d", "file": "f"}}, origin="somewhere.yaml")
+    assert len(problems) == 1
+    assert problems[0].startswith("somewhere.yaml: X: ")
+    assert "'source' is a required property" in problems[0]
+
+
+def test_validate_document_reports_a_misspelled_vendor_and_warns_about_a_new_one():
+    entry = {"description": "d", "source": "https://example.com/f", "file": "f"}
+    with pytest.warns(UserWarning, match="JOEL"):
+        assert validate_document({"X": {**entry, "microscope_vendor": "JOEL"}}) == []
+    problems = validate_document({"X": {**entry, "microscope_vendor": "Hitachy"}})
+    assert problems == [
+        "dataset entry: X: microscope_vendor: 'Hitachy' looks like a misspelling of 'Hitachi'"
+    ]
 
 
 def test_check_vendor_tells_a_typo_from_a_new_vendor():

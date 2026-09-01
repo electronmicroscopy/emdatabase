@@ -128,4 +128,7 @@ the server on every run. `emdatabase/index/vendors.yaml` lists the microscope
 vendors and detector manufacturers already in use - a new one is fine, but a name close
 to one already on the list fails CI as a misspelling.
 
-Open an issue with the new dataset template, or add the YAML file directly.
+Open an issue with the [new dataset template](https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml),
+or run `python -m emdatabase.new_dataset <url>`, which fetches the checksum and size,
+prompts for the rest and writes the file for you to open a pull request with.  See
+[CONTRIBUTING.md](CONTRIBUTING.md).

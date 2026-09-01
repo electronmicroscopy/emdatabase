@@ -1,19 +1,19 @@
 """Turn a filled-in "New Dataset" issue into a dataset YAML file.
 
-Run by ``.github/workflows/on_new_issue.yml``. The output is validated against
-``emdatabase/index/json-schema.json`` before it is written, so a malformed
-issue fails here rather than in the pull request the workflow opens.
+Run by ``.github/workflows/on_new_issue.yml``. The output goes through
+``emdatabase.metadata.validate_document`` before it is written - the same check
+the test suite and ``emdatabase.new_dataset`` run - so a malformed issue fails
+here rather than in the pull request the workflow opens.
 """
 
 import re
 import sys
-import urllib.request
 from pathlib import Path
 
-import jsonschema
 import yaml
 
-from emdatabase.metadata import check_vendor, load_schema, load_vendors
+from emdatabase.metadata import validate_document
+from emdatabase.new_dataset import content_length
 
 FIELDS = {
     "Dataset Name": r"--Dataset Name--\s*(.*)",
@@ -52,21 +52,6 @@ def parse_issue_body(text):
     return data
 
 
-def content_length(url):
-    """The file's size in bytes, or None if the server will not say."""
-    request = urllib.request.Request(
-        url,
-        method="HEAD",
-        headers={"User-Agent": "emdatabase (https://github.com/electronmicroscopy/emdatabase)"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            length = response.headers.get("Content-Length")
-        return int(length) if length else None
-    except Exception:
-        return None
-
-
 def build_yaml(data):
     """``(document, dataset_name)`` for a parsed issue."""
     name = re.sub(r"\W+", "", data["Dataset Name"])
@@ -99,31 +84,16 @@ def build_yaml(data):
     return {name: {k: v for k, v in entry.items() if v not in (None, "", [])}}, name
 
 
-def report_vendors(entry):
-    """Print vendor warnings; exit on a name that is a likely misspelling."""
-    vendors = load_vendors()
-    failed = False
-    for field, known in (
-        ("detector_manufacturer", vendors["detector_manufacturer"]),
-        ("microscope_vendor", vendors["microscope_vendor"]),
-    ):
-        result = check_vendor(entry.get(field, ""), known)
-        if result is None:
-            continue
-        level, message = result
-        print(f"{level}: {field}: {message}")
-        failed = failed or level == "error"
-    if failed:
-        sys.exit("fix the vendor spelling in the issue and reopen it")
-
-
 if __name__ == "__main__":
     issue_file, out_dir = sys.argv[1], Path(sys.argv[2])
     document, dataset_name = build_yaml(parse_issue_body(Path(issue_file).read_text()))
-    jsonschema.validate(document, load_schema())
-    report_vendors(document[dataset_name])
-
     out_path = out_dir / f"{dataset_name}.yaml"
+    problems = validate_document(document, origin=out_path)
+    for problem in problems:
+        print(problem)
+    if problems:
+        sys.exit("fix the issue and reopen it")
+
     with open(out_path, "w") as f:
         f.write("# $schema: ./json-schema.json\n")
         yaml.dump(document, f, sort_keys=False)

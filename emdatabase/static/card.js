@@ -117,7 +117,9 @@ function render({ model, el: root }) {
     downloadingNow = downloading;
     card.innerHTML = "";
 
-    card.appendChild(el("div", "emdb-d-title", esc(it.name || "")));
+    const title = el("div", "emdb-d-title", esc(it.name || ""));
+    if (it.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
+    card.appendChild(title);
     const sub = [it.technique, it.size, it.shape].filter(Boolean).join("  ·  ");
     card.appendChild(el("div", "emdb-d-sub", esc(sub)));
 
@@ -169,6 +171,8 @@ function render({ model, el: root }) {
       ["Detector", it.detector], ["Microscope", it.microscope], ["Voltage", it.voltage],
       ["Tags", (it.tags || []).join(", ")], ["Authors", (it.authors || []).join(", ")],
       ["License", it.license], ["File", it.file], ["DOI", it.doi],
+      ["Version", it.version], ["Model", it.model_class],
+      ["Framework", it.model_framework], ["quantem", it.model_quantem],
     ];
     const meta = el("div", "emdb-d-meta");
     for (const [key, value] of pairs) {

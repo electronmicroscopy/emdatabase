@@ -81,6 +81,36 @@
             }
           },
           "additionalProperties": false
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "dataset",
+            "weights"
+          ],
+          "default": "dataset"
+        },
+        "version": {
+          "type": "string"
+        },
+        "model": {
+          "type": "object",
+          "properties": {
+            "class": {
+              "type": "string"
+            },
+            "framework": {
+              "type": "string"
+            },
+            "quantem": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "class",
+            "framework"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -88,7 +118,29 @@
         "source",
         "file"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "weights"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "model"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "model"
+          ]
+        }
+      }
     }
   },
   "additionalProperties": false

@@ -1,7 +1,7 @@
 ### Example datasets ###
 from emdatabase import config, data
 from emdatabase.downloadable_dataset import DownloadableDataset
-from emdatabase.query import filter, list_datasets, search  # noqa: A004
+from emdatabase.query import filter, list_datasets, list_weights, search  # noqa: A004
 
 __all__ = []
 
@@ -52,6 +52,7 @@ def browse(**kwargs):
 
 __all__ = [
     "list_datasets",
+    "list_weights",
     "search",
     "filter",
     "get_data_dir",

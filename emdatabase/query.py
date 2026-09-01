@@ -28,6 +28,8 @@ from emdatabase.downloadable_dataset import DownloadableDataset
 #: ``downloaded`` and ``location`` describe what is on this machine instead -
 #: ``location`` being the name of the store a copy was found in, or ``"user"``.
 FILTER_FIELDS = (
+    "kind",
+    "version",
     "technique",
     "detector",
     "detector_manufacturer",
@@ -44,8 +46,12 @@ FILTER_FIELDS = (
 )
 
 
-def list_datasets() -> list[DownloadableDataset]:
-    """Every dataset in the index, sorted by name.
+def list_datasets(kind: str | None = None) -> list[DownloadableDataset]:
+    """Every entry in the index, sorted by name.
+
+    The index holds model weights as well as data; with no ``kind`` this
+    returns both, which is what it has always returned. Pass ``kind="dataset"``
+    or ``kind="weights"`` for one or the other.
 
     Not ``datasets()``: the YAML index used to be a ``datasets`` subpackage,
     and the import machinery overwrites a same-named attribute on the parent the
@@ -57,7 +63,12 @@ def list_datasets() -> list[DownloadableDataset]:
     >>> len(emdatabase.list_datasets()) > 0
     True
     """
-    return [ds for _, ds in catalogue.datasets()]
+    return [ds for _, ds in catalogue.datasets() if kind in (None, ds.metadata.kind)]
+
+
+def list_weights() -> list[DownloadableDataset]:
+    """Every model-weights entry in the index, sorted by name."""
+    return list_datasets(kind="weights")
 
 
 def search(query: str) -> list[DownloadableDataset]:
@@ -65,7 +76,8 @@ def search(query: str) -> list[DownloadableDataset]:
 
     The text searched is everything the widget searches: name, description,
     technique, detector, microscope, voltage, licence, DOI, file name, tags,
-    authors and their affiliations. Matching is case-insensitive, and terms may
+    authors and their affiliations, and for a weights entry the model class and
+    framework. Matching is case-insensitive, and terms may
     match different fields - ``"jeol eels"`` finds EELS datasets taken on a
     JEOL. An empty query returns everything.
     """
@@ -90,6 +102,7 @@ def filter(**criteria: Any) -> list[DownloadableDataset]:  # noqa: A001
         emdatabase.filter(technique="4D-STEM")
         emdatabase.filter(technique="4D-STEM", tags="Strain")
         emdatabase.filter(microscope_vendor=["JEOL", "Hitachi"])
+        emdatabase.filter(kind="weights")
         emdatabase.filter(downloaded=True)
         emdatabase.filter(location="group")     # found in the "group" store
 

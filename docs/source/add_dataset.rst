@@ -4,7 +4,9 @@ Add Dataset
 ===========
 
 A submission form that opens a pre-filled GitHub pull request adding your
-dataset's YAML file.
+dataset's YAML file. ``python -m emdatabase.new_dataset <url>`` does the same
+thing from a terminal, and fills in the checksum and size for you; see
+:doc:`Contributing a Dataset <contributing>`.
 
 .. note::
 

@@ -30,6 +30,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
 
+[project.scripts]
+emdatabase-new-dataset = "emdatabase.new_dataset:main"
+
 [project.urls]
 Homepage = "https://electronmicroscopy.github.io/emdatabase/"
 Documentation = "https://electronmicroscopy.github.io/emdatabase/datasets.html"

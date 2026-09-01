@@ -395,6 +395,9 @@ _DOCS_BROWSER_JS = r"""
   var root = document.getElementById("root");
   root.classList.add("emdb");
   var TAB_LABEL = { "In-situ TEM": "In-situ", "Cryo-EM": "Cryo" };
+  // What this page is browsing; baked in next to DATA so one script serves the
+  // dataset pages and the weights page.
+  var WHAT = (typeof LABEL !== "undefined" && LABEL) ? LABEL : "Datasets";
   var state = { tab: "All", search: "", selected: null, hovered: null };
 
   function esc(v) {
@@ -451,11 +454,13 @@ _DOCS_BROWSER_JS = r"""
   function drawHeader() {
     header.innerHTML = "";
     var top = el("div", "emdb-header-top");
-    top.appendChild(el("div", "emdb-brand", '<span class="emdb-diamond">◆</span> Datasets'));
-    top.appendChild(el("div", "emdb-count", DATA.n_total + " datasets"));
+    top.appendChild(el("div", "emdb-brand",
+      '<span class="emdb-diamond">◆</span> ' + esc(WHAT)));
+    top.appendChild(el("div", "emdb-count", DATA.n_total + " " + WHAT.toLowerCase()));
     header.appendChild(top);
     var search = el("input", "emdb-search");
-    search.type = "text"; search.placeholder = "Search datasets…"; search.value = state.search;
+    search.type = "text"; search.value = state.search;
+    search.placeholder = "Search " + WHAT.toLowerCase() + "…";
     search.addEventListener("input", function () { state.search = search.value; drawList(); });
     header.appendChild(search);
   }
@@ -479,7 +484,8 @@ _DOCS_BROWSER_JS = r"""
       if (state.tab === "All") listEl.appendChild(el("div", "emdb-group-head", esc(g.technique)));
       items.forEach(function (it) { listEl.appendChild(drawRow(it)); shown++; });
     });
-    if (!shown) listEl.appendChild(el("div", "emdb-empty", "No datasets match."));
+    if (!shown) listEl.appendChild(
+      el("div", "emdb-empty", "No " + WHAT.toLowerCase() + " match."));
     if (!state.selected && allItems().length) state.selected = allItems()[0].name;
     drawDetails();
   }
@@ -504,14 +510,18 @@ _DOCS_BROWSER_JS = r"""
   function drawDetails() {
     var it = findItem(state.hovered || state.selected);
     detailsEl.innerHTML = "";
-    if (!it) { detailsEl.appendChild(el("div", "emdb-details-empty", "Hover or select a dataset.")); return; }
-    detailsEl.appendChild(el("div", "emdb-d-title", esc(it.name)));
+    if (!it) { detailsEl.appendChild(el("div", "emdb-details-empty", "Hover or select an entry.")); return; }
+    var title = el("div", "emdb-d-title", esc(it.name));
+    if (it.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
+    detailsEl.appendChild(title);
     detailsEl.appendChild(el("div", "emdb-d-sub",
       esc([it.technique, it.size, it.shape].filter(Boolean).join("  ·  "))));
     if (it.description) detailsEl.appendChild(el("p", "emdb-d-desc", esc(it.description)));
     var pairs = [["Detector", it.detector], ["Microscope", it.microscope], ["Voltage", it.voltage],
       ["Tags", (it.tags || []).join(", ")], ["Authors", (it.authors || []).join(", ")],
-      ["License", it.license], ["DOI", it.doi]];
+      ["License", it.license], ["DOI", it.doi], ["Version", it.version],
+      ["Model", it.model_class], ["Framework", it.model_framework],
+      ["quantem", it.model_quantem]];
     var meta = el("div", "emdb-d-meta");
     pairs.forEach(function (kv) {
       if (!kv[1]) return;
@@ -522,7 +532,10 @@ _DOCS_BROWSER_JS = r"""
     });
     detailsEl.appendChild(meta);
     detailsEl.appendChild(el("div", "emdb-load-label", "Load"));
-    var snippet = toSnake(it.name) + " = emdatabase.data." + it.name + "()";
+    var snippet = it.kind === "weights"
+      ? "import torch\nfrom emdatabase import data\n\npath = data." + it.name
+        + "().download()\ncheckpoint = torch.load(path, weights_only=True)"
+      : toSnake(it.name) + " = emdatabase.data." + it.name + "()";
     detailsEl.appendChild(copyRow(snippet, snippet));
     if (it.source && it.file) {
       var wrap = el("div", "emdb-dl-link");
@@ -731,6 +744,7 @@ _NAV_LINKS = (
     ("Examples", "examples/index.html"),
     ("API", "reference/index.html"),
     ("All Data", "all_data.html"),
+    ("Model Weights", "weights.html"),
     ("Add Dataset", "add_dataset.html"),
 )
 
@@ -771,28 +785,31 @@ def _app_page(
     )
 
 
-def _catalogue_payload():
+def _catalogue_payload(kind: str = "dataset"):
     """``(payload, tabs)`` - the baked catalogue and the ordered tab list.
 
     Tabs are the canonical techniques (so 4D-STEM / EELS / EDS / EBSD / STEM /
     In-situ / Cryo always show, even if a technique currently has no dataset),
-    followed by any other technique that happens to be present.
+    followed by any other technique that happens to be present. For the weights
+    page there is one group, so the tabs are whatever is there.
     """
     from emdatabase import catalogue
 
-    payload = catalogue.catalogue()
-    order = list(catalogue.TECHNIQUE_ORDER)
+    payload = catalogue.catalogue(kind=kind)
     present = [g["technique"] for g in payload.get("groups", [])]
-    tabs = order + [t for t in present if t not in order]
-    return payload, tabs
+    if kind == "weights":
+        return payload, present
+    order = list(catalogue.TECHNIQUE_ORDER)
+    return payload, order + [t for t in present if t not in order]
 
 
-def _browser_script(payload, tabs) -> str:
+def _browser_script(payload, tabs, label: str = "Datasets") -> str:
     """The <script> block that boots the widget-style browser into ``#root``."""
     return (
         "<script>\n"
         "const DATA = " + json.dumps(payload) + ";\n"
-        "const TABS = " + json.dumps(tabs) + ";\n" + _DOCS_BROWSER_JS + "\n</script>"
+        "const TABS = " + json.dumps(tabs) + ";\n"
+        "const LABEL = " + json.dumps(label) + ";\n" + _DOCS_BROWSER_JS + "\n</script>"
     )
 
 
@@ -857,6 +874,35 @@ def generate_all_data_html() -> str:
         active="All Data",
         extra_css=_BROWSER_OVERRIDES + "\n.emdb-body { height: 620px; }\n",
         scripts=_browser_script(payload, tabs),
+    )
+
+
+def generate_weights_html() -> str:
+    """The Model Weights page: the same browser, over the weights entries.
+
+    Each entry is one released version of one model. emdatabase downloads the
+    checkpoint and nothing else, so the load snippet is where the page says how
+    to open it - ``weights_only=True``, which is the condition of a checkpoint
+    being accepted in the first place.
+    """
+    payload, tabs = _catalogue_payload(kind="weights")
+    note = "" if payload.get("groups") else "<p>No model weights are published yet.</p>"
+    body = (
+        '<main class="app-main">'
+        '<div class="app-hero" style="padding:18px 0 4px">'
+        '<h1 style="font-size:30px">Model Weights</h1>'
+        "<p>Trained model checkpoints, one entry per released version. Each is a "
+        "single file with a checksum, downloaded the same way a dataset is; the "
+        "load snippet opens it with <code>weights_only=True</code>.</p>" + note + "</div>"
+        '<div id="root"></div>'
+        "</main>"
+    )
+    return _app_page(
+        "Model Weights &middot; EM-Database",
+        body,
+        active="Model Weights",
+        extra_css=_BROWSER_OVERRIDES + "\n.emdb-body { height: 620px; }\n",
+        scripts=_browser_script(payload, tabs, label="Model weights"),
     )
 
 
@@ -1035,6 +1081,9 @@ def generate_add_dataset_html() -> str:
         "<p>Fill in the metadata; the YAML builds live on the right. "
         "&ldquo;Open a Pull Request&rdquo; sends you to GitHub with the new file "
         "pre-filled &mdash; commit it to a branch there and GitHub opens the PR.</p>"
+        "<p>From a terminal, <code>python -m emdatabase.new_dataset &lt;url&gt;</code> "
+        "fills in the checksum and size for you; see "
+        '<a href="contributing.html">Contributing a Dataset</a>.</p>'
         "</div>"
         '<div class="form-wrap">'
         '<form id="ds-form" class="ds-form" autocomplete="off">'

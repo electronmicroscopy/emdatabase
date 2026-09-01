@@ -18,6 +18,7 @@ from _build_docs import (  # noqa: E402
     generate_browser_html,
     generate_html_table,
     generate_landing_html,
+    generate_weights_html,
     parse_datasets,
 )
 
@@ -59,11 +60,11 @@ master_doc = "index"
 # Dark Catppuccin-Mocha by default, to match the generated app pages.
 html_context = {"default_mode": "dark"}
 
-# Top navigation: Examples / API / All Data / Add Dataset. Examples and API are
-# Sphinx-generated (sphinx-gallery + autodoc); All Data and Add Dataset are the
-# generated app pages, in the toctree so pydata builds correct relative links to
-# them from every page (their HTML output is then overwritten with the app page
-# in the build-finished hook below).
+# Top navigation: Examples / API / All Data / Model Weights / Add Dataset.
+# Examples and API are Sphinx-generated (sphinx-gallery + autodoc); the rest are
+# the generated app pages, in the toctree so pydata builds correct relative links
+# to them from every page (their HTML output is then overwritten with the app
+# page in the build-finished hook below).
 html_theme_options = {
     "logo": {"text": "◆ EM-Database"},
     "navbar_start": ["navbar-logo"],
@@ -92,6 +93,7 @@ _unused_sidebars = {
     "index": [],
     "all_data": [],
     "add_dataset": [],
+    "weights": [],
     "datasets": [],
 }
 
@@ -117,13 +119,14 @@ def build_datasets_html(app, exception):
 
     # Generated, self-contained Catppuccin "app" pages. Each is written into the
     # build output (overwriting the Sphinx-rendered page where names collide:
-    # index.html, all_data.html, add_dataset.html) so the whole site looks like
+    # index.html, all_data.html, weights.html, add_dataset.html) so the site looks like
     # emdatabase.browse(). Each is guarded so a failure never kills the build.
     outdir = Path(app.outdir)
     pages = {
         "index.html": generate_landing_html,
         "all_data.html": generate_all_data_html,
         "add_dataset.html": generate_add_dataset_html,
+        "weights.html": generate_weights_html,
         "datasets_browser.html": generate_browser_html,
     }
     for filename, generator in pages.items():
