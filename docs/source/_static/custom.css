@@ -1,7 +1,7 @@
 /* custom.css - Catppuccin Mocha theming for the Sphinx (pydata) pages
  *
  * The landing / All Data / Add Dataset pages are generated as self-contained
- * app pages (see doc/source/_build_docs.py). The Examples gallery and API
+ * app pages (see docs/source/_build_docs.py). The Examples gallery and API
  * reference are rendered by pydata_sphinx_theme; this file recolors that theme
  * to match, so the whole site reads as one dark Catppuccin "app". It maps the
  * Catppuccin palette onto pydata's --pst-color-* variables and restyles the

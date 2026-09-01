@@ -1,6 +1,5 @@
 ### Example datasets ###
-from emdatabase import data
-from emdatabase.config import settings
+from emdatabase import config, data
 from emdatabase.downloadable_dataset import DownloadableDataset
 from emdatabase.query import filter, list_datasets, search  # noqa: A004
 
@@ -13,49 +12,26 @@ def get_data_dir():
 
     Returns
     -------
-    str
+    Path
         Path to the example datasets directory.
     """
-    from emdatabase import config
-
     return config.data_dir()
 
 
-def set_data_dir(path: str, persist: bool = True):
+def set_data_dir(path: str):
     """
     Set the directory where example datasets are stored.
+
+    The change applies to this process. Write it to
+    ``~/.config/emdatabase/config.yaml`` with :func:`emdatabase.config.write` to
+    keep it across sessions.
 
     Parameters
     ----------
     path : str
         Path to the desired example datasets directory.
-    persist : bool, optional
-        If True (the default), remember the choice across sessions by writing it
-        to the settings file. Pass False for a one-off, in-memory change.
     """
-    settings["data_dir"] = str(path)
-    if persist:
-        settings.save()
-
-
-def reset_data_dir():
-    """
-    Reset the example datasets directory to the default location, clearing any
-    saved choice.
-    """
-    settings.reset("data_dir")
-
-
-def get_setting(key: str, default=None):
-    """Read a value from :data:`emdatabase.settings`."""
-    return settings.get(key, default)
-
-
-def set_setting(key: str, value, persist: bool = True):
-    """Set a value in :data:`emdatabase.settings`, persisting it by default."""
-    settings[key] = value
-    if persist:
-        settings.save()
+    config.set({"data_dir": str(path)})
 
 
 def browse(**kwargs):
@@ -80,11 +56,8 @@ __all__ = [
     "filter",
     "get_data_dir",
     "set_data_dir",
-    "reset_data_dir",
-    "get_setting",
-    "set_setting",
-    "settings",
     "browse",
+    "config",
     "data",
     "DownloadableDataset",
 ]

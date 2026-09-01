@@ -61,48 +61,50 @@ emdatabase.filter(downloaded=True)                        # what is already here
 An unknown field raises rather than being ignored, so a typo cannot quietly return
 the whole index.
 
-## Settings
+## Configuration
 
-Configuration lives in a live, matplotlib-`rcParams`-style object,
-`emdatabase.settings`, seeded at import from `~/.emdatabase/settings.yaml`.
-Change it in memory for an immediate effect, and persist it to remember the
-choice across sessions:
-
-```python
-import emdatabase
-
-emdatabase.settings["data_dir"] = "/big/disk/emdatabase"  # takes effect now
-emdatabase.settings.save()                             # remember it next time
-```
-
-In Jupyter you can also edit them interactively — `display(emdatabase.settings)`
-renders a panel to set (and save) the data directory directly.
-
-The data directory defaults to `~/emdatabase`. Convenience helpers wrap the
-common case — `set_data_dir` persists by default:
+Configuration is dask-style: shipped defaults, then every `*.yaml` in
+`~/.config/emdatabase/` (or wherever `EMDATABASE_CONFIG` points), then
+environment variables, then `config.set` — each layer overriding the one before.
 
 ```python
-emdatabase.get_data_dir()                       # current location
-emdatabase.set_data_dir("/big/disk/emdatabase")    # set + persist
-emdatabase.set_data_dir("/scratch", persist=False)  # one-off, in-memory only
-emdatabase.reset_data_dir()                     # back to the default, forget the choice
+from emdatabase import config
+
+config.get("data_dir")                                # None -> the pooch cache dir
+config.set({"data_dir": "/big/disk/emdatabase"})      # for this process
+config.write()                                        # -> ~/.config/emdatabase/config.yaml
 ```
 
-No environment variable is needed. Only values you explicitly set are written to
-the file, so the default is never frozen in — it keeps being obeyed even if it
-changes. For a one-off override (e.g. CI) the legacy `EM_DATABASE_DATA_DIR` is
-still honored, and `EM_DATABASE_CONFIG` relocates the settings file.
+`emdatabase.get_data_dir()` and `emdatabase.set_data_dir(path)` wrap the
+`data_dir` key. Downloads go to `data_dir`, which defaults to pooch's cache
+directory (`~/.cache/emdatabase` on Linux).
 
-### Shared, system-wide data
+From the environment, keys are prefixed `EMDATABASE_` and nest on a double
+underscore:
 
-Datasets can be installed once for every user. `download()` and `filepath()`
-look in the shared/system locations **first**, then your own data directory, and
-only download (into your directory) if the file is nowhere to be found — so a
-shared copy is reused instead of refetched. Shared locations come from the
-`EM_DATABASE_SHARED_DIR` environment variable (an `os.pathsep`-separated list), a
-`shared_data_dirs` list in your settings, or a system config file
-(`/etc/emdatabase/settings.yaml`, or `%PROGRAMDATA%\emdatabase\settings.yaml`
-on Windows).
+```bash
+export EMDATABASE_DATA_DIR=/scratch/emdatabase
+export EMDATABASE_STORES__GROUP=/group/example_data
+```
+
+### Stores: data installed once for everyone
+
+A store is a named, read-only directory searched **before** your own data
+directory, so a copy that is already on a group drive is used instead of
+refetched. Downloads always go to `data_dir`; nothing is ever written to a store
+by emdatabase.
+
+```yaml
+# ~/.config/emdatabase/config.yaml
+data_dir: /big/disk/emdatabase
+stores:
+  group: /group/example_data
+  cluster: /cluster/em_data
+```
+
+Stores are searched in declaration order. The name is the provenance: it is what
+`catalogue.entry()["location"]`, `emdatabase.filter(location="group")` and the
+widgets report for a copy found there — `"user"` for your own.
 
 ## Adding a dataset
 

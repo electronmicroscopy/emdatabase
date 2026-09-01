@@ -6,40 +6,22 @@ dataset in the index rather than a large one.
 
 from pathlib import Path
 
-import pytest
+import pooch
 
 import emdatabase
 from emdatabase import data
 from emdatabase.tests.test_load_data import TINY_DATASET
 
-DEFAULT_DIR = Path.home() / "emdatabase"
-
-
-@pytest.fixture(autouse=True)
-def _restore_data_dir():
-    """Never leave a stray data dir set for the next test."""
-    yield
-    emdatabase.reset_data_dir()
+DEFAULT_DIR = Path(pooch.os_cache("emdatabase"))
 
 
 def test_get_data_dir():
     assert emdatabase.get_data_dir() == DEFAULT_DIR
 
 
-def test_reset_data_dir_returns_to_the_default():
-    emdatabase.reset_data_dir()
-    assert emdatabase.get_data_dir() == DEFAULT_DIR
-
-
 def test_set_data_dir(tmp_path):
     emdatabase.set_data_dir(str(tmp_path))
     assert emdatabase.get_data_dir() == tmp_path
-
-
-def test_reset_data_dir(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path))
-    emdatabase.reset_data_dir()
-    assert emdatabase.get_data_dir() == DEFAULT_DIR
 
 
 def test_saving_to_configured_dir(tmp_path):

@@ -207,7 +207,7 @@ function render({ model, el: root }) {
     const row = el("div", "emdb-row" + (state.selected === item.name ? " selected" : ""));
     const meta = [item.size, item.shape].filter(Boolean).join("  ·  ");
     const glyph = el("span", "emdb-glyph " + glyphClass(item), item.downloaded ? "●" : "○");
-    if (item.location === "shared") glyph.title = sharedTitle(item);
+    if (inStore(item)) glyph.title = storeTitle(item);
     row.appendChild(glyph);
     row.appendChild(el("span", "emdb-name", esc(item.name)));
     row.appendChild(el("span", "emdb-meta", esc(meta)));
@@ -218,16 +218,21 @@ function render({ model, el: root }) {
     return row;
   }
 
-  // A shared copy and your own can both exist; the tooltip names each.
-  function sharedTitle(item) {
-    const lines = ["installed system-wide: " + item.path];
+  // `location` is the name of the store a copy was found in, or "user".
+  function inStore(item) {
+    return item.downloaded && item.location && item.location !== "user";
+  }
+
+  // A store's copy and your own can both exist; the tooltip names each.
+  function storeTitle(item) {
+    const lines = ["from the " + item.location + " store: " + item.path];
     if (item.user_path) lines.push("your copy: " + item.user_path);
     return lines.join("\n");
   }
 
   function glyphClass(item) {
     if (!item.downloaded) return "off";
-    return item.location === "shared" ? "shared" : "on";
+    return inStore(item) ? "shared" : "on";
   }
 
   function drawAction(item, isActive) {
@@ -266,13 +271,15 @@ function render({ model, el: root }) {
 
     // status / action line
     const statusRow = el("div", "emdb-d-status");
-    if (item.downloaded && item.location === "shared") {
-      const badge = el("span", "emdb-d-badge shared", item.user_path ? "● shared + yours" : "● shared");
-      badge.title = sharedTitle(item);
+    if (inStore(item)) {
+      const label = "● " + item.location + (item.user_path ? " + yours" : "");
+      const badge = el("span", "emdb-d-badge shared", esc(label));
+      badge.title = storeTitle(item);
       statusRow.appendChild(badge);
       if (item.user_path) {
         const del = el("button", "emdb-delete", "Delete yours");
-        del.title = "Remove your copy (" + item.user_path + "). The shared one stays.";
+        del.title = "Remove your copy (" + item.user_path + "). The " + item.location
+          + " store keeps its own.";
         del.addEventListener("click", () => cmd("delete", { name: item.name }));
         statusRow.appendChild(del);
       }

@@ -1,22 +1,25 @@
 """Shared test fixtures.
 
-Every test runs against an isolated, empty settings file (in a tmp dir) and with
-the legacy ``EM_DATABASE_DATA_DIR`` env var cleared, so the developer's real
-settings never affect a test and a test never writes to the real config.
+Every test runs against an isolated, empty config directory (in a tmp dir), with
+every ``EMDATABASE_*`` environment variable cleared and the first-run notice
+already marked shown, so the developer's real configuration never affects a test
+and a test never writes to the real one.
 """
+
+import os
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def _isolate_settings(tmp_path, monkeypatch):
+def _isolate_config(tmp_path, monkeypatch):
     from emdatabase import config
 
-    monkeypatch.setenv("EM_DATABASE_CONFIG", str(tmp_path / "emdatabase_settings.yaml"))
-    # Point the system config at a nonexistent file and clear the shared/data env
-    # vars, so the developer's real machine config never leaks into a test.
-    monkeypatch.setenv("EM_DATABASE_SYSTEM_CONFIG", str(tmp_path / "system.yaml"))
-    monkeypatch.delenv("EM_DATABASE_DATA_DIR", raising=False)
-    monkeypatch.delenv("EM_DATABASE_SHARED_DIR", raising=False)
-    config.settings.reload()  # re-seed from the isolated (empty) config
+    for name in list(os.environ):
+        if name.startswith(config.ENV_PREFIX):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("EMDATABASE_CONFIG", str(tmp_path / "config"))
+    monkeypatch.setattr(config, "_NOTICE_SHOWN", True)
+    config.refresh()
     yield
+    config.refresh()

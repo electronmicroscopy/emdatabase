@@ -70,14 +70,17 @@ def _join(*parts) -> str:
 
 
 def _location(path: Path | None) -> str | None:
-    """Which data directory a downloaded file came from: "shared" or "user"."""
+    """Which search location a downloaded file came from: the name of the store
+    holding it, or "user" for the user's own data directory."""
     if path is None:
         return None
     from emdatabase import config
 
     parent = path.resolve().parent
-    shared = {d.resolve() for d in config.shared_data_dirs()}
-    return "shared" if parent in shared else "user"
+    for name, directory in config.stores().items():
+        if parent == directory.resolve():
+            return name
+    return "user"
 
 
 def entry(name: str, ds: DownloadableDataset) -> dict:
@@ -88,7 +91,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
     except Exception:
         found = []
     path = found[0] if found else None
-    # The copy in the user's own directory, which may sit behind a shared one in
+    # The copy in the user's own directory, which may sit behind a store's in
     # the search order. It is the only copy delete() will touch, so the widgets
     # need it to know whether there is anything to offer deleting.
     user_path = next((p for p in found if _location(p) == "user"), None)
@@ -142,11 +145,11 @@ def _order(technique: str):
 def catalogue() -> dict:
     """The whole browser payload, grouped by technique.
 
-    ``{"data_dir", "groups": [{"technique", "items"}], "n_downloaded",
+    ``{"data_dir", "stores", "groups": [{"technique", "items"}], "n_downloaded",
     "n_total"}`` - one group per technique in :data:`TECHNIQUE_ORDER`, then any
     others alphabetically.
     """
-    import emdatabase
+    from emdatabase import config
 
     items = [entry(name, ds) for name, ds in datasets()]
     by_tech: dict[str, list[dict]] = {}
@@ -154,7 +157,8 @@ def catalogue() -> dict:
         by_tech.setdefault(it["technique"], []).append(it)
     groups = [{"technique": t, "items": by_tech[t]} for t in sorted(by_tech, key=_order)]
     return {
-        "data_dir": str(emdatabase.get_data_dir()),
+        "data_dir": str(config.data_dir()),
+        "stores": {name: str(path) for name, path in config.stores().items()},
         "groups": groups,
         "n_downloaded": sum(1 for it in items if it["downloaded"]),
         "n_total": len(items),

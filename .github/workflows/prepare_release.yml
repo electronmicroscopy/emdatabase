@@ -123,7 +123,7 @@ jobs:
           # the built docs advertise a version that was never released.
           edits = [
               ("pyproject.toml", re.compile(r'^version = "[^"]*"', re.M), f'version = "{new}"'),
-              ("doc/source/conf.py", re.compile(r"^release = '[^']*'", re.M), f"release = '{new}'"),
+              ("docs/source/conf.py", re.compile(r'^release = "[^"]*"', re.M), f'release = "{new}"'),
           ]
           for name, pattern, replacement in edits:
               path = pathlib.Path(name)
@@ -168,7 +168,7 @@ jobs:
           title: "Release v${{ steps.version.outputs.new }}"
           body: |
             Bumps the version from `${{ steps.version.outputs.current }}` to
-            `${{ steps.version.outputs.new }}` in `pyproject.toml` and `doc/source/conf.py`.
+            `${{ steps.version.outputs.new }}` in `pyproject.toml` and `docs/source/conf.py`.
 
             ### Changes in this release
 

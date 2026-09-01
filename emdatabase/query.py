@@ -25,7 +25,8 @@ from emdatabase import catalogue
 from emdatabase.downloadable_dataset import DownloadableDataset
 
 #: Fields :func:`filter` accepts. The first group is the dataset's own metadata;
-#: ``downloaded`` and ``location`` describe what is on this machine instead.
+#: ``downloaded`` and ``location`` describe what is on this machine instead -
+#: ``location`` being the name of the store a copy was found in, or ``"user"``.
 FILTER_FIELDS = (
     "technique",
     "detector",
@@ -90,7 +91,7 @@ def filter(**criteria: Any) -> list[DownloadableDataset]:  # noqa: A001
         emdatabase.filter(technique="4D-STEM", tags="Strain")
         emdatabase.filter(microscope_vendor=["JEOL", "Hitachi"])
         emdatabase.filter(downloaded=True)
-        emdatabase.filter(location="shared")
+        emdatabase.filter(location="group")     # found in the "group" store
 
     Several criteria are combined with and. An unknown field raises rather than
     being ignored, so a typo cannot quietly return the whole index.

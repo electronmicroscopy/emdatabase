@@ -12,12 +12,12 @@ build/
 dist/
 
 # Docs
-doc/build/
+docs/build/
 # Sphinx/sphinx-gallery/autosummary output generated into the source tree
-doc/source/examples/
-doc/source/api/
-doc/source/reference/generated/
-doc/source/sg_execution_times.rst
+docs/source/examples/
+docs/source/api/
+docs/source/reference/generated/
+docs/source/sg_execution_times.rst
 
 # Editors
 .idea/

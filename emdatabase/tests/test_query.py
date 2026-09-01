@@ -1,6 +1,6 @@
 """Tests for the Python query API.
 
-The conftest fixture isolates the settings and clears the shared/data env vars,
+The conftest fixture isolates the config and clears the EMDATABASE_ env vars,
 so ``downloaded`` / ``location`` here describe a tmp dir rather than whatever the
 developer happens to have downloaded.
 """
@@ -10,7 +10,7 @@ import types
 import pytest
 
 import emdatabase
-from emdatabase import catalogue
+from emdatabase import catalogue, config
 from emdatabase.data import BilayerWS2
 from emdatabase.downloadable_dataset import DownloadableDataset
 from emdatabase.query import FILTER_FIELDS
@@ -113,12 +113,11 @@ def test_filter_fields_are_all_actually_filterable():
         emdatabase.filter(**{field: None if field == "location" else "nothing-matches-this"})
 
 
-def test_filter_on_downloaded_and_location(tmp_path, monkeypatch):
-    shared, user = tmp_path / "shared", tmp_path / "user"
-    shared.mkdir()
+def test_filter_on_downloaded_and_location(tmp_path):
+    store, user = tmp_path / "group", tmp_path / "user"
+    store.mkdir()
     user.mkdir()
-    monkeypatch.setenv("EM_DATABASE_SHARED_DIR", str(shared))
-    emdatabase.set_data_dir(str(user), persist=False)
+    config.set({"data_dir": str(user), "stores": {"group": str(store)}})
 
     assert emdatabase.filter(downloaded=True) == []
     assert names(emdatabase.filter(downloaded=False)) == names(emdatabase.list_datasets())
@@ -127,10 +126,10 @@ def test_filter_on_downloaded_and_location(tmp_path, monkeypatch):
     (user / ds.file).write_bytes(b"mine")
     assert names(emdatabase.filter(downloaded=True)) == [type(ds).__name__]
     assert names(emdatabase.filter(location="user")) == [type(ds).__name__]
-    assert emdatabase.filter(location="shared") == []
+    assert emdatabase.filter(location="group") == []
 
-    (shared / ds.file).write_bytes(b"theirs")
-    assert names(emdatabase.filter(location="shared")) == [type(ds).__name__]
+    (store / ds.file).write_bytes(b"theirs")
+    assert names(emdatabase.filter(location="group")) == [type(ds).__name__]
     assert emdatabase.filter(location="user") == []
 
 
@@ -160,6 +159,6 @@ def test_public_names_survive_a_submodule_walk():
 
     for name in emdatabase.__all__:
         exported = getattr(emdatabase, name)
-        assert not isinstance(exported, types.ModuleType) or name in ("data", "settings"), (
+        assert not isinstance(exported, types.ModuleType) or name in ("data", "config"), (
             f"emdatabase.{name} was replaced by a submodule of the same name"
         )

@@ -10,7 +10,7 @@ import threading
 import pytest
 
 import emdatabase
-from emdatabase import catalogue
+from emdatabase import catalogue, config
 
 TINY_DATASET = "CuZnHAADF"  # 34 kB - the smallest file in the index
 
@@ -57,24 +57,23 @@ def test_catalogue_entry_has_expected_fields():
     assert isinstance(row["downloaded"], bool)
 
 
-def test_catalogue_entry_reports_where_the_file_came_from(tmp_path, monkeypatch):
-    shared, user = tmp_path / "shared", tmp_path / "user"
-    shared.mkdir()
+def test_catalogue_entry_reports_where_the_file_came_from(tmp_path):
+    store, user = tmp_path / "group", tmp_path / "user"
+    store.mkdir()
     user.mkdir()
-    monkeypatch.setenv("EM_DATABASE_SHARED_DIR", str(shared))
-    emdatabase.set_data_dir(str(user), persist=False)
+    config.set({"data_dir": str(user), "stores": {"group": str(store)}})
 
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     assert catalogue.entry(TINY_DATASET, ds)["location"] is None
     (user / ds.file).write_bytes(b"x")
     assert catalogue.entry(TINY_DATASET, ds)["location"] == "user"
-    (shared / ds.file).write_bytes(b"x")
-    assert catalogue.entry(TINY_DATASET, ds)["location"] == "shared"
+    (store / ds.file).write_bytes(b"x")
+    assert catalogue.entry(TINY_DATASET, ds)["location"] == "group"
 
 
 def test_catalogue_downloaded_flag_tracks_the_file(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path), persist=False)
+    emdatabase.set_data_dir(str(tmp_path))
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     assert catalogue.entry(TINY_DATASET, ds)["downloaded"] is False
@@ -162,7 +161,7 @@ def test_search_blob_includes_authors_and_affiliation():
 
 
 def test_delete_removes_downloaded_file(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path), persist=False)
+    emdatabase.set_data_dir(str(tmp_path))
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     (tmp_path / ds.file).write_bytes(b"x")
@@ -235,35 +234,6 @@ def test_dataset_display_falls_back_without_anywidget(monkeypatch):
     assert "text/plain" in bundle
 
 
-def test_settings_widget_edits_and_persists(tmp_path):
-    pytest.importorskip("anywidget")
-    from emdatabase import config
-    from emdatabase.widget import settings_widget
-
-    widget = settings_widget()
-    assert widget.data_dir == str(emdatabase.get_data_dir())
-
-    widget._command = {"action": "save", "data_dir": str(tmp_path / "d"), "nonce": 1}
-    assert emdatabase.get_data_dir() == tmp_path / "d"
-    assert config._read_file()["data_dir"] == str(tmp_path / "d")  # persisted
-    assert widget.data_dir == str(tmp_path / "d")
-
-    widget._command = {"action": "session", "data_dir": str(tmp_path / "s"), "nonce": 2}
-    assert emdatabase.get_data_dir() == tmp_path / "s"
-    assert config._read_file()["data_dir"] == str(tmp_path / "d")  # NOT persisted
-
-    widget._command = {"action": "reset", "nonce": 3}
-    assert emdatabase.get_data_dir() == config._default_data_dir()
-
-
-def test_settings_display_is_a_widget():
-    pytest.importorskip("anywidget")
-    bundle = emdatabase.settings._repr_mimebundle_()
-    mimes = bundle[0] if isinstance(bundle, tuple) else bundle
-    assert mimes is not None
-    assert "application/vnd.jupyter.widget-view+json" in mimes
-
-
 def test_notebook_detection_and_colab_enable_are_safe():
     """The frontend helpers must be no-ops off a notebook (e.g. under pytest),
     so nothing breaks when emdatabase is imported in plain Python."""
@@ -313,7 +283,7 @@ def test_download_toasts_plumbing():
 
 @pytest.mark.slow
 def test_widget_download_end_to_end(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path), persist=False)
+    emdatabase.set_data_dir(str(tmp_path))
     widget = _browser()
     future = widget._start_download(TINY_DATASET)
     assert future is not None

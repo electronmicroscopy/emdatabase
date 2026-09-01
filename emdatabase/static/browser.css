@@ -198,39 +198,6 @@
 .emdb-inline-toast.cancelling { opacity: 0.65; }
 .emdb-inline-toast.error { border-color: var(--emdb-red); }
 
-/* Settings panel (display(emdatabase.settings)) ------------------- */
-.emdb-settings-host { max-width: 620px; }
-.emdb-settings { padding: 16px 18px; }
-.emdb-field { margin-top: 12px; }
-.emdb-field-label {
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--emdb-muted); margin: 12px 0 6px;
-}
-.emdb-field-row { display: flex; gap: 8px; align-items: stretch; }
-.emdb-field-row .emdb-search { flex: 1; min-width: 0; margin-top: 0; }
-.emdb-browse {
-  flex: 0 0 auto; cursor: pointer; font-family: var(--emdb-font);
-  font-size: 12px; font-weight: 600; color: var(--emdb-text);
-  background: var(--emdb-surface0); border: 1px solid var(--emdb-surface1);
-  border-radius: 7px; padding: 0 14px;
-}
-.emdb-browse:hover { border-color: var(--emdb-blue); color: var(--emdb-blue); }
-.emdb-field-actions { display: flex; gap: 8px; margin-top: 8px; }
-.emdb-hint { margin-top: 6px; font-size: 11px; color: var(--emdb-subtext); }
-.emdb-status { margin-top: 12px; font-size: 12px; color: var(--emdb-green); font-weight: 600; }
-.emdb-settings-info { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--emdb-surface0); }
-.emdb-searchlist { display: flex; flex-direction: column; gap: 5px; }
-.emdb-searchdir {
-  font-family: var(--emdb-mono); font-size: 11.5px; color: var(--emdb-text);
-  word-break: break-all;
-}
-.emdb-tag {
-  font-family: var(--emdb-font); font-size: 10px; font-weight: 600;
-  color: var(--emdb-crust); background: var(--emdb-green);
-  border-radius: 4px; padding: 1px 6px; white-space: nowrap;
-}
-.emdb-tag.shared { background: var(--emdb-blue); }
-
 /* Toasts: pinned to the bottom-right of the viewport ----------------- */
 .emdb-toast-root {
   position: fixed; right: 16px; bottom: 16px; z-index: 99999;

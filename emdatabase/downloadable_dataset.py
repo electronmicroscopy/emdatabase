@@ -331,8 +331,8 @@ class DownloadableDataset:
         """
         if not background:
             return DatasetPath(self._retrieve(destination, progressbar, chunk_size))
-        # Resolve where the file will end up: an existing shared/user copy if it
-        # is already present, otherwise the user's download location.
+        # Resolve where the file will end up: an existing copy in a store or in
+        # the user's directory, otherwise the user's download location.
         if destination is not None:
             target = Path(destination) / self.file
         else:
@@ -361,9 +361,9 @@ class DownloadableDataset:
     ) -> Path:
         """Fetch the file and return its local path (blocking).
 
-        With no explicit destination, an existing system-wide/shared copy is used
-        as-is (never re-downloaded); otherwise pooch downloads into the user's
-        data directory.
+        With no explicit destination, an existing copy in a store is used as-is
+        (never re-downloaded); otherwise pooch downloads into the user's data
+        directory.
         """
         if progressbar is True:
             try:
@@ -375,9 +375,9 @@ class DownloadableDataset:
                 # Our own bar rather than pooch's; see _TqdmProgress.
                 progressbar = _TqdmProgress(self.file)
         if destination is None:
-            shared = self._find_shared()
-            if shared is not None:
-                return shared
+            in_store = self._find_in_stores()
+            if in_store is not None:
+                return in_store
             destination = self._resolve_destination(None)
         else:
             destination = self._resolve_destination(destination)
@@ -403,11 +403,11 @@ class DownloadableDataset:
                 progressbar.close()
         return Path(filepath)
 
-    def _find_shared(self) -> Path | None:
-        """Path to an existing copy in a shared/system data dir, or None."""
+    def _find_in_stores(self) -> Path | None:
+        """Path to an existing copy in one of the configured stores, or None."""
         from emdatabase import config
 
-        for directory in config.shared_data_dirs():
+        for directory in config.stores().values():
             candidate = directory / self.file
             if candidate.exists():
                 return candidate
@@ -416,12 +416,12 @@ class DownloadableDataset:
     def filepaths(self) -> list[Path]:
         """Every copy of the dataset on disk, in search order.
 
-        A dataset can be in more than one place at once - a shared install and
+        A dataset can be in more than one place at once - a copy in a store and
         your own download of the same file - and which one gets used is only a
         matter of the search order. :meth:`filepath` returns the winner; this
         returns all of them, so a caller can tell the difference between the
-        one copy that is shared and a shared copy that you also have your own
-        of.
+        one copy that is in a store and a store copy that you also have your
+        own of.
         """
         from emdatabase import config
 
@@ -430,8 +430,8 @@ class DownloadableDataset:
     def filepath(self) -> Path | None:
         """Return the local file path of the dataset if present.
 
-        Looks in the shared/system data locations first, then the user's data
-        directory. Returns None if the dataset is not downloaded anywhere."""
+        Looks in the configured stores first, then the user's data directory.
+        Returns None if the dataset is not downloaded anywhere."""
         found = self.filepaths()
         return found[0] if found else None
 

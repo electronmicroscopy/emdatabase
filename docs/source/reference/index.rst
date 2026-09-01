@@ -8,6 +8,7 @@ Reference
    :toctree: generated/
 
    emdatabase
+   emdatabase.config
    emdatabase.data
 
 
