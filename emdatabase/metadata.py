@@ -241,6 +241,7 @@ class DatasetMetadata:
     description: str
     source: str
     file: str
+    url: str | None = None
     checksum: str | None = None
     size_bytes: int | None = None
     detector_manufacturer: str | None = None

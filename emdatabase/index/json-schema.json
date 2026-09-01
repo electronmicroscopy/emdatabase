@@ -17,6 +17,10 @@
         "file": {
           "type": "string"
         },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
         "checksum": {
           "type": "string",
           "pattern": "^md5:[A-Fa-f0-9]{32}$"

@@ -68,7 +68,7 @@ def test_source_url_resolves(name):
     workflow runs it instead.
     """
     dataset = getattr(data, name)()
-    url = f"{dataset.source}/{dataset.file}"
+    url = dataset.download_url
     try:
         response = _head(url)
     except urllib.error.HTTPError as error:
@@ -97,6 +97,22 @@ def test_metadata_is_complete(name):
         f"{name} has no md5 checksum, so a corrupt or truncated download would go unnoticed"
     )
     assert dataset.size_bytes, f"{name} has no size_bytes"
+
+
+def test_download_url_joins_the_source_and_the_file():
+    dataset = getattr(data, TINY_DATASET)()
+    assert dataset.download_url == f"{dataset.source}/{dataset.file}"
+
+
+def test_an_explicit_url_is_what_gets_downloaded():
+    """A link that does not end in the file name is given whole, as ``url``."""
+    dataset = DownloadableDataset(
+        description="A dataset behind an opaque link.",
+        source="https://drive.google.com",
+        url="https://drive.google.com/uc?export=download&id=abc",
+        file="MyData.zspy",
+    )
+    assert dataset.download_url == "https://drive.google.com/uc?export=download&id=abc"
 
 
 def test_download_verifies_checksum(tmp_path):

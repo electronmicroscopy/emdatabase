@@ -216,9 +216,10 @@ class DownloadableDataset:
     ``_spec``; keyword arguments override it for a single instance.
 
     Everything the YAML declares is on :attr:`metadata`
-    (``ds.metadata.technique``). The four fields the download machinery itself
+    (``ds.metadata.technique``). The fields the download machinery itself
     needs are also reachable directly, as :attr:`source`, :attr:`file`,
-    :attr:`checksum` and :attr:`size_bytes`.
+    :attr:`url`, :attr:`checksum` and :attr:`size_bytes`; the link that is
+    actually fetched is :attr:`download_url`.
     """
 
     _spec: ClassVar[dict[str, Any]] = {}
@@ -240,6 +241,21 @@ class DownloadableDataset:
     @property
     def file(self) -> str:
         return self.metadata.file
+
+    @property
+    def url(self) -> str | None:
+        return self.metadata.url
+
+    @property
+    def download_url(self) -> str:
+        """The link the file is fetched from.
+
+        ``source`` is where the file comes from and ``file`` is what it is
+        called locally, which for most hosts is also the last segment of the
+        link. Where it is not - a Google Drive link, or anything else with a
+        query string - the entry gives the whole link as ``url`` instead.
+        """
+        return self.url or f"{self.source}/{self.file}"
 
     @property
     def checksum(self) -> str | None:
@@ -390,7 +406,7 @@ class DownloadableDataset:
         )
         try:
             filepath = pooch.retrieve(
-                url=self.source + "/" + self.file,
+                url=self.download_url,
                 known_hash=self.checksum,
                 fname=self.file,
                 path=destination,

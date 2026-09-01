@@ -19,6 +19,8 @@ def parse_datasets(yaml_dir):
             data = yaml.safe_load(f)
 
         for name, info in data.items():
+            if info.get("kind") == "weights":
+                continue  # the Model Weights page, not this one
             technique = info.get("technique", "Unknown")
             datasets_by_technique[technique].append(
                 {
@@ -537,10 +539,10 @@ _DOCS_BROWSER_JS = r"""
         + "().download()\ncheckpoint = torch.load(path, weights_only=True)"
       : toSnake(it.name) + " = emdatabase.data." + it.name + "()";
     detailsEl.appendChild(copyRow(snippet, snippet));
-    if (it.source && it.file) {
+    if (it.url) {
       var wrap = el("div", "emdb-dl-link");
       var a = document.createElement("a");
-      a.href = it.source + "/" + it.file; a.target = "_blank"; a.rel = "noopener";
+      a.href = it.url; a.target = "_blank"; a.rel = "noopener";
       a.className = "emdb-dl-anchor"; a.textContent = "⤓ Download " + it.file;
       wrap.appendChild(a);
       detailsEl.appendChild(wrap);

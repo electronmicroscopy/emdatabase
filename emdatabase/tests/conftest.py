@@ -11,9 +11,11 @@ than a monkeypatched download. Nothing here touches the network.
 """
 
 import http.server
+import io
 import os
 import threading
 from functools import partial
+from pathlib import Path
 
 import pytest
 
@@ -33,7 +35,13 @@ def _isolate_config(tmp_path, monkeypatch):
 
 
 class _Handler(http.server.SimpleHTTPRequestHandler):
-    """Serve the directory, and redirect ``/moved/<name>`` to ``/<name>``."""
+    """Serve the directory, with two paths that stand in for real hosts.
+
+    ``/moved/<name>`` redirects to ``/<name>``, the way Zenodo and GitHub raw
+    both do. ``/uc?export=download&id=<name>`` is the Google Drive shape: a link
+    that names no file, redirecting to bytes that name themselves in a
+    ``Content-Disposition`` header.
+    """
 
     def send_head(self):
         if self.path.startswith("/moved/"):
@@ -42,6 +50,21 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return None
+        if self.path.startswith("/uc?"):
+            self.send_response(302)
+            self.send_header("Location", "/attached/" + self.path.rpartition("=")[2])
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return None
+        if self.path.startswith("/attached/"):
+            name = self.path[len("/attached/") :]
+            body = (Path(self.directory) / name).read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+            self.end_headers()
+            return io.BytesIO(body)
         return super().send_head()
 
     def log_message(self, format, *args):

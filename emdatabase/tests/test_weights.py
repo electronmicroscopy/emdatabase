@@ -5,10 +5,11 @@ of it: the same index, the same download, the same checksum. What is new is the
 ``model`` block, which the schema requires for weights and forbids for data, and
 that the catalogue and the query API can tell the two apart.
 
-There is no weights entry in ``index/`` yet, so everything here builds its own -
-a two-tensor checkpoint written to a directory served by ``conftest``'s local
-HTTP server, and a class installed into ``emdatabase.data`` for the length of
-one test. Nothing touches the network.
+Everything here builds its own entry - a two-tensor checkpoint written to a
+directory served by ``conftest``'s local HTTP server, and a class installed into
+``emdatabase.data`` for the length of one test - and asserts that it is found,
+rather than that it is the only one: ``index/`` ships weights entries of its own.
+Nothing touches the network.
 """
 
 import hashlib
@@ -159,15 +160,17 @@ def test_a_replaced_checkpoint_is_refused(checkpoint, tmp_path):
 
 
 def test_list_weights_and_filter_find_it(in_the_index):
-    assert [type(ds).__name__ for ds in emdatabase.list_weights()] == [in_the_index]
-    assert [type(ds).__name__ for ds in emdatabase.filter(kind="weights")] == [in_the_index]
-    assert [type(ds).__name__ for ds in emdatabase.filter(version="1")] == [in_the_index]
+    assert in_the_index in [type(ds).__name__ for ds in emdatabase.list_weights()]
+    assert in_the_index in [type(ds).__name__ for ds in emdatabase.filter(kind="weights")]
+    assert in_the_index in [type(ds).__name__ for ds in emdatabase.filter(version="1")]
 
 
 def test_list_datasets_still_returns_everything(in_the_index):
     names = [type(ds).__name__ for ds in emdatabase.list_datasets()]
     assert in_the_index in names
-    assert len(names) == len(emdatabase.list_datasets(kind="dataset")) + 1
+    assert len(names) == len(emdatabase.list_datasets(kind="dataset")) + len(
+        emdatabase.list_datasets(kind="weights")
+    )
     assert in_the_index not in [type(ds).__name__ for ds in emdatabase.list_datasets("dataset")]
 
 
@@ -178,15 +181,16 @@ def test_search_matches_the_model_class(in_the_index):
 def test_the_catalogue_groups_weights_on_their_own(in_the_index):
     groups = catalogue.catalogue()["groups"]
     assert groups[-1]["technique"] == catalogue.WEIGHTS_GROUP
-    assert [it["name"] for it in groups[-1]["items"]] == [in_the_index]
+    items = {it["name"]: it for it in groups[-1]["items"]}
+    assert in_the_index in items
     # The entry's own technique is still 4D-STEM; it is only grouped elsewhere.
-    assert groups[-1]["items"][0]["technique"] == "4D-STEM"
+    assert items[in_the_index]["technique"] == "4D-STEM"
     assert all(g["technique"] != catalogue.WEIGHTS_GROUP for g in groups[:-1])
 
 
 def test_the_catalogue_can_be_asked_for_one_kind(in_the_index):
     weights = catalogue.catalogue(kind="weights")
-    assert weights["n_total"] == 1
+    assert weights["n_total"] == len(emdatabase.list_weights())
     assert [g["technique"] for g in weights["groups"]] == [catalogue.WEIGHTS_GROUP]
     datasets = catalogue.catalogue(kind="dataset")
     assert in_the_index not in [it["name"] for g in datasets["groups"] for it in g["items"]]

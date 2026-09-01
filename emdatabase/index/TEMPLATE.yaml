@@ -13,6 +13,10 @@ MyDatasetName:
   description: One or two sentences on what this is, how it was acquired and how it is calibrated.
   # Required. The directory the file is served from, without the file name.
   source: https://zenodo.org/records/0000000/files
+  # The full download link, and only needed when the file is not served at
+  # `source/file` - a Google Drive link, or anything else with a query string.
+  # `file` is still the name the file is saved under locally.
+  url: https://zenodo.org/records/0000000/files/MyDatasetName.zspy
   # md5 of the file, as `md5:<32 hex>`. pooch refuses a download that does not match.
   checksum: md5:0123456789abcdef0123456789abcdef
   # Required. The file name at that source.
@@ -47,8 +51,7 @@ MyDatasetName:
       affiliation: University of Somewhere
       # ORCID as `0000-0000-0000-0000`.
       orcid: 0000-0002-1825-0097
-  # What the entry hands out: `dataset` (the default) or `weights` for a model
-  # checkpoint.
+  # What the entry hands out: `dataset` (the default) or `weights` for a model checkpoint.
   kind: dataset
   # The released version this entry pins, quoted. One entry per version.
   version: "1"

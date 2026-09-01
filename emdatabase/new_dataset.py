@@ -1,11 +1,13 @@
 """Build a dataset YAML entry from a URL, ready to open a pull request with.
 
-``python -m emdatabase.new_dataset <url>`` takes the direct link to a hosted
-file, asks the server how big it is, streams it to a temporary file to get its
-md5, prompts for the rest of the metadata and writes
-``emdatabase/index/<Name>.yaml``. Nothing is written until the entry passes
-:func:`~emdatabase.metadata.validate_document`, which is the same check the
-test suite and the issue-form workflow run.
+``python -m emdatabase.new_dataset <url>`` takes the link to a hosted file,
+asks the server how big it is, streams it to a temporary file to get its md5,
+prompts for the rest of the metadata and writes
+``emdatabase/index/<Name>.yaml``. A link that does not end in the file name - a
+Google Drive link, or anything else with a query string - is written out as
+``url``, with the file name taken from the server. Nothing is written until the
+entry passes :func:`~emdatabase.metadata.validate_document`, which is the same
+check the test suite and the issue-form workflow run.
 
 ``--kind weights`` describes a model checkpoint instead, and asks for the
 version and the model it belongs to.
@@ -17,10 +19,12 @@ nothing else.
 from __future__ import annotations
 
 import argparse
+import email.message
 import hashlib
 import re
 import sys
 import tempfile
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -41,6 +45,7 @@ HEADERS = {"User-Agent": "emdatabase (https://github.com/electronmicroscopy/emda
 FIELD_ORDER = (
     "description",
     "source",
+    "url",
     "checksum",
     "file",
     "size_bytes",
@@ -76,11 +81,24 @@ def content_length(url: str) -> int | None:
         return None
 
 
-def download_md5(url: str, destination: Path, progressbar: bool = True) -> tuple[str, int]:
-    """Stream ``url`` to ``destination``; return its ``(md5 hex, byte count)``.
+def _served_name(headers: email.message.Message) -> str:
+    """The file name a response's ``Content-Disposition`` gives, or ``""``.
+
+    It is the only thing that names the file behind a link that does not end in
+    it, which is how Google Drive and other query-string links serve.
+    """
+    message = email.message.Message()
+    message["Content-Disposition"] = headers.get("Content-Disposition", "")
+    return Path(message.get_filename() or "").name
+
+
+def download_md5(url: str, destination: Path, progressbar: bool = True) -> tuple[str, int, str]:
+    """Stream ``url`` to ``destination``; return ``(md5 hex, byte count, name)``.
 
     The count is the fallback for ``size_bytes`` when the server would not
-    answer a HEAD request.
+    answer a HEAD request, and the name is what the server called the file, if
+    it said - redirects are followed, so both come from wherever the bytes
+    actually are.
     """
     from tqdm.auto import tqdm
 
@@ -88,6 +106,7 @@ def download_md5(url: str, destination: Path, progressbar: bool = True) -> tuple
     digest = hashlib.md5()
     downloaded = 0
     with urllib.request.urlopen(request, timeout=60) as response:
+        served = _served_name(response.headers)
         declared = response.headers.get("Content-Length")
         bar = tqdm(
             total=int(declared) if declared else None,
@@ -103,7 +122,26 @@ def download_md5(url: str, destination: Path, progressbar: bool = True) -> tuple
                 digest.update(chunk)
                 downloaded += len(chunk)
                 bar.update(len(chunk))
-    return digest.hexdigest(), downloaded
+    return digest.hexdigest(), downloaded, served
+
+
+def split_url(url: str) -> tuple[str, str, str]:
+    """``(source, file, url)`` for a link, with ``url`` empty when unneeded.
+
+    A link ending in the file name splits into the directory it is served from
+    and the name, which is how nearly every entry is written. One with a query
+    string, or with no extension on its last segment, names nothing: it is kept
+    whole as ``url``, ``source`` is the host it points at, and the file name has
+    to come from the server.
+    """
+    parts = urllib.parse.urlsplit(url)
+    if not (parts.scheme and parts.netloc):
+        return "", "", ""
+    last = parts.path.rpartition("/")[2]
+    if parts.query or "." not in last:
+        return f"{parts.scheme}://{parts.netloc}", "", url
+    source, _, filename = url.rpartition("/")
+    return source, filename, ""
 
 
 def default_name(filename: str) -> str:
@@ -188,6 +226,19 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _entry_target(args: argparse.Namespace, filename: str) -> tuple[str, Path] | None:
+    """``(entry name, path to write)``, or ``None`` after printing why not."""
+    name = args.name or _ask("entry name", default_name(filename), args.yes)
+    if not name:
+        print("the entry needs a name")
+        return None
+    out_path = args.out / f"{name}.yaml"
+    if out_path.exists() and not args.force:
+        print(f"{out_path} already exists; pass --force to overwrite it")
+        return None
+    return name, out_path
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -205,35 +256,46 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("a URL is required (or --validate PATH)")
 
     url = args.url.rstrip("/")
-    source, _, filename = url.rpartition("/")
-    if not source or not filename:
-        print(f"{args.url!r} is not a direct link to a file")
+    source, filename, link = split_url(url)
+    if not source:
+        print(f"{args.url!r} is not a link to a file")
         return 1
 
-    name = args.name or _ask("entry name", default_name(filename), args.yes)
-    if not name:
-        print("the entry needs a name")
-        return 1
-    out_path = args.out / f"{name}.yaml"
-    if out_path.exists() and not args.force:
-        print(f"{out_path} already exists; pass --force to overwrite it")
+    # The name is only known up front for a link that ends in it; otherwise the
+    # server says, once the download has started.
+    target = _entry_target(args, filename) if filename else None
+    if filename and target is None:
         return 1
 
     size_bytes = content_length(url)
     checksum = args.checksum
     if checksum is None:
-        temporary = Path(tempfile.gettempdir()) / filename
+        temporary = Path(tempfile.gettempdir()) / (filename or "download")
         try:
-            digest, downloaded = download_md5(url, temporary)
+            digest, downloaded, served = download_md5(url, temporary)
         except OSError as error:
             print(f"could not download {url}: {error}")
             return 1
         checksum = f"md5:{digest}"
         size_bytes = size_bytes if size_bytes is not None else downloaded
+        if not filename and served:
+            filename = served
+            temporary = temporary.rename(temporary.with_name(filename))
         if args.keep:
             print(f"kept {temporary}")
         else:
             temporary.unlink(missing_ok=True)
+
+    if not filename:
+        filename = _ask("file name the download should be saved as", assume_yes=args.yes)
+        if not filename:
+            print(f"{url} does not name a file, and neither did the server")
+            return 1
+    if target is None:
+        target = _entry_target(args, filename)
+        if target is None:
+            return 1
+    name, out_path = target
 
     description = args.description or _ask("description", assume_yes=args.yes)
     if not description:
@@ -243,6 +305,7 @@ def main(argv: list[str] | None = None) -> int:
     entry: dict[str, Any] = {
         "description": description,
         "source": source,
+        "url": link,
         "checksum": checksum,
         "file": filename,
         "size_bytes": size_bytes,

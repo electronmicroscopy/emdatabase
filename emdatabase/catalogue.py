@@ -118,6 +118,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         "doi": md.doi or "",
         "source": md.source,
         "file": md.file,
+        "url": ds.download_url,
         "version": md.version or "",
         "model_class": md.model.class_ if md.model else "",
         "model_framework": md.model.framework if md.model else "",

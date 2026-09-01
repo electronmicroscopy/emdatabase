@@ -89,3 +89,9 @@ Zenodo is preferred: it gives a DOI, a stable URL and a record that is not
 going to be rewritten. A GitHub URL is acceptable if it is pinned to a commit
 SHA. A URL on a moving branch is not, because the file behind it can change
 without the checksum changing with it.
+
+Google Drive works for a small file, as a
+``https://drive.google.com/uc?export=download&id=<id>`` link written to the
+entry's ``url``; above about 100 MB Drive answers with a virus-scan page
+instead of the file, and the entry will not download. The CLI recognises a link
+like that and fills in ``url``, ``source`` and ``file`` itself.

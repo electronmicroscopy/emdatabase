@@ -1,0 +1,29 @@
+# $schema: ./json-schema.json
+TutorialUNet_v1:
+  description: >-
+    Trained weights for the small U-Net from the quantem tutorial
+    neural_networks_02_unet.ipynb (quantem.core.ml.CNN2d, single-channel
+    segmentation of synthetic shapes). A plain state dict saved with
+    torch.save(model.state_dict(), path); load with torch.load(path,
+    weights_only=True) into CNN2d(in_channels=1, out_channels=1,
+    final_activation=torch.nn.Sigmoid()).
+  source: https://drive.google.com
+  url: https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40CcdTSiXGnpG_oRAWdKwHL
+  checksum: md5:bcdc37950e37dc132499b63660f44485
+  file: nn02_unet1_weights.pt
+  size_bytes: 2632696
+  license: MIT
+  technique: Other
+  tags:
+    - Machine Learning
+    - Segmentation
+    - Tutorial
+  authors:
+    Arthur McCray:
+      affiliation: Stanford University
+  kind: weights
+  version: "1"
+  model:
+    class: quantem.core.ml.CNN2d
+    framework: torch
+    quantem: ">=0.1"

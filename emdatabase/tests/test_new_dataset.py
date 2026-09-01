@@ -89,6 +89,36 @@ def test_the_head_request_follows_a_redirect(server, tmp_path):
     assert entry["checksum"] == f"md5:{MD5}"
 
 
+def test_a_link_that_names_no_file_is_written_as_a_url(server, tmp_path):
+    """A Google-Drive-shaped link: the entry keeps the whole link, and the file
+    name comes from the ``Content-Disposition`` the redirect leads to."""
+    base, _ = server
+    link = f"{base}/uc?export=download&id=MyData.zspy"
+    assert (
+        main(
+            [
+                link,
+                "--name",
+                "MyData",
+                "--out",
+                str(tmp_path),
+                "--description",
+                "A 4D-STEM dataset of something.",
+                "--yes",
+            ]
+        )
+        == 0
+    )
+    path = tmp_path / "MyData.yaml"
+    assert validate_file(path) == []
+    entry = _document(path)["MyData"]
+    assert entry["url"] == link
+    assert entry["source"] == base
+    assert entry["file"] == "MyData.zspy"
+    assert entry["checksum"] == f"md5:{MD5}"
+    assert entry["size_bytes"] == len(CONTENT)
+
+
 def test_prompts_fill_in_the_optional_fields(server, tmp_path, monkeypatch):
     base, _ = server
     _answers(
