@@ -4,7 +4,7 @@ emdatabase
 This is a simple project for aggregating different Electron Microscopy files which are hosted over different sources.  It uses pooch to download datasets and should be
 used as a way to host simple example datasets for method validation.
 
-Data is stored in a file "User/emdatabase" but this can be also set to a custom location.
+Downloads go to `~/.cache/emdatabase` by default; shared read-only locations can be added with `emdatabase.add_location`.
 
 List of datasets https://electronmicroscopy.github.io/emdatabase/datasets.html
 
@@ -63,48 +63,94 @@ the whole index.
 
 ## Configuration
 
-Configuration is dask-style: shipped defaults, then every `*.yaml` in
-`~/.config/emdatabase/` (or wherever `EMDATABASE_CONFIG` points), then
-environment variables, then `config.set` — each layer overriding the one before.
+Data lives in two kinds of place: one **personal** directory, writable, where
+downloads go, and any number of named **shared** stores, read-only, searched
+first so a copy already on a group drive is used instead of refetched.
+
+`add_location` writes both:
 
 ```python
 from emdatabase import config
 
-config.get("data_dir")                                # None -> the pooch cache dir
-config.set({"data_dir": "/big/disk/emdatabase"})      # for this process
-config.write()                                        # -> ~/.config/emdatabase/config.yaml
+config.add_location("/group/example_data")                 # a shared store
+config.add_location("/big/disk/emdatabase", "personal")    # where downloads go
+config.locations()
 ```
 
-`emdatabase.get_data_dir()` and `emdatabase.set_data_dir(path)` wrap the
-`data_dir` key. Downloads go to `data_dir`, which defaults to pooch's cache
-directory (`~/.cache/emdatabase` on Linux).
-
-From the environment, keys are prefixed `EMDATABASE_` and nest on a double
-underscore:
-
-```bash
-export EMDATABASE_DATA_DIR=/scratch/emdatabase
-export EMDATABASE_STORES__GROUP=/group/example_data
+```
+[Location(name='example_data', path=PosixPath('/group/example_data'), kind='shared'),
+ Location(name='personal', path=PosixPath('/big/disk/emdatabase'), kind='personal')]
 ```
 
-### Stores: data installed once for everyone
+`locations()` is the search order: the stores in the order they were added, then
+the personal directory last. A store is named after the last component of its
+path unless you pass `name=`, and that name is the provenance — it is what
+`catalogue.entry()["location"]`, `emdatabase.filter(location="example_data")` and
+the browser widget report for a copy found there. Nothing is written to a store
+unless you name it as a download's destination, which is how one is seeded.
 
-A store is a named, read-only directory searched **before** your own data
-directory, so a copy that is already on a group drive is used instead of
-refetched. Downloads always go to `data_dir`; nothing is ever written to a store
-by emdatabase.
+Removing one takes either the name or the path; `"personal"` puts downloads back
+in the default cache directory:
+
+```python
+config.remove_location("example_data")
+config.remove_location("/group/example_data")   # the same thing, by path
+config.remove_location("personal")
+```
+
+Both functions persist to `~/.config/emdatabase/config.yaml`, which is read on
+every import. Pass `persist=False` to change this process only, or use
+`config.set` as a context manager for a change that lasts for a block:
+
+```python
+config.add_location("/scratch/em", "personal", persist=False)   # this process
+with config.set({"data_dir": "/scratch/em"}):                   # this block
+    ...
+```
+
+The path does not have to exist when you add it — a store may be mounted later —
+but you get a warning saying so.
+
+### Seeding a store
+
+`destination=` takes a store's name, which is how the copy gets onto the share in
+the first place — run it once, from an account with write access:
+
+```python
+from emdatabase import data
+
+data.CuZnHAADF().download(destination="example_data")
+```
+
+The file is written with your umask, so `chmod` it group-readable afterwards if
+your umask is not; emdatabase does not set permissions for you.
+
+### The keys underneath
+
+Configuration is dask-style: shipped defaults, then every `*.yaml` in
+`~/.config/emdatabase/` (or wherever `EMDATABASE_CONFIG` points), then
+environment variables, then `config.set` — each layer overriding the one before.
+There are two keys, and `add_location` is a wrapper over writing them yourself:
 
 ```yaml
 # ~/.config/emdatabase/config.yaml
 data_dir: /big/disk/emdatabase
 stores:
-  group: /group/example_data
+  example_data: /group/example_data
   cluster: /cluster/em_data
 ```
 
-Stores are searched in declaration order. The name is the provenance: it is what
-`catalogue.entry()["location"]`, `emdatabase.filter(location="group")` and the
-widgets report for a copy found there — `"user"` for your own.
+`data_dir: null` means pooch's cache directory (`~/.cache/emdatabase` on Linux).
+`emdatabase.get_data_dir()` and `emdatabase.set_data_dir(path)` wrap `data_dir`.
+
+On HPC, where a config file is often the wrong place to put a machine-specific
+path, set the same keys from the environment instead — prefix `EMDATABASE_`,
+double underscore to nest — which needs no file and no write access:
+
+```bash
+export EMDATABASE_DATA_DIR=/scratch/emdatabase
+export EMDATABASE_STORES__GROUP=/group/example_data
+```
 
 ## Adding a dataset
 

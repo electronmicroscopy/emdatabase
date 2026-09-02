@@ -9,6 +9,7 @@ from typing import Any, ClassVar, Protocol
 
 import pooch
 
+from emdatabase.config import StoreName
 from emdatabase.metadata import DatasetMetadata
 
 
@@ -296,17 +297,21 @@ class DownloadableDataset:
         return widget._repr_mimebundle_(**kwargs)
 
     @staticmethod
-    def _resolve_destination(destination: str | os.PathLike | None) -> Path:
-        """Return the directory the dataset should live in."""
-        if destination is None:
-            from emdatabase import config
+    def _resolve_destination(destination: Path | StoreName | None) -> Path:
+        """Return the directory the dataset should live in.
 
-            return config.data_dir()
-        return Path(destination)
+        A string that is the name of a configured store resolves to that
+        store's directory; anything else is a path, and None is the data
+        directory downloads go to.
+        """
+        from emdatabase import config
+
+        resolved = config.resolve_destination(destination)
+        return config.data_dir() if resolved is None else resolved
 
     def download(
         self,
-        destination: str | os.PathLike | None = None,
+        destination: Path | StoreName | None = None,
         progressbar: bool | Progress = True,
         chunk_size: int = 4096,
         background: bool = True,
@@ -320,11 +325,17 @@ class DownloadableDataset:
         If the file already exists in the destination directory and the checksum matches,
         it will not be downloaded again and the existing file path will be returned.
 
+        Downloading into a shared store is how one is seeded, and the file is
+        left with whatever permissions it was written with - making it
+        group-readable is the caller's job, not this package's.
+
         Parameters
         ----------
         destination : str or Path, optional
-            The directory to download the dataset to. If None, uses the default emdata.data_dir
-            directory, by default None.
+            The directory to download the dataset to. A string naming a store
+            configured with :func:`emdatabase.add_location` resolves to that
+            store's directory; anything else is a path. If None, uses the
+            default emdata.data_dir directory, by default None.
         progressbar : bool, optional
             Whether to show a progress bar during download, by default True.
         chunk_size : int, optional
@@ -350,7 +361,7 @@ class DownloadableDataset:
         # Resolve where the file will end up: an existing copy in a store or in
         # the user's directory, otherwise the user's download location.
         if destination is not None:
-            target = Path(destination) / self.file
+            target = self._resolve_destination(destination) / self.file
         else:
             target = self.filepath() or self._resolve_destination(None) / self.file
         # In Jupyter (with the widget installed) a background download pops a
@@ -371,7 +382,7 @@ class DownloadableDataset:
 
     def _retrieve(
         self,
-        destination: str | os.PathLike | None = None,
+        destination: Path | StoreName | None = None,
         progressbar: bool | Progress = True,
         chunk_size: int = 4096,
     ) -> Path:
@@ -451,14 +462,16 @@ class DownloadableDataset:
         found = self.filepaths()
         return found[0] if found else None
 
-    def delete(self, destination: str | None = None) -> bool:
+    def delete(self, destination: Path | StoreName | None = None) -> bool:
         """Delete the downloaded file if it is present.
 
         Parameters
         ----------
         destination : str or Path, optional
-            The directory the dataset was downloaded to. If None, uses the
-            default emdata.data_dir directory, by default None.
+            The directory the dataset was downloaded to. A string naming a store
+            configured with :func:`emdatabase.add_location` resolves to that
+            store's directory; anything else is a path. If None, uses the
+            default emdata.data_dir directory - never a store - by default None.
 
         Returns
         -------

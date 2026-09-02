@@ -4,9 +4,21 @@ Two keys are shipped, in ``emdatabase/emdatabase.yaml``: ``data_dir``, where
 downloads are written (``null`` means pooch's cache directory), and ``stores``, a
 name to read-only directory mapping searched before ``data_dir``.
 
-Read and write them from Python::
+Add and remove locations with :func:`add_location`, :func:`locations` and
+:func:`remove_location`, which is the short way to write both keys::
 
     from emdatabase import config
+
+    config.add_location("/group/example_data")                  # a shared store
+    config.add_location("/big/disk/emdatabase", "personal")     # where downloads go
+    config.locations()                                          # in search order
+    config.remove_location("example_data")
+
+Each of those persists to the config file unless called with ``persist=False``.
+A store's name is also what a download writes into, which is how a store is
+seeded: ``data.CuZnHAADF().download(destination="example_data")``.
+
+Or read and write the keys directly::
 
     config.get("data_dir")
     config.set({"data_dir": "/big/disk/emdatabase"})   # for this process
@@ -32,8 +44,9 @@ import logging
 import os
 import warnings
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
 import pooch
 import yaml
@@ -539,6 +552,9 @@ def data_dir() -> Path:
     return cache
 
 
+StoreName = Annotated[str, "the name of a store configured with add_location"]
+
+
 def stores() -> dict[str, Path]:
     """The named read-only directories searched before :func:`data_dir`.
 
@@ -549,14 +565,196 @@ def stores() -> dict[str, Path]:
     return {str(name): Path(str(path)).expanduser() for name, path in configured.items()}
 
 
+@dataclass(frozen=True)
+class Location:
+    """One place datasets are looked for: a shared store, or the personal dir.
+
+    Attributes
+    ----------
+    name : str
+        The store's name, or ``"personal"`` for :func:`data_dir`.
+    path : Path
+        The directory, with ``~`` expanded.
+    kind : str
+        ``"shared"`` for a store, ``"personal"`` for the data directory.
+    """
+
+    name: str
+    path: Path
+    kind: str
+
+
+def locations() -> list[Location]:
+    """Every configured location, in search order.
+
+    The stores in declaration order, then the personal data directory last.
+
+    Examples
+    --------
+    >>> config.locations()  # doctest: +SKIP
+    [Location(name='group', path=PosixPath('/group/example_data'), kind='shared'),
+     Location(name='personal', path=PosixPath('/big/disk/emdatabase'), kind='personal')]
+    """
+    found = [Location(name, path, "shared") for name, path in stores().items()]
+    found.append(Location("personal", data_dir(), "personal"))
+    return found
+
+
 def data_search_dirs() -> list[Path]:
     """Everywhere to look for an existing dataset: the stores, then
     :func:`data_dir`."""
     dirs: list[Path] = []
-    for directory in [*stores().values(), data_dir()]:
-        if directory not in dirs:
-            dirs.append(directory)
+    for location in locations():
+        if location.path not in dirs:
+            dirs.append(location.path)
     return dirs
+
+
+def resolve_destination(destination: Path | StoreName | None) -> Path | None:
+    """The directory a ``destination=`` argument names, or None.
+
+    A string that is exactly the name of a configured store is that store's
+    directory; every other string, and every :class:`~pathlib.Path`, is a path,
+    with ``~`` expanded. ``None`` stays ``None``, for the caller to fill in with
+    whatever its own default is.
+
+    Examples
+    --------
+    >>> config.resolve_destination("example_data")  # doctest: +SKIP
+    PosixPath('/group/example_data')
+    >>> config.resolve_destination("data")  # no store of that name  # doctest: +SKIP
+    PosixPath('data')
+    """
+    if destination is None:
+        return None
+    if isinstance(destination, str):
+        configured = stores().get(destination)
+        if configured is not None:
+            return configured
+    return Path(destination).expanduser()
+
+
+def add_location(
+    path: Path | str,
+    kind: Literal["shared", "personal"] = "shared",
+    name: str | None = None,
+    persist: bool = True,
+) -> Path:
+    """Add a shared store, or set the personal data directory.
+
+    Parameters
+    ----------
+    path : Path or str
+        The directory. ``~`` is expanded. It does not have to exist yet - a
+        store may be mounted later - but a warning says so if it does not.
+    kind : {"shared", "personal"}, optional
+        ``"shared"`` appends a named store, searched before the personal
+        directory and never written to. ``"personal"`` sets ``data_dir``, where
+        downloads go; there is only one of those, so it is replaced.
+    name : str, optional
+        The store's name, and its provenance in the widgets and in
+        ``filter(location=...)``. Defaults to the last component of ``path``.
+        Passing a name already in use repoints that store. Ignored when
+        ``kind="personal"``.
+    persist : bool, optional
+        Write the configuration to ``~/.config/emdatabase/config.yaml`` (see
+        :func:`write`) so the location survives the session. ``False`` changes
+        this process only; :class:`set` as a context manager is the way to make
+        a change that lasts for a block.
+
+    Returns
+    -------
+    Path
+        The expanded path.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` was not given and the name derived from ``path`` is already
+        taken by a different directory. Pass ``name=`` to choose another.
+
+    Examples
+    --------
+    >>> config.add_location("/group/example_data")  # doctest: +SKIP
+    PosixPath('/group/example_data')
+    >>> config.add_location("/big/disk/emdatabase", "personal")  # doctest: +SKIP
+    PosixPath('/big/disk/emdatabase')
+    """
+    if kind not in ("shared", "personal"):
+        raise ValueError(f'kind must be "shared" or "personal", got {kind!r}')
+
+    expanded = Path(str(path)).expanduser()
+    if not expanded.exists():
+        warnings.warn(
+            f"{expanded} does not exist. It is still configured, in case it is mounted "
+            "or created later."
+        )
+
+    if kind == "personal":
+        set({"data_dir": str(expanded)})
+    else:
+        current = stores()
+        if name is None:
+            name = expanded.name
+            if name in current and current[name] != expanded:
+                raise ValueError(
+                    f"A store named {name!r} already points at {current[name]}, not "
+                    f"{expanded}. Pass name= to add this one under a different name."
+                )
+        # Assignment, not a merge: an existing name keeps its position, a new
+        # one lands last, which is the search order.
+        updated = {n: str(p) for n, p in current.items()}
+        updated[name] = str(expanded)
+        set({"stores": updated})
+
+    if persist:
+        write()
+    return expanded
+
+
+def remove_location(path_or_name: Path | str, persist: bool = True) -> None:
+    """Remove a shared store, or reset the personal data directory.
+
+    Parameters
+    ----------
+    path_or_name : Path or str
+        A store's name, a store's path, the personal directory's path, or the
+        literal ``"personal"``. Names are matched first.
+    persist : bool, optional
+        As in :func:`add_location`.
+
+    Raises
+    ------
+    KeyError
+        If nothing is configured under that name or path.
+
+    Examples
+    --------
+    >>> config.remove_location("group")       # doctest: +SKIP
+    >>> config.remove_location("/group/example_data")  # doctest: +SKIP
+    >>> config.remove_location("personal")    # back to the cache dir  # doctest: +SKIP
+    """
+    target = str(path_or_name)
+    current = stores()
+
+    name = target if target in current else None
+    if name is None:
+        expanded = Path(target).expanduser()
+        name = next((n for n, p in current.items() if p == expanded), None)
+        if name is None:
+            if target == "personal" or expanded == data_dir():
+                set({"data_dir": None})
+                if persist:
+                    write()
+                return
+            raise KeyError(
+                f"No location named or located at {target!r}. Configured: "
+                f"{[(loc.name, str(loc.path)) for loc in locations()]}"
+            )
+
+    set({"stores": {n: str(p) for n, p in current.items() if n != name}})
+    if persist:
+        write()
 
 
 def first_run_notice(directory: Path | None = None) -> None:

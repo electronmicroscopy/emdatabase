@@ -1,19 +1,40 @@
 """Tests for named stores: read-only directories searched before the data dir.
 
 The conftest fixture isolates the config, so these exercise the resolution logic
-on its own (no network - the "downloads" here find a pre-placed file).
+on its own (no network - the "downloads" here find a pre-placed file, and the
+one test that seeds a store fetches from ``conftest``'s local HTTP server).
 """
+
+import hashlib
+from pathlib import Path
+
+import pytest
 
 import emdatabase
 from emdatabase import catalogue, config
 from emdatabase.downloadable_dataset import DownloadableDataset
 from emdatabase.tests.test_load_data import TINY_DATASET
 
+CONTENT = b"a tiny dataset, allegedly" * 10
+
 
 def _dataset() -> DownloadableDataset:
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     return ds
+
+
+@pytest.fixture
+def served(http_server):
+    """A dataset served from localhost, for the tests that really download."""
+    base, directory = http_server
+    (directory / "Tiny.zspy").write_bytes(CONTENT)
+    return DownloadableDataset(
+        description="A tiny dataset, served locally.",
+        source=base,
+        file="Tiny.zspy",
+        checksum=f"md5:{hashlib.md5(CONTENT).hexdigest()}",
+    )
 
 
 def _configure(tmp_path, **stores):
@@ -124,3 +145,71 @@ def test_the_catalogue_payload_carries_the_stores(tmp_path):
     payload = catalogue.catalogue()
     assert payload["stores"] == {"group": str(tmp_path / "group")}
     assert payload["data_dir"] == str(emdatabase.get_data_dir())
+
+
+# ---------------------------------------------------------------------------
+# A store's name as a destination
+# ---------------------------------------------------------------------------
+
+
+def test_download_to_a_store_by_name(tmp_path, served):
+    """Naming a store as the destination is how one is seeded."""
+    user = _configure(tmp_path, group="group")
+    store = tmp_path / "group"
+
+    path = served.download(destination="group", progressbar=False, background=False)
+    assert path == store / served.file
+    assert path.read_bytes() == CONTENT
+    assert not (user / served.file).exists()
+
+
+def test_a_background_download_targets_the_store_before_it_finishes(tmp_path, served):
+    """The handle points at the store's directory, not at a ``group`` directory
+    relative to the working directory."""
+    _configure(tmp_path, group="group")
+    store = tmp_path / "group"
+
+    handle = served.download(destination="group", progressbar=False)
+    assert handle == store / served.file  # comparing paths never blocks
+    assert handle.result() == store / served.file
+
+
+def test_a_destination_that_is_not_a_store_name_is_a_path(tmp_path, served):
+    _configure(tmp_path, group="group")
+    elsewhere = tmp_path / "elsewhere"
+
+    path = served.download(destination=str(elsewhere), progressbar=False, background=False)
+    assert path == elsewhere / served.file
+    assert not (tmp_path / "group" / served.file).exists()
+
+
+def test_a_path_is_never_a_store_name(tmp_path):
+    """Only a string is looked up; ``Path("group")`` is a relative directory."""
+    _configure(tmp_path, group="group")
+
+    assert config.resolve_destination("group") == tmp_path / "group"
+    assert config.resolve_destination(Path("group")) == Path("group")
+    assert DownloadableDataset._resolve_destination(Path("group")) == Path("group")
+
+
+def test_resolve_destination_passes_none_through(tmp_path):
+    _configure(tmp_path, group="group")
+    assert config.resolve_destination(None) is None
+
+
+def test_delete_by_store_name_removes_the_store_copy(tmp_path):
+    """``delete()`` never touches a store; ``delete("group")`` is how you ask."""
+    user = _configure(tmp_path, group="group")
+    store = tmp_path / "group"
+
+    ds = _dataset()
+    (store / ds.file).write_bytes(b"group")
+    (user / ds.file).write_bytes(b"user")
+
+    assert ds.delete() is True  # yours only
+    assert (store / ds.file).exists()
+    assert ds.filepath() == store / ds.file  # which is what you now resolve to
+
+    assert ds.delete(destination="group") is True
+    assert not (store / ds.file).exists()
+    assert ds.filepath() is None  # nothing left anywhere

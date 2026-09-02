@@ -1,5 +1,6 @@
 ### Example datasets ###
 from emdatabase import config, data
+from emdatabase.config import StoreName, add_location, locations, remove_location
 from emdatabase.downloadable_dataset import DownloadableDataset
 from emdatabase.query import filter, list_datasets, list_weights, search  # noqa: A004
 
@@ -57,6 +58,10 @@ __all__ = [
     "filter",
     "get_data_dir",
     "set_data_dir",
+    "add_location",
+    "remove_location",
+    "locations",
+    "StoreName",
     "browse",
     "config",
     "data",
