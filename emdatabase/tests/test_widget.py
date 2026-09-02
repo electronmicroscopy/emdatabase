@@ -58,22 +58,22 @@ def test_catalogue_entry_has_expected_fields():
 
 
 def test_catalogue_entry_reports_where_the_file_came_from(tmp_path):
-    store, user = tmp_path / "group", tmp_path / "user"
-    store.mkdir()
+    group, user = tmp_path / "group", tmp_path / "user"
+    group.mkdir()
     user.mkdir()
-    config.set({"data_dir": str(user), "stores": {"group": str(store)}})
+    config.set({"locations": {"group": str(group), "personal": str(user)}})
 
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     assert catalogue.entry(TINY_DATASET, ds)["location"] is None
     (user / ds.file).write_bytes(b"x")
-    assert catalogue.entry(TINY_DATASET, ds)["location"] == "user"
-    (store / ds.file).write_bytes(b"x")
+    assert catalogue.entry(TINY_DATASET, ds)["location"] == "personal"
+    (group / ds.file).write_bytes(b"x")
     assert catalogue.entry(TINY_DATASET, ds)["location"] == "group"
 
 
 def test_catalogue_downloaded_flag_tracks_the_file(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path))
+    config.add_location(tmp_path, name="personal", persist=False)
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     assert catalogue.entry(TINY_DATASET, ds)["downloaded"] is False
@@ -161,7 +161,7 @@ def test_search_blob_includes_authors_and_affiliation():
 
 
 def test_delete_removes_downloaded_file(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path))
+    config.add_location(tmp_path, name="personal", persist=False)
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     (tmp_path / ds.file).write_bytes(b"x")
@@ -283,7 +283,7 @@ def test_download_toasts_plumbing():
 
 @pytest.mark.slow
 def test_widget_download_end_to_end(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path))
+    config.add_location(tmp_path, name="personal", persist=False)
     widget = _browser()
     future = widget._start_download(TINY_DATASET)
     assert future is not None

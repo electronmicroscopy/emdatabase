@@ -63,17 +63,15 @@ the whole index.
 
 ## Configuration
 
-Data lives in two kinds of place: one **personal** directory, writable, where
-downloads go, and any number of named **shared** stores, read-only, searched
-first so a copy already on a group drive is used instead of refetched.
-
-`add_location` writes both:
+Data lives in named **locations**. `personal` is the one writable location,
+where downloads go; every other one is read-only and searched first, so a copy
+already on a group drive is used instead of refetched.
 
 ```python
 from emdatabase import config
 
-config.add_location("/group/example_data")                 # a shared store
-config.add_location("/big/disk/emdatabase", "personal")    # where downloads go
+config.add_location("/group/example_data")                    # read-only
+config.add_location("/big/disk/emdatabase", name="personal")  # where downloads go
 config.locations()
 ```
 
@@ -82,15 +80,16 @@ config.locations()
  Location(name='personal', path=PosixPath('/big/disk/emdatabase'), kind='personal')]
 ```
 
-`locations()` is the search order: the stores in the order they were added, then
-the personal directory last. A store is named after the last component of its
+`locations()` is the search order: the shared locations in the order they were
+added, then `personal` last. A location is named after the last component of its
 path unless you pass `name=`, and that name is the provenance — it is what
 `catalogue.entry()["location"]`, `emdatabase.filter(location="example_data")` and
-the browser widget report for a copy found there. Nothing is written to a store
-unless you name it as a download's destination, which is how one is seeded.
+the browser widget report for a copy found there. Nothing is written to a shared
+location unless you name it as a download's destination, which is how one is
+seeded.
 
-Removing one takes either the name or the path; `"personal"` puts downloads back
-in the default cache directory:
+Removing one takes either the name or the path; `"personal"` is not deleted but
+reset, putting downloads back in the default cache directory:
 
 ```python
 config.remove_location("example_data")
@@ -103,18 +102,18 @@ every import. Pass `persist=False` to change this process only, or use
 `config.set` as a context manager for a change that lasts for a block:
 
 ```python
-config.add_location("/scratch/em", "personal", persist=False)   # this process
-with config.set({"data_dir": "/scratch/em"}):                   # this block
+config.add_location("/scratch/em", name="personal", persist=False)  # this process
+with config.set({"locations.personal": "/scratch/em"}):             # this block
     ...
 ```
 
-The path does not have to exist when you add it — a store may be mounted later —
+The path does not have to exist when you add it — a share may be mounted later —
 but you get a warning saying so.
 
-### Seeding a store
+### Seeding a shared location
 
-`destination=` takes a store's name, which is how the copy gets onto the share in
-the first place — run it once, from an account with write access:
+`destination=` takes a location's name, which is how the copy gets onto the share
+in the first place — run it once, from an account with write access:
 
 ```python
 from emdatabase import data
@@ -125,31 +124,31 @@ data.CuZnHAADF().download(destination="example_data")
 The file is written with your umask, so `chmod` it group-readable afterwards if
 your umask is not; emdatabase does not set permissions for you.
 
-### The keys underneath
+### The key underneath
 
 Configuration is dask-style: shipped defaults, then every `*.yaml` in
 `~/.config/emdatabase/` (or wherever `EMDATABASE_CONFIG` points), then
 environment variables, then `config.set` — each layer overriding the one before.
-There are two keys, and `add_location` is a wrapper over writing them yourself:
+There is one key, and `add_location` is a wrapper over writing it yourself:
 
 ```yaml
 # ~/.config/emdatabase/config.yaml
-data_dir: /big/disk/emdatabase
-stores:
+locations:
   example_data: /group/example_data
   cluster: /cluster/em_data
+  personal: /big/disk/emdatabase
 ```
 
-`data_dir: null` means pooch's cache directory (`~/.cache/emdatabase` on Linux).
-`emdatabase.get_data_dir()` and `emdatabase.set_data_dir(path)` wrap `data_dir`.
+`personal: null` means pooch's cache directory (`~/.cache/emdatabase` on Linux),
+and `config.data_dir()` reports whichever it resolves to.
 
 On HPC, where a config file is often the wrong place to put a machine-specific
-path, set the same keys from the environment instead — prefix `EMDATABASE_`,
+path, set the same key from the environment instead — prefix `EMDATABASE_`,
 double underscore to nest — which needs no file and no write access:
 
 ```bash
-export EMDATABASE_DATA_DIR=/scratch/emdatabase
-export EMDATABASE_STORES__GROUP=/group/example_data
+export EMDATABASE_LOCATIONS__PERSONAL=/scratch/emdatabase
+export EMDATABASE_LOCATIONS__GROUP=/group/example_data
 ```
 
 ## Adding a dataset

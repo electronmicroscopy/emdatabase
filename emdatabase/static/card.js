@@ -126,17 +126,17 @@ function render({ model, el: root }) {
     const status = el("div", "emdb-d-status");
     if (downloading) {
       status.appendChild(el("span", "emdb-d-badge", "downloading…"));
-    } else if (it.downloaded && it.location && it.location !== "user") {
-      // `location` is the name of the store the copy was found in.
+    } else if (it.downloaded && it.location && it.location !== "personal") {
+      // `location` is the name of the shared location the copy was found in.
       const label = "● " + it.location + (it.user_path ? " + yours" : "");
       const badge = el("span", "emdb-d-badge shared", esc(label));
-      badge.title = "from the " + it.location + " store: " + it.path
+      badge.title = "from " + it.location + ": " + it.path
         + (it.user_path ? "\nyour copy: " + it.user_path : "");
       status.appendChild(badge);
       if (it.user_path) {
         const del = el("button", "emdb-delete", "Delete yours");
-        del.title = "Remove your copy (" + it.user_path + "). The " + it.location
-          + " store keeps its own.";
+        del.title = "Remove your copy (" + it.user_path + "). The copy in "
+          + it.location + " is untouched.";
         del.addEventListener("click", () => cmd("delete"));
         status.appendChild(del);
       }

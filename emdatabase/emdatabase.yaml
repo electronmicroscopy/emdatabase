@@ -1,2 +1,2 @@
-data_dir: null
-stores: {}
+locations:
+  personal: null

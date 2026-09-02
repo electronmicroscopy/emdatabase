@@ -9,7 +9,7 @@ from typing import Any, ClassVar, Protocol
 
 import pooch
 
-from emdatabase.config import StoreName
+from emdatabase.config import LocationName
 from emdatabase.metadata import DatasetMetadata
 
 
@@ -297,11 +297,11 @@ class DownloadableDataset:
         return widget._repr_mimebundle_(**kwargs)
 
     @staticmethod
-    def _resolve_destination(destination: Path | StoreName | None) -> Path:
+    def _resolve_destination(destination: Path | LocationName | None) -> Path:
         """Return the directory the dataset should live in.
 
-        A string that is the name of a configured store resolves to that
-        store's directory; anything else is a path, and None is the data
+        A string that is the name of a configured location resolves to that
+        location's directory; anything else is a path, and None is the personal
         directory downloads go to.
         """
         from emdatabase import config
@@ -311,31 +311,32 @@ class DownloadableDataset:
 
     def download(
         self,
-        destination: Path | StoreName | None = None,
+        destination: Path | LocationName | None = None,
         progressbar: bool | Progress = True,
         chunk_size: int = 4096,
         background: bool = True,
     ) -> DatasetPath:
-        """Download the dataset to the specified destination if not already present.
+        """Return a verified local path to the file, downloading it if needed.
 
-        By default, this will download to the defined emdata.data_dir directory. You can set
-        a custom default download directory with emdata.data_dir = 'your/path/here' which will
-        in turn set the corresponding environment variable.
+        With no ``destination`` the search order from :func:`emdatabase.locations`
+        is consulted first: a copy in any shared location, or in the personal
+        one, is returned without downloading. Only if the file is nowhere is it
+        fetched into the personal location.
 
-        If the file already exists in the destination directory and the checksum matches,
-        it will not be downloaded again and the existing file path will be returned.
-
-        Downloading into a shared store is how one is seeded, and the file is
-        left with whatever permissions it was written with - making it
-        group-readable is the caller's job, not this package's.
+        With a ``destination`` the file is written there, whether or not a copy
+        exists elsewhere. Naming a shared location is how it is seeded; naming
+        ``"personal"`` forces your own copy even when the share has one. The
+        file is left with whatever permissions it was written with; making it
+        group-readable is the caller's job.
 
         Parameters
         ----------
-        destination : str or Path, optional
-            The directory to download the dataset to. A string naming a store
-            configured with :func:`emdatabase.add_location` resolves to that
-            store's directory; anything else is a path. If None, uses the
-            default emdata.data_dir directory, by default None.
+        destination : Path or LocationName, optional
+            Where to write the file. A string naming a location configured with
+            :func:`emdatabase.add_location` (including ``"personal"``) resolves
+            to that location's directory; any other string or a ``Path`` is a
+            directory path. ``None`` (the default) resolves through the search
+            order as described above.
         progressbar : bool, optional
             Whether to show a progress bar during download, by default True.
         chunk_size : int, optional
@@ -358,8 +359,8 @@ class DownloadableDataset:
         """
         if not background:
             return DatasetPath(self._retrieve(destination, progressbar, chunk_size))
-        # Resolve where the file will end up: an existing copy in a store or in
-        # the user's directory, otherwise the user's download location.
+        # Resolve where the file will end up: an existing copy in a shared
+        # location or in the personal one, otherwise the personal one.
         if destination is not None:
             target = self._resolve_destination(destination) / self.file
         else:
@@ -382,15 +383,15 @@ class DownloadableDataset:
 
     def _retrieve(
         self,
-        destination: Path | StoreName | None = None,
+        destination: Path | LocationName | None = None,
         progressbar: bool | Progress = True,
         chunk_size: int = 4096,
     ) -> Path:
         """Fetch the file and return its local path (blocking).
 
-        With no explicit destination, an existing copy in a store is used as-is
-        (never re-downloaded); otherwise pooch downloads into the user's data
-        directory.
+        With no explicit destination, an existing copy in a shared location is
+        used as-is (never re-downloaded); otherwise pooch downloads into the
+        personal directory.
         """
         if progressbar is True:
             try:
@@ -402,9 +403,9 @@ class DownloadableDataset:
                 # Our own bar rather than pooch's; see _TqdmProgress.
                 progressbar = _TqdmProgress(self.file)
         if destination is None:
-            in_store = self._find_in_stores()
-            if in_store is not None:
-                return in_store
+            shared = self._find_in_shared_locations()
+            if shared is not None:
+                return shared
             destination = self._resolve_destination(None)
         else:
             destination = self._resolve_destination(destination)
@@ -430,12 +431,14 @@ class DownloadableDataset:
                 progressbar.close()
         return Path(filepath)
 
-    def _find_in_stores(self) -> Path | None:
-        """Path to an existing copy in one of the configured stores, or None."""
+    def _find_in_shared_locations(self) -> Path | None:
+        """Path to an existing copy in a configured shared location, or None."""
         from emdatabase import config
 
-        for directory in config.stores().values():
-            candidate = directory / self.file
+        for location in config.locations():
+            if location.kind == "personal":
+                continue
+            candidate = location.path / self.file
             if candidate.exists():
                 return candidate
         return None
@@ -443,12 +446,12 @@ class DownloadableDataset:
     def filepaths(self) -> list[Path]:
         """Every copy of the dataset on disk, in search order.
 
-        A dataset can be in more than one place at once - a copy in a store and
-        your own download of the same file - and which one gets used is only a
-        matter of the search order. :meth:`filepath` returns the winner; this
-        returns all of them, so a caller can tell the difference between the
-        one copy that is in a store and a store copy that you also have your
-        own of.
+        A dataset can be in more than one place at once - a copy in a shared
+        location and your own download of the same file - and which one gets
+        used is only a matter of the search order. :meth:`filepath` returns the
+        winner; this returns all of them, so a caller can tell the difference
+        between the one copy that is shared and a shared copy that you also
+        have your own of.
         """
         from emdatabase import config
 
@@ -457,21 +460,21 @@ class DownloadableDataset:
     def filepath(self) -> Path | None:
         """Return the local file path of the dataset if present.
 
-        Looks in the configured stores first, then the user's data directory.
-        Returns None if the dataset is not downloaded anywhere."""
+        Looks in the configured shared locations first, then the personal
+        directory. Returns None if the dataset is not downloaded anywhere."""
         found = self.filepaths()
         return found[0] if found else None
 
-    def delete(self, destination: Path | StoreName | None = None) -> bool:
+    def delete(self, destination: Path | LocationName | None = None) -> bool:
         """Delete the downloaded file if it is present.
 
         Parameters
         ----------
         destination : str or Path, optional
-            The directory the dataset was downloaded to. A string naming a store
-            configured with :func:`emdatabase.add_location` resolves to that
-            store's directory; anything else is a path. If None, uses the
-            default emdata.data_dir directory - never a store - by default None.
+            The directory the dataset was downloaded to. A string naming a
+            location configured with :func:`emdatabase.add_location` resolves to
+            that location's directory; anything else is a path. If None, uses
+            the personal directory - never a shared one - by default None.
 
         Returns
         -------

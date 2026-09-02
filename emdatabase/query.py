@@ -26,7 +26,8 @@ from emdatabase.downloadable_dataset import DownloadableDataset
 
 #: Fields :func:`filter` accepts. The first group is the dataset's own metadata;
 #: ``downloaded`` and ``location`` describe what is on this machine instead -
-#: ``location`` being the name of the store a copy was found in, or ``"user"``.
+#: ``location`` being the name of the location a copy was found in, which is
+#: ``"personal"`` for your own directory.
 FILTER_FIELDS = (
     "kind",
     "version",
@@ -104,7 +105,7 @@ def filter(**criteria: Any) -> list[DownloadableDataset]:  # noqa: A001
         emdatabase.filter(microscope_vendor=["JEOL", "Hitachi"])
         emdatabase.filter(kind="weights")
         emdatabase.filter(downloaded=True)
-        emdatabase.filter(location="group")     # found in the "group" store
+        emdatabase.filter(location="group")     # found in the "group" location
 
     Several criteria are combined with and. An unknown field raises rather than
     being ignored, so a typo cannot quietly return the whole index.
