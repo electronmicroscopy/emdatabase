@@ -29,7 +29,7 @@ jobs:
       - name: Upload the built site
         uses: actions/upload-artifact@v4
         with:
-          name: html-${{ github.ref_name }}
+          name: html-${{ github.run_id }}
           path: docs/build/html
           retention-days: 14
 
