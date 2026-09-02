@@ -1,16 +1,15 @@
 name: "New Dataset"
-description: Add a new dataset to the EM Database
+description: Add a new dataset or model weights to the EM Database
 title: "[New Dataset]: "
 labels:
   - "new_dataset"
-assignees:
-  - CSSFrancis
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for adding a new dataset to the EM Database! Please fill out the following
-        form regarding the dataset you are submitting. Make sure to include as much relevant
+        Thanks for adding a new entry to the EM Database! Please fill out the following
+        form regarding the dataset or model weights you are submitting. Make sure to
+        include as much relevant metadata as you can.
   - type: input
     id: dataset_name
     attributes:
@@ -32,17 +31,33 @@ body:
     attributes:
       label: --Affiliation--
       description: Which institution or company are you at?
-      placeholder: ex. University of Wisconsin-Madison
+      placeholder: ex. University of Mars
     validations:
       required: true
+  - type: input
+    id: orcid
+    attributes:
+      label: --ORCID--
+      description: Your ORCID, as 0000-0000-0000-0000.
+      placeholder: ex. 0000-0000-0000-0000
+    validations:
+      required: false
   - type: input
     id: url
     attributes:
       label: --URL--
-      description: Please provide a URL where the dataset can be downloaded. This must be a direct link to the file itself - the file name is taken from the end of it.
+      description: Please provide a URL where the file can be downloaded. A link ending in the file name is split into the directory it is served from and the name; a link that names no file - a Google Drive `uc?export=download&id=` link, or anything else with a query string - is kept whole, and then the file name has to be given below.
       placeholder: ex. https://zenodo.org/records/15490547/files/smallPtychography.hspy
     validations:
       required: true
+  - type: input
+    id: file_name
+    attributes:
+      label: --File Name--
+      description: Only needed when the URL above does not end in the file name. This is the name the file is saved under locally.
+      placeholder: ex. smallPtychography.hspy
+    validations:
+      required: false
   - type: input
     id: checksum
     attributes:
@@ -92,6 +107,14 @@ body:
     validations:
       required: false
   - type: input
+    id: camera_length
+    attributes:
+      label: Camera Length
+      description: Please provide the camera length, with its unit.
+      placeholder: ex. 100 mm
+    validations:
+      required: false
+  - type: input
     id: accelerating_voltage
     attributes:
       label: Accelerating Voltage
@@ -122,10 +145,64 @@ body:
         - Cryo-EM
         - Other
   - type: input
+    id: doi
+    attributes:
+      label: DOI
+      description: DOI of the record or the paper, without a `https://doi.org/` prefix.
+      placeholder: ex. 10.5281/zenodo.15490547
+    validations:
+      required: false
+  - type: input
     id: tags
     attributes:
       label: Tags
       description: Please provide relevant tags for the dataset, separated by commas.
       placeholder: ex. Orientation Mapping, Nanocrystals, Ptychography, Strain Mapping
+    validations:
+      required: false
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: What the entry hands out - a dataset, or a trained model checkpoint.
+      default: 0
+      options:
+        - dataset
+        - weights
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The released version this entry pins. One entry per version.
+      placeholder: ex. 1
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        The three fields below apply to `Kind: weights` only. Leave them blank for a
+        dataset - a dataset entry with a model block is rejected.
+  - type: input
+    id: model_class
+    attributes:
+      label: Model Class
+      description: The dotted import path of the class the checkpoint loads into. Required for model weights.
+      placeholder: ex. quantem.core.ml.CNN2d
+    validations:
+      required: false
+  - type: input
+    id: model_framework
+    attributes:
+      label: Model Framework
+      description: The framework the checkpoint was saved with. Required for model weights.
+      placeholder: ex. torch
+    validations:
+      required: false
+  - type: input
+    id: model_quantem
+    attributes:
+      label: Model quantem
+      description: The quantem versions the checkpoint loads under.
+      placeholder: ex. ">=0.2,<0.3"
     validations:
       required: false

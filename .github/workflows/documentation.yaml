@@ -24,13 +24,13 @@ jobs:
       - name: Sphinx build
         timeout-minutes: 15
         run: |
-          make html -C doc
+          make html -C docs
 
       - name: Upload the built site
         uses: actions/upload-artifact@v4
         with:
-          name: html-${{ github.ref_name }}
-          path: doc/build/html
+          name: html-${{ github.run_id }}
+          path: docs/build/html
           retention-days: 14
 
       - name: Deploy to GitHub Pages
@@ -39,5 +39,5 @@ jobs:
         with:
           publish_branch: gh-pages
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir:  doc/build/html
+          publish_dir:  docs/build/html
           force_orphan: true

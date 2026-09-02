@@ -1,0 +1,34 @@
+# $schema: ./json-schema.json
+LSMOLineScan:
+  description: A core-loss EELS line scan through a La(0.7)Sr(0.3)MnO3 thin film in which
+    part of the film was deliberately given a very long electron beam exposure, inducing
+    oxygen vacancies. Used by the eXSpy fine structure tutorial - the O-K and Mn-L2,3
+    fine structure changes measurably between the damaged and undamaged regions.
+    40 probe positions at 3.219 nm with 586 energy channels covering 428.5-721 eV at
+    0.5 eV dispersion. Acquired on a JEOL ARM200cF with a Gatan Quantum ER in DualEELS
+    mode at 80 kV, 27.42 mrad convergence and 33.19 mrad collection angle. The matching
+    low-loss spectrum is LSMOLineScanLowLoss.
+  source: https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets
+  checksum: md5:9cfcf5fbcaac71709b69b79df12faf98
+  file: LSMO_linescan.hspy
+  size_bytes: 91885
+  detector_manufacturer: Gatan
+  detector: Quantum ER
+  microscope_vendor: JEOL
+  microscope_model: ARM200cF
+  voltage: 80 kV
+  license: Unspecified
+  technique: EELS
+  tags:
+    - Line Scan
+    - Core Loss
+    - Fine Structure
+    - Perovskite
+    - Oxygen Vacancies
+    - Beam Damage
+    - DualEELS
+    - Tutorial
+  authors:
+    Magnus Nord:
+      affiliation: Norwegian University of Science and Technology
+  kind: dataset

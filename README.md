@@ -1,27 +1,27 @@
-EM Data
--------
+emdatabase
+----------
 
 This is a simple project for aggregating different Electron Microscopy files which are hosted over different sources.  It uses pooch to download datasets and should be
 used as a way to host simple example datasets for method validation.
 
-Data is stored in a file "User/em_database" but this can be also set to a custom location.
+Data is stored in a file "User/emdatabase" but this can be also set to a custom location.
 
-List of datasets https://cssfrancis.github.io/em_data/datasets.html
+List of datasets https://electronmicroscopy.github.io/emdatabase/datasets.html
 
 ## Installation
 
 ```bash
-pip install em-database
+pip install emdatabase
 ```
 
 ## Usage
 
-Every dataset is a class under `em_database.data`.  Calling `download()` fetches the
+Every dataset is a class under `emdatabase.data`.  Calling `download()` fetches the
 file to the data directory, verifies its checksum, and returns a path handle.  Files
 that are already present are not downloaded again.
 
 ```python
-import em_database.data as data
+import emdatabase.data as data
 import hyperspy.api as hs
 
 path = data.LayeredCuNb4DSTEM().download()
@@ -48,66 +48,68 @@ matches named fields.  Both return dataset objects, so a result can be downloade
 directly.
 
 ```python
-import em_database
+import emdatabase
 
-em_database.list_datasets()                                     # everything
-em_database.search("amorphous")                            # any field
-em_database.search("jeol eels")                            # all terms, any field
-em_database.filter(technique="4D-STEM", tags="Strain")     # exact, case-insensitive
-em_database.filter(microscope_vendor=["JEOL", "Hitachi"])  # a list means any of
-em_database.filter(downloaded=True)                        # what is already here
+emdatabase.list_datasets()                                     # everything
+emdatabase.search("amorphous")                            # any field
+emdatabase.search("jeol eels")                            # all terms, any field
+emdatabase.filter(technique="4D-STEM", tags="Strain")     # exact, case-insensitive
+emdatabase.filter(microscope_vendor=["JEOL", "Hitachi"])  # a list means any of
+emdatabase.filter(downloaded=True)                        # what is already here
 ```
 
 An unknown field raises rather than being ignored, so a typo cannot quietly return
 the whole index.
 
-## Settings
+## Configuration
 
-Configuration lives in a live, matplotlib-`rcParams`-style object,
-`em_database.settings`, seeded at import from `~/.em_database/settings.yaml`.
-Change it in memory for an immediate effect, and persist it to remember the
-choice across sessions:
-
-```python
-import em_database
-
-em_database.settings["data_dir"] = "/big/disk/em_data"  # takes effect now
-em_database.settings.save()                             # remember it next time
-```
-
-In Jupyter you can also edit them interactively — `display(em_database.settings)`
-renders a panel to set (and save) the data directory directly.
-
-The data directory defaults to `~/em_database`. Convenience helpers wrap the
-common case — `set_data_dir` persists by default:
+Configuration is dask-style: shipped defaults, then every `*.yaml` in
+`~/.config/emdatabase/` (or wherever `EMDATABASE_CONFIG` points), then
+environment variables, then `config.set` — each layer overriding the one before.
 
 ```python
-em_database.get_data_dir()                       # current location
-em_database.set_data_dir("/big/disk/em_data")    # set + persist
-em_database.set_data_dir("/scratch", persist=False)  # one-off, in-memory only
-em_database.reset_data_dir()                     # back to the default, forget the choice
+from emdatabase import config
+
+config.get("data_dir")                                # None -> the pooch cache dir
+config.set({"data_dir": "/big/disk/emdatabase"})      # for this process
+config.write()                                        # -> ~/.config/emdatabase/config.yaml
 ```
 
-No environment variable is needed. Only values you explicitly set are written to
-the file, so the default is never frozen in — it keeps being obeyed even if it
-changes. For a one-off override (e.g. CI) the legacy `EM_DATABASE_DATA_DIR` is
-still honored, and `EM_DATABASE_CONFIG` relocates the settings file.
+`emdatabase.get_data_dir()` and `emdatabase.set_data_dir(path)` wrap the
+`data_dir` key. Downloads go to `data_dir`, which defaults to pooch's cache
+directory (`~/.cache/emdatabase` on Linux).
 
-### Shared, system-wide data
+From the environment, keys are prefixed `EMDATABASE_` and nest on a double
+underscore:
 
-Datasets can be installed once for every user. `download()` and `filepath()`
-look in the shared/system locations **first**, then your own data directory, and
-only download (into your directory) if the file is nowhere to be found — so a
-shared copy is reused instead of refetched. Shared locations come from the
-`EM_DATABASE_SHARED_DIR` environment variable (an `os.pathsep`-separated list), a
-`shared_data_dirs` list in your settings, or a system config file
-(`/etc/em_database/settings.yaml`, or `%PROGRAMDATA%\em_database\settings.yaml`
-on Windows).
+```bash
+export EMDATABASE_DATA_DIR=/scratch/emdatabase
+export EMDATABASE_STORES__GROUP=/group/example_data
+```
+
+### Stores: data installed once for everyone
+
+A store is a named, read-only directory searched **before** your own data
+directory, so a copy that is already on a group drive is used instead of
+refetched. Downloads always go to `data_dir`; nothing is ever written to a store
+by emdatabase.
+
+```yaml
+# ~/.config/emdatabase/config.yaml
+data_dir: /big/disk/emdatabase
+stores:
+  group: /group/example_data
+  cluster: /cluster/em_data
+```
+
+Stores are searched in declaration order. The name is the provenance: it is what
+`catalogue.entry()["location"]`, `emdatabase.filter(location="group")` and the
+widgets report for a copy found there — `"user"` for your own.
 
 ## Adding a dataset
 
-Datasets are described by a YAML file in `em_database/datasets/`, one entry per file,
-validated against `em_database/datasets/json-schema.json`.  The class name is generated
+Datasets are described by a YAML file in `emdatabase/index/`, one entry per file,
+validated against `emdatabase/index/json-schema.json`.  The class name is generated
 from the top-level key:
 
 ```yaml
@@ -122,8 +124,11 @@ MyDataset:
 ```
 
 `size_bytes` is the file's `Content-Length` in bytes; the test suite checks it against
-the server on every run. `em_database/datasets/vendors.yaml` lists the microscope
+the server on every run. `emdatabase/index/vendors.yaml` lists the microscope
 vendors and detector manufacturers already in use - a new one is fine, but a name close
 to one already on the list fails CI as a misspelling.
 
-Open an issue with the new dataset template, or add the YAML file directly.
+Open an issue with the [new dataset template](https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml),
+or run `python -m emdatabase.new_dataset <url>`, which fetches the checksum and size,
+prompts for the rest and writes the file for you to open a pull request with.  See
+[CONTRIBUTING.md](CONTRIBUTING.md).

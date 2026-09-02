@@ -7,7 +7,7 @@ This example demonstrates how to load and visualize data using the HyperSpy libr
 
 import hyperspy.api as hs
 
-from em_database.data import BilayerWS2
+from emdatabase.data import BilayerWS2
 
 # Load a dataset using HyperSpy
 dataset = BilayerWS2()

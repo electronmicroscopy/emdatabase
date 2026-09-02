@@ -1,0 +1,28 @@
+# $schema: ./json-schema.json
+CuZnHAADF:
+  description: The HAADF survey image acquired simultaneously with the CuZnEELSMapping
+    spectrum image - copper and zinc oxide on carbon nanotubes. 40 x 50 pixels at
+    0.9214 nm, uint16, on a JEOL ARM200F at 200 kV and 600000x. Pairs with
+    CuZnEELSMapping for correlating elemental maps against the survey.
+    Note - the Sample.description field in the file reads "Ta2O5 25% TiO2 CSIRO 400C",
+    which is stale metadata carried over from an unrelated acquisition.
+  source: https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets
+  checksum: md5:b328b4a3c78828a6c704db332fc1e0dc
+  file: CuZn_HAADF.hspy
+  size_bytes: 34043
+  detector_manufacturer: Gatan
+  microscope_vendor: JEOL
+  microscope_model: ARM200F
+  voltage: 200 kV
+  license: Unspecified
+  technique: STEM
+  tags:
+    - HAADF
+    - Survey Image
+    - Tutorial
+  authors:
+    Ida Hjorth:
+      affiliation: Norwegian University of Science and Technology
+    Magnus Nord:
+      affiliation: Norwegian University of Science and Technology
+  kind: dataset

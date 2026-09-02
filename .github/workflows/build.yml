@@ -34,7 +34,7 @@ jobs:
         run: basedpyright
 
       - name: dataset stub is current
-        run: python -m em_database._create_stubs --check
+        run: python -m emdatabase._create_stubs --check
 
   build-with-pip:
     name: ${{ matrix.os }}-py${{ matrix.python-version }}${{ matrix.LABEL }}
@@ -84,7 +84,7 @@ jobs:
       - name: Run docstring tests
         continue-on-error: true
         run: |
-          pytest --doctest-modules --doctest-continue-on-failure --ignore-glob=em_database/tests em_database
+          pytest --doctest-modules --doctest-continue-on-failure --ignore-glob=emdatabase/tests emdatabase
 
       - name: Run tests
         run: |

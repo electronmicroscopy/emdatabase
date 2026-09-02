@@ -1,0 +1,19 @@
+# $schema: ./json-schema.json
+FeAlStripes:
+  description: A 4D STEM dataset with FeAl stripes exhibiting magnetic stripes. The dataset can be used to study the correlation between structural and magnetic properties.
+  source: https://zenodo.org/records/15490547/files
+  checksum: md5:702cb0c8ff75062c0cb23b3722c2f859
+  file: FeAl_stripes.zspy
+  size_bytes: 382141850
+  detector_manufacturer: Quantum Detectors
+  detector: Merlin
+  microscope_vendor: JEOL
+  voltage: 200 kV
+  license: CC-BY-4.0
+  technique: 4D-STEM
+  tags:
+    - Strain Mapping
+  authors:
+    Magnus Nord:
+      affiliation: Norwegian University of Science and Technology
+  kind: dataset

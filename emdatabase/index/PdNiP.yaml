@@ -1,0 +1,22 @@
+# $schema: ./json-schema.json
+PdNiPGlass:
+  description: A 4D STEM dataset of PdNiP metallic glass thin film.
+  source: https://zenodo.org/records/15490547/files
+  checksum: md5:b16375d23eda3da60ea2ff36cc11c5bd
+  file: PdNiP.zspy
+  size_bytes: 304627953
+  detector_manufacturer: Direct Electron
+  detector: DE-16
+  microscope_vendor: Thermo Fisher Scientific
+  microscope_model: Gen 1 Titan
+  voltage: 200 kV
+  license: CC-BY-4.0
+  technique: 4D-STEM
+  tags:
+    - Amorphous
+    - FEM
+    - Angular Correlations
+  authors:
+    Carter Francis:
+      affiliation: University of Wisconsin, Madison
+  kind: dataset

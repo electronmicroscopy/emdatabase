@@ -1,0 +1,27 @@
+# $schema: ./json-schema.json
+HREBSDStrainPatterns:
+  description: High-resolution EBSD patterns collected on a Direct Electron DE-Meridian,
+    centred on a deformed region suitable for cross-correlation strain analysis. 32 x 32
+    probe positions at a 25 nm step, each pattern the sum of 256 counted, dark- and
+    gain-corrected frames, binned 2 x 2 from 2048 x 2048 to 1024 x 1024 pixels. The
+    pattern-plane geometry (detector distance, pattern centre, sample tilt) and the
+    accelerating voltage were not recorded with the raw data, so the pattern axes are
+    in detector pixels.
+  source: https://zenodo.org/records/21632101/files
+  checksum: md5:76ad1ba1c0730faf629f03785d49ecd9
+  file: HREBSDStrainPatterns.zspy
+  size_bytes: 1280664400
+  detector_manufacturer: Direct Electron
+  detector: DE-Meridian
+  license: CC-BY-4.0
+  doi: 10.5281/zenodo.21632101
+  technique: EBSD
+  tags:
+    - Strain
+    - Cross Correlation
+    - High Resolution Patterns
+    - Deformation
+  authors:
+    Carter Francis:
+      affiliation: Direct Electron
+  kind: dataset

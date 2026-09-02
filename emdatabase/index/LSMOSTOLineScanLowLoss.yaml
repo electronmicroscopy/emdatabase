@@ -1,0 +1,32 @@
+# $schema: ./json-schema.json
+LSMOSTOLineScanLowLoss:
+  description: The low-loss half of the DualEELS pair for LSMOSTOLineScan - a
+    La(0.7)Sr(0.3)MnO3 on SrTiO3 thin film line scan. 10 probe positions at 3.152 nm with
+    512 energy channels covering -50 to 461 eV at 1 eV dispersion, so it contains the
+    zero-loss peak and the plasmon region. Use it with the core-loss spectrum for relative
+    thickness mapping and Fourier-ratio deconvolution. Acquired on a JEOL ARM200cF with a
+    Gatan Quantum ER at 200 kV; the low-loss dwell time is 9.44e-05 s against 0.4999 s for
+    the core loss.
+  source: https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets
+  checksum: md5:fd6e922c73e0b1e11229acb5960370cc
+  file: LSMO_STO_linescan_low_loss.hspy
+  size_bytes: 42038
+  detector_manufacturer: Gatan
+  detector: Quantum ER
+  microscope_vendor: JEOL
+  microscope_model: ARM200cF
+  voltage: 200 kV
+  license: Unspecified
+  technique: EELS
+  tags:
+    - Line Scan
+    - Low Loss
+    - Zero Loss Peak
+    - Perovskite
+    - DualEELS
+    - Thickness
+    - Tutorial
+  authors:
+    Magnus Nord:
+      affiliation: Norwegian University of Science and Technology
+  kind: dataset

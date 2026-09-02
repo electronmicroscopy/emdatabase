@@ -1,0 +1,31 @@
+# $schema: ./json-schema.json
+LayeredCuNb4DSTEM:
+  description: A 4D-STEM dataset of a layered Cu/Nb nanolaminate, acquired with a nearly
+    parallel 1.58 mrad probe on a Direct Electron CeleritasXS. 128 x 128 probe positions
+    (the central quarter of a 512 x 512 raster scan) of 256 x 256 pixel diffraction patterns,
+    each the sum of 32 camera frames at 25000 fps. Reciprocal space is calibrated at
+    0.0078768 1/Angstrom per pixel and centred on the direct beam; the detector half-width
+    is 1.008 1/Angstrom (25.3 mrad at 200 kV). The real-space scan step was not recorded
+    by the scan controller, so the navigation axes are in pixels. Gain- and dark-corrected
+    intensities were divided by 2 and rounded to uint16; multiply by 2 to recover ADU.
+  source: https://zenodo.org/records/21632101/files
+  checksum: md5:4507f116a29de495195b0dca652b682e
+  file: LayeredCuNb4DSTEM.zspy
+  size_bytes: 720938200
+  detector_manufacturer: Direct Electron
+  detector: CeleritasXS
+  voltage: 200 kV
+  camera_length: 0.6 cm
+  license: CC-BY-4.0
+  doi: 10.5281/zenodo.21632101
+  technique: 4D-STEM
+  tags:
+    - Nanolaminate
+    - Nanodiffraction
+    - Layered
+    - Orientation Mapping
+    - Strain
+  authors:
+    Carter Francis:
+      affiliation: Direct Electron
+  kind: dataset

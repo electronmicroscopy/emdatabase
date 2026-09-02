@@ -1,0 +1,21 @@
+# $schema: ./json-schema.json
+BilayerWS2:
+  description: small 4-D STEM dataset of a bilayer WS2. Each Diffraction pattern is only 8x8 pixels so the dataset is quite small although for simple non iterative ptychography 8x8 pixels should be sufficient.
+  source: https://zenodo.org/records/15490547/files
+  checksum: md5:df9376d5c020a23f0f7f51cfe79f303f
+  file: smallPtychography.hspy
+  size_bytes: 12492298
+  detector_manufacturer: Direct Electron
+  detector: CeleritasXS
+  microscope_vendor: Thermo Fisher Scientific
+  microscope_model: Gen 1 Titan
+  voltage: 200 kV
+  license: CC-BY-4.0
+  technique: 4D-STEM
+  tags:
+    - Orientation Mapping
+    - Nanocrystals
+  authors:
+    Nick Hagopian:
+      affiliation: University of Wisconsin, Madison
+  kind: dataset

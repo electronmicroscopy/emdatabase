@@ -1,0 +1,63 @@
+# $schema: ./json-schema.json
+#
+# Copy this file to <YourDatasetName>.yaml, replace every placeholder, and open
+# a pull request. Check it before you do with
+#   python -m emdatabase.new_dataset --validate emdatabase/index/<YourDatasetName>.yaml
+# This file is skipped by the catalogue, so the placeholder never appears as a
+# dataset; the test suite still validates it.
+
+# The entry name. Becomes the class name in `emdatabase.data`, so make it a
+# CamelCase identifier. One entry per file, named after the entry.
+MyDatasetName:
+  # Required. What the data is, how it was acquired and how it is calibrated.
+  description: One or two sentences on what this is, how it was acquired and how it is calibrated.
+  # Required. The directory the file is served from, without the file name.
+  source: https://zenodo.org/records/0000000/files
+  # The full download link, and only needed when the file is not served at
+  # `source/file` - a Google Drive link, or anything else with a query string.
+  # `file` is still the name the file is saved under locally.
+  url: https://zenodo.org/records/0000000/files/MyDatasetName.zspy
+  # md5 of the file, as `md5:<32 hex>`. pooch refuses a download that does not match.
+  checksum: md5:0123456789abcdef0123456789abcdef
+  # Required. The file name at that source.
+  file: MyDatasetName.zspy
+  # The file's Content-Length in bytes; the weekly CI check compares it to the server.
+  size_bytes: 1000000
+  # Who made the detector. See vendors.yaml for the names already in use.
+  detector_manufacturer: Direct Electron
+  # The detector model.
+  detector: DE-16
+  # Who made the microscope. See vendors.yaml for the names already in use.
+  microscope_vendor: Thermo Fisher Scientific
+  # The microscope model.
+  microscope_model: Gen 1 Titan
+  # Camera length, with its unit.
+  camera_length: 100 mm
+  # Accelerating voltage, as `<number> kV`.
+  voltage: 200 kV
+  # The licence the data is released under, as an SPDX identifier.
+  license: CC-BY-4.0
+  # What the data is, e.g. 4D-STEM, EELS, EBSD, HAADF.
+  technique: 4D-STEM
+  # DOI of the record or the paper, without a `https://doi.org/` prefix.
+  doi: 10.5281/zenodo.0000000
+  # Free-form keywords, one per line. Searched by `emdatabase.search`.
+  tags:
+    - Amorphous
+    - Strain
+  # Who to credit, keyed by name. `affiliation` is required for each.
+  authors:
+    Jane Doe:
+      affiliation: University of Somewhere
+      # ORCID as `0000-0000-0000-0000`.
+      orcid: 0000-0002-1825-0097
+  # What the entry hands out: `dataset` (the default) or `weights` for a model checkpoint.
+  kind: dataset
+  # The released version this entry pins, quoted. One entry per version.
+  version: "1"
+  # Required for `kind: weights`, and not allowed on a dataset. `class` is the
+  # dotted import path of the model, `quantem` the versions it loads under.
+  # model:
+  #   class: quantem.diffractive_imaging.ObjectINR
+  #   framework: torch
+  #   quantem: ">=0.2,<0.3"

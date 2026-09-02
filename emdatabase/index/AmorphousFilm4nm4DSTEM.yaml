@@ -1,0 +1,28 @@
+# $schema: ./json-schema.json
+AmorphousFilm4nm4DSTEM:
+  description: A 4D-STEM dataset of a 4 nm amorphous thin film acquired with a 2.5 mrad
+    probe on a Direct Electron CeleritasXS at 49000 fps. 256 x 256 probe positions (the
+    central quarter of a 1024 x 1024 scan) of 128 x 128 pixel diffraction patterns.
+    Both real and reciprocal space are calibrated - 0.12325 nm per scan step and
+    0.12453 1/nm per detector pixel, centred on the direct beam. Suitable for fluctuation
+    electron microscopy and angular correlation analysis. Gain- and dark-corrected
+    intensities were divided by 2 and rounded to uint16; multiply by 2 to recover ADU
+    (the detector records 300 ADU per electron).
+  source: https://zenodo.org/records/21632101/files
+  checksum: md5:eaa809326d134e73b2c96e6ad4a85b6a
+  file: AmorphousFilm4nm4DSTEM.zspy
+  size_bytes: 1104287335
+  detector_manufacturer: Direct Electron
+  detector: CeleritasXS
+  license: CC-BY-4.0
+  doi: 10.5281/zenodo.21632101
+  technique: 4D-STEM
+  tags:
+    - Amorphous
+    - FEM
+    - Angular Correlations
+    - Thin Film
+  authors:
+    Carter Francis:
+      affiliation: Direct Electron
+  kind: dataset

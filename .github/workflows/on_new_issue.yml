@@ -7,7 +7,7 @@ on:
 jobs:
   create-dataset-yaml:
     runs-on: ubuntu-latest
-    if: github.event.issue.body && contains(github.event.issue.body, 'new_dataset')
+    if: contains(github.event.issue.labels.*.name, 'new_dataset')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,18 +21,20 @@ jobs:
         run: pip install -U -e .'[dev]'
 
       - name: Extract issue body
-        run: echo "${{ github.event.issue.body }}" > issue_body.txt
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: printf '%s' "$ISSUE_BODY" > issue_body.txt
 
       - name: Parse issue and write YAML
         run: |
-          python .github/scripts/issue_to_yaml.py issue_body.txt em_database/datasets/
+          python .github/scripts/issue_to_yaml.py issue_body.txt emdatabase/index/
 
       - name: Commit new YAML
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b add-dataset-${{ github.run_id }}
-          git add em_database/datasets/*.yaml
+          git add emdatabase/index/*.yaml
           git commit -m "Add new dataset YAML from issue"
 
       - name: Create Pull Request

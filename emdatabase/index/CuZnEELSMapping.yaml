@@ -1,0 +1,34 @@
+# $schema: ./json-schema.json
+CuZnEELSMapping:
+  description: An EELS spectrum image of copper and zinc oxide deposited on carbon nanotubes,
+    used by the eXSpy elemental mapping tutorial. 40 x 50 probe positions at 0.9214 nm
+    with 162 energy channels covering 700-1988 eV at 8 eV dispersion, which resolves the
+    Cu-L2,3 (~931 eV) and Zn-L2,3 (~1020 eV) edges. The Zn:Cu ratio is 3:1 and roughly
+    80 wt% of the sample is carbon, so the edges sit on a large plasmon background - a
+    good test case for model-based background removal and overlapping-edge quantification.
+    The simultaneously acquired survey image is available as CuZnHAADF.
+    Note - the Sample.description field in the file reads "Ta2O5 25% TiO2 CSIRO 400C",
+    which is stale metadata carried over from an unrelated acquisition.
+  source: https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets
+  checksum: md5:fe46eb743e213eef7179538242b1f121
+  file: CuZn_EELS_mapping_tutorial.hspy
+  size_bytes: 466089
+  detector_manufacturer: Gatan
+  detector: GIF Quantum ER
+  microscope_vendor: JEOL
+  microscope_model: ARM200F
+  voltage: 200 kV
+  license: Unspecified
+  technique: EELS
+  tags:
+    - Spectrum Image
+    - Elemental Mapping
+    - Core Loss
+    - Overlapping Edges
+    - Tutorial
+  authors:
+    Ida Hjorth:
+      affiliation: Norwegian University of Science and Technology
+    Magnus Nord:
+      affiliation: Norwegian University of Science and Technology
+  kind: dataset

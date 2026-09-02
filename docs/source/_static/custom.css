@@ -1,0 +1,194 @@
+/* custom.css - Catppuccin Mocha theming for the Sphinx (pydata) pages
+ *
+ * The landing / All Data / Add Dataset pages are generated as self-contained
+ * app pages (see docs/source/_build_docs.py). The Examples gallery and API
+ * reference are rendered by pydata_sphinx_theme; this file recolors that theme
+ * to match, so the whole site reads as one dark Catppuccin "app". It maps the
+ * Catppuccin palette onto pydata's --pst-color-* variables and restyles the
+ * top navbar to echo the app header.
+ */
+
+:root {
+  --ctp-base: #1e1e2e;
+  --ctp-mantle: #181825;
+  --ctp-crust: #11111b;
+  --ctp-surface0: #313244;
+  --ctp-surface1: #45475a;
+  --ctp-surface2: #585b70;
+  --ctp-overlay: #2a2a3c;
+  --ctp-text: #cdd6f4;
+  --ctp-subtext: #a6adc8;
+  --ctp-muted: #7f849c;
+  --ctp-blue: #89b4fa;
+  --ctp-mauve: #cba6f7;
+  --ctp-green: #a6e3a1;
+  --ctp-red: #f38ba8;
+}
+
+/* Map Catppuccin onto pydata's tokens. Apply to the dark theme (the default),
+ * and also to the base :root so the palette holds before the theme attribute is
+ * stamped on / if the visitor forces light. */
+:root,
+html[data-theme="dark"],
+html[data-theme="light"] {
+  --pst-color-primary: var(--ctp-blue);
+  --pst-color-primary-highlight: var(--ctp-mauve);
+  --pst-color-secondary: var(--ctp-mauve);
+  --pst-color-secondary-highlight: var(--ctp-blue);
+  --pst-color-background: var(--ctp-base);
+  --pst-color-on-background: var(--ctp-mantle);
+  --pst-color-surface: var(--ctp-surface0);
+  --pst-color-on-surface: var(--ctp-text);
+  --pst-color-text-base: var(--ctp-text);
+  --pst-color-text-muted: var(--ctp-subtext);
+  --pst-color-heading-color: var(--ctp-text);
+  --pst-color-border: var(--ctp-surface0);
+  --pst-color-shadow: rgba(0, 0, 0, 0.45);
+  --pst-color-link: var(--ctp-blue);
+  --pst-color-link-hover: var(--ctp-mauve);
+  --pst-color-inline-code: var(--ctp-mauve);
+  --pst-color-inline-code-links: var(--ctp-blue);
+  --pst-color-target: rgba(137, 180, 250, 0.18);
+  --pst-color-accent: var(--ctp-mauve);
+  --pst-color-info: var(--ctp-blue);
+  --pst-color-success: var(--ctp-green);
+  --pst-color-warning: var(--ctp-yellow, #f9e2af);
+  --pst-color-danger: var(--ctp-red);
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--ctp-base);
+  color: var(--ctp-text);
+}
+
+/* Header: neutralize pydata's navbar shell so the app nav (rendered by the
+ * overridden sections/header.html) IS the visible bar - identical to the
+ * generated app pages. */
+#pst-header.bd-header,
+.bd-header.navbar {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  display: block !important;
+  min-height: 0 !important;
+}
+.app-nav {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 10px 22px; background: linear-gradient(#1c1c2b, var(--ctp-mantle));
+  border-bottom: 1px solid var(--ctp-surface0); box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+}
+.app-brand {
+  font-size: 16px; font-weight: 800; letter-spacing: 0.2px; margin-right: auto;
+  display: flex; align-items: center; color: var(--ctp-text);
+}
+.app-brand:hover { text-decoration: none; }
+.app-navlink {
+  font-size: 14px; font-weight: 600; color: var(--ctp-subtext);
+  padding: 7px 15px; border-radius: 999px; border: 1px solid transparent;
+}
+.app-navlink:hover { color: var(--ctp-text); background: var(--ctp-overlay); text-decoration: none; }
+.app-navlink.active {
+  color: var(--ctp-blue); background: rgba(137, 180, 250, 0.14);
+  border-color: rgba(137, 180, 250, 0.4);
+}
+
+/* Sidebars + content surfaces. */
+.bd-sidebar-primary,
+.bd-sidebar-secondary {
+  background-color: var(--ctp-mantle);
+  border-color: var(--ctp-surface0);
+}
+.bd-main .bd-content { color: var(--ctp-text); }
+
+/* Gradient page titles, matching the app hero. */
+.bd-article-container h1 {
+  background: linear-gradient(135deg, #89b4fa, #cba6f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+}
+
+/* Code + admonitions. */
+code, pre, .highlight {
+  background-color: var(--ctp-crust) !important;
+}
+.highlight pre { color: var(--ctp-text); }
+
+/* Cards (sphinx-design) + gallery thumbnails. */
+.sd-card,
+.sphx-glr-thumbcontainer {
+  background-color: var(--ctp-mantle) !important;
+  border: 1px solid var(--ctp-surface0) !important;
+  border-radius: 10px;
+}
+.sd-card:hover,
+.sphx-glr-thumbcontainer:hover {
+  border-color: var(--ctp-blue) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Buttons / search. */
+.bd-search input,
+input[type="search"] {
+  background-color: var(--ctp-crust);
+  color: var(--ctp-text);
+  border: 1px solid var(--ctp-surface0);
+}
+
+/* Simple + full width: no sidebars, no breadcrumbs, edge-to-edge content, and a
+ * larger base font so the Examples/API pages match the app pages and use the
+ * space they are given. */
+html { font-size: 17px; }
+.bd-sidebar-primary,
+.bd-sidebar-secondary,
+.bd-breadcrumbs,
+.prev-next-footer { display: none !important; }
+.bd-container,
+.bd-page-width,
+.bd-main .bd-content,
+.bd-main .bd-content .bd-article-container,
+.bd-article-container > article {
+  max-width: 100% !important;
+}
+.bd-main { margin: 0 !important; }
+.bd-article-container { padding: 10px 40px 48px !important; }
+.bd-content, .bd-article-container p, .bd-content li { font-size: 1rem; line-height: 1.6; }
+.bd-article-container h1 { font-size: 2.4rem; }
+/* Gallery: cards stretch to fill the row instead of clustering top-left. */
+.sphx-glr-thumbnails {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin: 8px 0 24px;
+}
+.sphx-glr-thumbcontainer {
+  width: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 12px !important;
+}
+.sphx-glr-thumbnail-title { font-size: 1rem !important; }
+
+/* Restyle the (green, monospace) download banners into app pill buttons. */
+.sphx-glr-footer { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-start; margin-top: 20px; }
+.sphx-glr-download { margin: 0 !important; }
+.sphx-glr-download a {
+  background: var(--ctp-surface0) !important;
+  background-image: none !important;
+  color: var(--ctp-blue) !important;
+  border: 1px solid var(--ctp-surface1) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  font-family: inherit !important;
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+  padding: 10px 16px !important;
+}
+.sphx-glr-download a:hover { border-color: var(--ctp-blue) !important; background: var(--ctp-overlay) !important; }
+.sphx-glr-signature { opacity: 0.45; font-size: 0.8rem; }
+
+/* Trim the footer to the copyright line only. */
+.bd-footer .bd-footer__inner { justify-content: flex-start; }
