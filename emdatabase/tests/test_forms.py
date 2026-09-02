@@ -148,8 +148,8 @@ def test_form_dataset_with_an_opaque_url_validates(run_form):
     assert entry["authors"] == {
         "Jane Doe": {"affiliation": "University of Somewhere", "orcid": "0000-0002-1825-0097"}
     }
-    # `kind: dataset` is the default; the CLI omits it and so does the form.
-    assert "kind" not in entry
+    # `kind` is always written out, `dataset` included.
+    assert entry["kind"] == "dataset"
     assert "model" not in entry
 
 
@@ -172,7 +172,7 @@ def test_form_drops_the_model_block_for_a_dataset(run_form):
     document, entry = _entry(run_form(fields))
     assert validate_document(document) == []
     assert "model" not in entry
-    assert "kind" not in entry
+    assert entry["kind"] == "dataset"
 
 
 def test_form_omits_the_url_when_the_file_is_at_source_slash_file(run_form):
@@ -327,5 +327,5 @@ def test_issue_drive_link_becomes_url_plus_file_name(parse):
         "A 4D-STEM dataset of MgO nanocrystals.",
         "Two lines of it.",
     ]
-    assert "kind" not in entry
+    assert entry["kind"] == "dataset"
     assert "model" not in entry

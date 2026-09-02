@@ -188,7 +188,13 @@ def _ask_authors(assume_yes: bool) -> dict[str, dict[str, str]]:
 
 
 def build_document(name: str, entry: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """``{name: entry}`` in the shipped key order, with the empty fields dropped."""
+    """``{name: entry}`` in the shipped key order, with the empty fields dropped.
+
+    ``kind`` is always written, ``dataset`` included: the schema defaults it so
+    that an old third-party file still loads, but everything generated here says
+    which it is.
+    """
+    entry = {**entry, "kind": entry.get("kind") or "dataset"}
     return {name: {k: entry[k] for k in FIELD_ORDER if entry.get(k) not in (None, "", [], {})}}
 
 

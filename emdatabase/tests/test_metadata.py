@@ -64,6 +64,8 @@ def test_entry_builds_a_record(name):
     path, _, spec = next(e for e in ENTRIES if e[1] == name)
     metadata = DatasetMetadata.from_spec(spec, path)
     assert metadata.description and metadata.source and metadata.file
+    # The schema defaults `kind`, but every entry shipped here writes it out.
+    assert spec["kind"] in ("dataset", "weights")
 
 
 def test_schema_and_dataclass_agree():

@@ -63,8 +63,10 @@ def test_writes_a_valid_entry_with_the_checksum_and_size(server, tmp_path):
     assert entry["size_bytes"] == len(CONTENT)
     assert entry["source"] == base
     assert entry["file"] == "MyData.zspy"
-    # The optional fields were not answered, so they are not written at all.
-    assert set(entry) == {"description", "source", "checksum", "file", "size_bytes"}
+    # The optional fields were not answered, so they are not written at all;
+    # `kind` is written whether or not it was asked for.
+    assert set(entry) == {"description", "source", "checksum", "file", "size_bytes", "kind"}
+    assert entry["kind"] == "dataset"
 
 
 def test_the_head_request_follows_a_redirect(server, tmp_path):
@@ -209,7 +211,7 @@ def test_a_dataset_entry_says_nothing_about_a_model(server, tmp_path):
         == 0
     )
     entry = _document(tmp_path / "MyData.yaml")["MyData"]
-    assert "kind" not in entry and "model" not in entry
+    assert entry["kind"] == "dataset" and "model" not in entry
 
 
 def test_a_misspelled_vendor_is_asked_for_again(server, tmp_path, monkeypatch):

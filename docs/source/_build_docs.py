@@ -1261,10 +1261,10 @@ function emdbBuildYaml(fields) {
       if (a.orcid) lines.push("      orcid: " + emdbYamlStr(a.orcid));
     });
   }
-  // `kind: dataset` is the default and the CLI leaves it out, so only a weights
-  // entry writes one - and only a weights entry may carry a model block.
+  // `kind` is always written, `dataset` included; only a weights entry may
+  // carry a model block.
   var weights = get("kind") === "weights";
-  if (weights) lines.push("  kind: weights");
+  lines.push("  kind: " + (weights ? "weights" : "dataset"));
   add("version", get("version"));
   if (weights) {
     var model = [
