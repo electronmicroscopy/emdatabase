@@ -6,14 +6,17 @@ Contributing a Dataset
 A dataset is one YAML file in ``emdatabase/index/``, validated against
 ``emdatabase/index/json-schema.json``. Adding one means adding that file.
 
-Two routes
-----------
+Three routes
+------------
 
 Fill in the `new-dataset issue form
 <https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml>`_
 and an action turns it into the YAML file and opens a pull request for you. Or
 run the CLI below, which writes the file locally and leaves the pull request to
-you. Both end in the same place, and both run the same validator.
+you. Both end in the same place, and both run the same validator. The
+:doc:`Add Dataset <add_dataset>` form and the issue form carry every field the
+schema has, including model weights and a ``url`` for a download link that is
+not ``source/file``.
 
 Using the CLI
 -------------

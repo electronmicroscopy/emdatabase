@@ -914,6 +914,7 @@ _VENDOR_LISTS = load_vendors()
 _MANUFACTURERS = tuple(_VENDOR_LISTS["detector_manufacturer"])
 _VENDORS = tuple(_VENDOR_LISTS["microscope_vendor"])
 _TECHNIQUES = ("4D-STEM", "EELS", "EDS", "EBSD", "STEM", "In-situ TEM", "Cryo-EM", "Other")
+_KINDS = ("dataset", "weights")
 
 # Owner/repo the prefilled "create new file" PR link targets.
 _REPO = "electronmicroscopy/emdatabase"
@@ -944,10 +945,20 @@ def _text_field(fid, label, required=False, placeholder="", hint="", full=False)
     )
 
 
-def _select_field(fid, label, options, hint=""):
+def _select_field(fid, label, options, hint="", default=""):
+    """A dropdown; with ``default`` set it starts on that option rather than blank."""
     hn = '<div class="field-hint">' + _esc(hint) + "</div>" if hint else ""
-    opts = '<option value="">&mdash; select &mdash;</option>'
-    opts += "".join('<option value="' + _esc(o) + '">' + _esc(o) + "</option>" for o in options)
+    opts = "" if default else '<option value="">&mdash; select &mdash;</option>'
+    opts += "".join(
+        '<option value="'
+        + _esc(o)
+        + '"'
+        + (" selected" if o == default else "")
+        + ">"
+        + _esc(o)
+        + "</option>"
+        for o in options
+    )
     return (
         '<div class="field"><label for="'
         + fid
@@ -1028,17 +1039,28 @@ def generate_add_dataset_html() -> str:
             hint="Direct download base (no file name).",
         )
         + _text_field(
-            "f-file",
-            "File",
-            required=True,
-            placeholder="smallPtychography.hspy",
-            hint="The file name at that source.",
+            "f-url",
+            "Download URL",
+            placeholder="https://drive.google.com/uc?export=download&id=<id>",
+            hint=(
+                "Only when the download link is not <source>/<file> - a Google Drive "
+                "uc?export=download&id= link, or anything else with a query string. "
+                "File stays the name the file is saved under."
+            ),
+            full=True,
         )
         + _text_field(
             "f-checksum",
             "Checksum",
             placeholder="md5:df9376d5c020a23f0f7f51cfe79f303f",
             hint="md5:<32 hex chars>",
+        )
+        + _text_field(
+            "f-file",
+            "File",
+            required=True,
+            placeholder="smallPtychography.hspy",
+            hint="The file name at that source.",
         )
         + _text_field(
             "f-size_bytes",
@@ -1062,8 +1084,8 @@ def generate_add_dataset_html() -> str:
         + _text_field("f-microscope_model", "Microscope Model", placeholder="Gen 1 Titan")
         + _text_field("f-camera_length", "Camera Length", placeholder="e.g. 100 mm")
         + _text_field("f-voltage", "Voltage", placeholder="200 kV", hint="e.g. 200 kV")
-        + _select_field("f-technique", "Technique", _TECHNIQUES)
         + _text_field("f-license", "License", placeholder="CC-BY-4.0")
+        + _select_field("f-technique", "Technique", _TECHNIQUES)
         + _text_field("f-doi", "DOI", placeholder="10.5281/zenodo.15490547")
         + _text_field(
             "f-tags",
@@ -1071,6 +1093,42 @@ def generate_add_dataset_html() -> str:
             placeholder="Orientation Mapping, Nanocrystals",
             hint="Comma-separated.",
             full=True,
+        )
+    )
+
+    entry_fields = _select_field(
+        "f-kind",
+        "Kind",
+        _KINDS,
+        hint="What the entry hands out.",
+        default="dataset",
+    ) + _text_field(
+        "f-version",
+        "Version",
+        placeholder="1",
+        hint="The released version this entry pins. One entry per version.",
+    )
+
+    model_fields = (
+        _text_field(
+            "f-model_class",
+            "Model Class",
+            required=True,
+            placeholder="quantem.core.ml.CNN2d",
+            hint="Dotted import path of the class the checkpoint loads into.",
+            full=True,
+        )
+        + _text_field(
+            "f-model_framework",
+            "Framework",
+            required=True,
+            placeholder="torch",
+        )
+        + _text_field(
+            "f-model_quantem",
+            "quantem Versions",
+            placeholder=">=0.2,<0.3",
+            hint="The versions the checkpoint loads under.",
         )
     )
 
@@ -1093,6 +1151,14 @@ def generate_add_dataset_html() -> str:
         '<div class="section-title">Authors</div>'
         '<div id="authors">' + _author_row_html() + "</div>"
         '<button type="button" id="add-author" class="btn-ghost">+ Add author</button>'
+        '<div class="section-title">Entry</div>'
+        '<div class="grid2">' + entry_fields + "</div>"
+        '<div id="model-group" hidden>'
+        '<div class="section-title">Model</div>'
+        '<div class="field-hint" style="margin-bottom:10px">Required for model weights, '
+        "and not allowed on a dataset.</div>"
+        '<div class="grid2">' + model_fields + "</div>"
+        "</div>"
         "</form>"
         '<aside class="yaml-side">'
         '<div class="yaml-head"><span>Generated YAML</span>'
@@ -1116,7 +1182,7 @@ def generate_add_dataset_html() -> str:
     )
 
     js = _ADD_DATASET_JS.replace("__REPO__", _REPO).replace("__BRANCH__", _BRANCH)
-    scripts = "<script>\n" + js + "\n</script>"
+    scripts = "<script>\n" + ADD_DATASET_YAML_JS + js + "\n</script>"
     return _app_page(
         "Add Dataset &middot; EM-Database",
         body,
@@ -1124,6 +1190,102 @@ def generate_add_dataset_html() -> str:
         extra_css=_FORM_CSS,
         scripts=scripts,
     )
+
+
+ADD_DATASET_YAML_JS = r"""
+// Build one entry's YAML from a plain object of field values. Pure - the form
+// and the DOM stay with the caller - so the test suite can run it under node.
+// Key order matches new_dataset.FIELD_ORDER, so the web form, the issue form
+// and the CLI all write the same file.
+// The YAML key and the file name. An underscore survives, because a weights
+// entry is named with its version on the end - `TutorialUNet_v1`.
+function emdbEntryName(value) {
+  return String(value == null ? "" : value).replace(/[^A-Za-z0-9_]+/g, "");
+}
+
+// Emit a YAML scalar: plain when safe, double-quoted (with escapes) otherwise.
+function emdbYamlStr(v) {
+  v = String(v);
+  if (v === "") return '""';
+  if (/\n/.test(v)) {
+    return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n").replace(/\t/g, "\\t") + '"';
+  }
+  var risky = /^\s|\s$/.test(v)
+    || /^[-?:,\[\]{}#&*!|>'"%@`]/.test(v)
+    || /:(\s|$)/.test(v)
+    || /\s#/.test(v)
+    || /^(true|false|null|yes|no|on|off|~)$/i.test(v)
+    || /^[-+]?(\d[\d_]*\.?\d*([eE][-+]?\d+)?)$/.test(v);
+  if (risky) return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  return v;
+}
+
+function emdbBuildYaml(fields) {
+  function get(key) {
+    var v = fields[key];
+    return v == null ? "" : String(v).trim();
+  }
+  var name = emdbEntryName(get("name")) || "DatasetName";
+  var lines = ["# $schema: ./json-schema.json", name + ":"];
+  function add(key, value) {
+    if (value) lines.push("  " + key + ": " + emdbYamlStr(value));
+  }
+  add("description", get("description"));
+  add("source", get("source"));
+  add("url", get("url"));
+  add("checksum", get("checksum"));
+  add("file", get("file"));
+  var bytes = get("size_bytes").replace(/[^0-9]/g, "");
+  if (bytes) lines.push("  size_bytes: " + bytes);
+  add("detector_manufacturer", get("detector_manufacturer"));
+  add("detector", get("detector"));
+  add("microscope_vendor", get("microscope_vendor"));
+  add("microscope_model", get("microscope_model"));
+  add("camera_length", get("camera_length"));
+  add("voltage", get("voltage"));
+  add("license", get("license"));
+  add("technique", get("technique"));
+  add("doi", get("doi"));
+  var tags = (fields.tags || []).map(function (t) { return String(t).trim(); }).filter(Boolean);
+  if (tags.length) {
+    lines.push("  tags:");
+    tags.forEach(function (t) { lines.push("    - " + emdbYamlStr(t)); });
+  }
+  var authors = (fields.authors || []).filter(function (a) { return a && a.name; });
+  if (authors.length) {
+    lines.push("  authors:");
+    authors.forEach(function (a) {
+      lines.push("    " + emdbYamlStr(a.name) + ":");
+      lines.push("      affiliation: " + emdbYamlStr(a.aff || ""));
+      if (a.orcid) lines.push("      orcid: " + emdbYamlStr(a.orcid));
+    });
+  }
+  // `kind: dataset` is the default and the CLI leaves it out, so only a weights
+  // entry writes one - and only a weights entry may carry a model block.
+  var weights = get("kind") === "weights";
+  if (weights) lines.push("  kind: weights");
+  add("version", get("version"));
+  if (weights) {
+    var model = [
+      ["class", get("model_class")],
+      ["framework", get("model_framework")],
+      ["quantem", get("model_quantem")]
+    ].filter(function (pair) { return pair[1]; });
+    if (model.length) {
+      lines.push("  model:");
+      model.forEach(function (pair) {
+        lines.push("    " + pair[0] + ": " + emdbYamlStr(pair[1]));
+      });
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { emdbBuildYaml: emdbBuildYaml, emdbEntryName: emdbEntryName };
+}
+"""
 
 
 _ADD_DATASET_JS = r"""
@@ -1135,77 +1297,38 @@ _ADD_DATASET_JS = r"""
   var copyBtn = document.getElementById("copy-yaml");
   var addAuthor = document.getElementById("add-author");
   var authorsBox = document.getElementById("authors");
+  var modelGroup = document.getElementById("model-group");
+
+  var SCALARS = [
+    "name", "description", "source", "url", "checksum", "file", "size_bytes",
+    "detector_manufacturer", "detector", "microscope_vendor", "microscope_model",
+    "camera_length", "voltage", "license", "technique", "doi",
+    "kind", "version", "model_class", "model_framework", "model_quantem"
+  ];
 
   function val(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
-  function sanitizeName(s) { return String(s).replace(/[^A-Za-z0-9]+/g, ""); }
-
-  // Emit a YAML scalar: plain when safe, double-quoted (with escapes) otherwise.
-  function yamlStr(v) {
-    v = String(v);
-    if (v === "") return '""';
-    if (/\n/.test(v)) {
-      return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-        .replace(/\n/g, "\\n").replace(/\t/g, "\\t") + '"';
-    }
-    var risky = /^\s|\s$/.test(v)
-      || /^[-?:,\[\]{}#&*!|>'"%@`]/.test(v)
-      || /:(\s|$)/.test(v)
-      || /\s#/.test(v)
-      || /^(true|false|null|yes|no|on|off|~)$/i.test(v)
-      || /^[-+]?(\d[\d_]*\.?\d*([eE][-+]?\d+)?)$/.test(v);
-    if (risky) return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
-    return v;
-  }
 
   function authors() {
     var out = [];
     form.querySelectorAll(".author-row").forEach(function (r) {
       var name = r.querySelector(".a-name").value.trim();
-      var aff = r.querySelector(".a-aff").value.trim();
-      var orcid = r.querySelector(".a-orcid").value.trim();
-      if (name) out.push({ name: name, aff: aff, orcid: orcid });
+      if (name) {
+        out.push({
+          name: name,
+          aff: r.querySelector(".a-aff").value.trim(),
+          orcid: r.querySelector(".a-orcid").value.trim()
+        });
+      }
     });
     return out;
   }
 
-  function tags() {
-    return val("f-tags").split(",").map(function (t) { return t.trim(); }).filter(Boolean);
-  }
-
-  function buildYaml() {
-    var name = sanitizeName(val("f-name")) || "DatasetName";
-    var lines = ["# $schema: ./json-schema.json", name + ":"];
-    function add(k, v) { if (v !== "" && v != null) lines.push("  " + k + ": " + yamlStr(v)); }
-    add("description", val("f-description"));
-    add("source", val("f-source"));
-    add("checksum", val("f-checksum"));
-    add("file", val("f-file"));
-    var bytes = val("f-size_bytes").replace(/[^0-9]/g, "");
-    if (bytes) { lines.push("  size_bytes: " + bytes); }
-    add("detector_manufacturer", val("f-detector_manufacturer"));
-    add("detector", val("f-detector"));
-    add("microscope_vendor", val("f-microscope_vendor"));
-    add("microscope_model", val("f-microscope_model"));
-    add("camera_length", val("f-camera_length"));
-    add("voltage", val("f-voltage"));
-    add("license", val("f-license"));
-    add("technique", val("f-technique"));
-    add("doi", val("f-doi"));
-    var tg = tags();
-    if (tg.length) {
-      lines.push("  tags:");
-      tg.forEach(function (t) { lines.push("    - " + yamlStr(t)); });
-    }
-    var au = authors();
-    if (au.length) {
-      lines.push("  authors:");
-      au.forEach(function (a) {
-        lines.push("    " + yamlStr(a.name) + ":");
-        lines.push("      affiliation: " + yamlStr(a.aff));
-        if (a.orcid) lines.push("      orcid: " + yamlStr(a.orcid));
-      });
-    }
-    return lines.join("\n") + "\n";
+  function collect() {
+    var fields = {};
+    SCALARS.forEach(function (key) { fields[key] = val("f-" + key); });
+    fields.tags = val("f-tags").split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+    fields.authors = authors();
+    return fields;
   }
 
   function setError(id, msg) {
@@ -1215,24 +1338,38 @@ _ADD_DATASET_JS = r"""
     if (field) field.classList.toggle("invalid", !!msg);
   }
 
+  function requireField(id) {
+    var ok = !!val(id);
+    setError(id, ok ? "" : "Required");
+    return ok;
+  }
+
   function validate() {
     var ok = true;
-    if (!sanitizeName(val("f-name"))) { setError("f-name", "Required"); ok = false; }
+    if (!emdbEntryName(val("f-name"))) { setError("f-name", "Required"); ok = false; }
     else setError("f-name", "");
-    if (!val("f-description")) { setError("f-description", "Required"); ok = false; }
-    else setError("f-description", "");
+    if (!requireField("f-description")) ok = false;
     var src = val("f-source");
     if (!src) { setError("f-source", "Required"); ok = false; }
     else if (!/^https?:\/\/\S+$/i.test(src)) { setError("f-source", "Must be an http(s) URL"); ok = false; }
     else setError("f-source", "");
-    if (!val("f-file")) { setError("f-file", "Required"); ok = false; }
-    else setError("f-file", "");
+    var url = val("f-url");
+    if (url && !/^https?:\/\/\S+$/i.test(url)) { setError("f-url", "Must be an http(s) URL"); ok = false; }
+    else setError("f-url", "");
+    if (!requireField("f-file")) ok = false;
     var cs = val("f-checksum");
     if (cs && !/^md5:[0-9a-fA-F]{32}$/.test(cs)) { setError("f-checksum", "Must match md5:<32 hex>"); ok = false; }
     else setError("f-checksum", "");
     var volt = val("f-voltage");
     if (volt && !/^[0-9]+\s?kV$/.test(volt)) { setError("f-voltage", "e.g. 200 kV"); ok = false; }
     else setError("f-voltage", "");
+    if (val("f-kind") === "weights") {
+      if (!requireField("f-model_class")) ok = false;
+      if (!requireField("f-model_framework")) ok = false;
+    } else {
+      setError("f-model_class", "");
+      setError("f-model_framework", "");
+    }
     form.querySelectorAll(".author-row").forEach(function (r) {
       var n = r.querySelector(".a-name"), a = r.querySelector(".a-aff"), o = r.querySelector(".a-orcid");
       var ae = r.querySelector(".a-aff-err"), oe = r.querySelector(".a-orcid-err");
@@ -1245,7 +1382,8 @@ _ADD_DATASET_JS = r"""
   }
 
   function refresh() {
-    preview.textContent = buildYaml();
+    modelGroup.hidden = val("f-kind") !== "weights";
+    preview.textContent = emdbBuildYaml(collect());
     submitPr.disabled = !validate();
   }
 
@@ -1279,14 +1417,14 @@ _ADD_DATASET_JS = r"""
     refresh();
   });
 
-  copyBtn.addEventListener("click", function () { copyText(buildYaml(), copyBtn); });
+  copyBtn.addEventListener("click", function () { copyText(emdbBuildYaml(collect()), copyBtn); });
 
   submitPr.addEventListener("click", function () {
     if (!validate()) { refresh(); return; }
-    var name = sanitizeName(val("f-name")) || "Dataset";
+    var name = emdbEntryName(val("f-name")) || "Dataset";
     var url = "https://github.com/" + REPO + "/new/" + BRANCH
       + "?filename=" + encodeURIComponent("emdatabase/index/" + name + ".yaml")
-      + "&value=" + encodeURIComponent(buildYaml());
+      + "&value=" + encodeURIComponent(emdbBuildYaml(collect()));
     window.open(url, "_blank", "noopener");
   });
 

@@ -7,7 +7,7 @@ on:
 jobs:
   create-dataset-yaml:
     runs-on: ubuntu-latest
-    if: github.event.issue.body && contains(github.event.issue.body, 'new_dataset')
+    if: contains(github.event.issue.labels.*.name, 'new_dataset')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,7 +21,9 @@ jobs:
         run: pip install -U -e .'[dev]'
 
       - name: Extract issue body
-        run: echo "${{ github.event.issue.body }}" > issue_body.txt
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: printf '%s' "$ISSUE_BODY" > issue_body.txt
 
       - name: Parse issue and write YAML
         run: |
