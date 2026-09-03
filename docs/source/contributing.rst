@@ -87,9 +87,10 @@ that snapshot under a date other than today; the :doc:`Add Dataset
 <add_dataset>` form and the issue form ask for the same date, and take today
 when it is left blank.
 
-Retraining a model means re-uploading the file to the same link. Nothing in the
-entry needs editing by hand: the weekly job below sees the new md5, archives the
-bytes and opens a pull request adding the new dated version.
+Retraining a model means re-uploading the file to the same link, or publishing
+a new version of the Zenodo record. Nothing in the entry needs editing by hand:
+the weekly job below sees the new md5, or the new record, and opens a pull
+request adding the new dated version.
 
 ``download()`` returns whatever the ``latest`` link serves now. It warns with a
 ``StaleIndexWarning`` when that md5 is not the one in the index, which happens
@@ -108,7 +109,10 @@ misspelling, while a genuinely new one warns and asks for it to be added.
 ``check_sources.yml`` runs weekly and asks each source server whether the file
 is still there and still the size the entry claims.
 
-``check_weights.yml`` runs weekly as well. It downloads each weights family's
+``check_weights.yml`` runs weekly as well, and what it does depends on where
+the family is hosted.
+
+For a link that moves in place, such as Google Drive, it downloads the
 ``latest`` link and compares the md5 with the index. An unchanged file is
 archived on the first run that finds it unarchived, so a newly contributed
 entry stops depending on the contributor's link. A changed file becomes a new
@@ -118,6 +122,16 @@ file over 500 MB goes to the workflow run as an artifact instead, and a
 maintainer uploads it to the release by hand. A link that answers with
 ``text/html`` - a Google Drive virus-scan page rather than the file - is
 reported and nothing is archived.
+
+For a Zenodo record file, nothing is downloaded and nothing is copied to
+GitHub. The job asks the Zenodo API for the newest record of the concept the
+current record belongs to. If that is still the record the entry points at, the
+run reports it unchanged, and reports an error if the API's md5 is not the one
+in the index. If a newer record has been published, the job adds a dated
+version - dated by the new record's publication date - pointing at the file in
+that record, and moves ``latest`` to it. The file it looks for in the new
+record is the one whose name matches the current link; if the name has changed
+and the record holds more than one file, the run fails rather than guess.
 
 Hosting
 -------
@@ -132,9 +146,13 @@ it follows the model's published link, and every state that link has served is
 kept as a dated version pinned to its own checksum. A dataset, and a weights
 entry's dated versions, stay pinned.
 
-Zenodo's latest link is not resolved yet. A concept DOI has no static file URL,
-only an API, so give the current record's file link and update the entry when a
-new record is published.
+For weights on Zenodo, give the current record's file link,
+``https://zenodo.org/records/<id>/files/<name>``. A concept DOI has no static
+file URL, so the link names one record; the weekly job follows that record's
+concept through the API and, when a new record is published, adds a dated
+version pointing at it and moves ``latest`` there. Nothing is copied to GitHub:
+a Zenodo record's files are immutable, so the record is already the archive.
+GitHub archival is only for links that move in place, Google Drive among them.
 
 Google Drive works for a small file, as a
 ``https://drive.google.com/uc?export=download&id=<id>`` link written to the

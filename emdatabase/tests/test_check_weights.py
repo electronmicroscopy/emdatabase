@@ -11,6 +11,7 @@ script.
 
 import hashlib
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -252,3 +253,171 @@ def test_two_states_of_a_file_under_one_date_fail(script, gh, unchanged, tmp_pat
     assert path.read_text(encoding="utf-8") == original
     assert gh == []
     assert f"`{today}` already exists" in summary.read_text()
+
+
+CONCEPT = "1000"
+OLD_RECORD = "1001"
+NEW_RECORD = "1002"
+NEW_DATE = "260304"
+
+
+def _zenodo_file(base, record_id, key, data):
+    return {
+        "key": key,
+        "size": len(data),
+        "checksum": _md5(data),
+        "links": {"self": f"{base}/api/records/{record_id}/files/{key}/content"},
+    }
+
+
+@pytest.fixture
+def zenodo(http_server, index):
+    """A weights family whose ``latest`` is a Zenodo record file link.
+
+    ``publish`` writes one record's API JSON into the served directory, at the
+    record id and, when it is the concept's newest, at the concept id as well -
+    which is where both ``links.latest`` and the ``conceptrecid`` fallback
+    lead. The file itself is never served, so a run that downloaded it fails.
+    """
+    base, served = http_server
+    directory, path, write = index
+    api = served / "api" / "records"
+    api.mkdir(parents=True)
+
+    def publish(record_id, published, files, *, newest=True):
+        record = {
+            "id": int(record_id),
+            "conceptrecid": CONCEPT,
+            "links": {"latest": f"{base}/api/records/{CONCEPT}"},
+            "metadata": {"publication_date": published},
+            "files": files,
+        }
+        for name in [record_id] + ([CONCEPT] if newest else []):
+            (api / name).write_text(json.dumps(record), encoding="utf-8")
+        return record
+
+    pin = {
+        "url": f"{base}/records/{OLD_RECORD}/files/{FILE}",
+        "checksum": _md5(LATEST_BYTES),
+        "size_bytes": len(LATEST_BYTES),
+    }
+    write(dict(pin), {OLD_DATE: dict(pin)})
+    publish(OLD_RECORD, "2026-01-01", [_zenodo_file(base, OLD_RECORD, FILE, LATEST_BYTES)])
+    return base, served, directory, path, publish
+
+
+def test_a_zenodo_family_on_the_newest_record_is_left_alone(script, gh, zenodo, tmp_path):
+    _, _, directory, path, _ = zenodo
+    original = path.read_text(encoding="utf-8")
+
+    code, summary = _run(script, directory, tmp_path)
+
+    assert code == 0
+    assert path.read_text(encoding="utf-8") == original
+    assert gh == []
+    assert f"record {OLD_RECORD} is still the latest version" in summary.read_text()
+
+
+def test_a_new_zenodo_record_becomes_a_dated_version(script, gh, zenodo, tmp_path):
+    base, _, directory, path, publish = zenodo
+    publish(
+        OLD_RECORD,
+        "2026-01-01",
+        [_zenodo_file(base, OLD_RECORD, FILE, LATEST_BYTES)],
+        newest=False,
+    )
+    publish(NEW_RECORD, "2026-03-04", [_zenodo_file(base, NEW_RECORD, FILE, NEW_BYTES)])
+
+    code, summary = _run(script, directory, tmp_path)
+
+    assert code == 0
+    assert gh == []
+    entry = _entry(path)
+    new_url = f"{base}/records/{NEW_RECORD}/files/{FILE}"
+    assert entry["latest"] == {
+        "url": new_url,
+        "checksum": _md5(NEW_BYTES),
+        "size_bytes": len(NEW_BYTES),
+    }
+    assert entry["versions"][NEW_DATE] == {
+        "url": new_url,
+        "checksum": _md5(NEW_BYTES),
+        "size_bytes": len(NEW_BYTES),
+    }
+    # The record the entry pointed at before is immutable, so it stays as it is.
+    assert entry["versions"][OLD_DATE]["url"] == f"{base}/records/{OLD_RECORD}/files/{FILE}"
+    report = summary.read_text()
+    assert f"new Zenodo record {NEW_RECORD}" in report
+    assert _md5(LATEST_BYTES) in report and _md5(NEW_BYTES) in report
+
+
+def test_a_new_zenodo_record_is_followed_without_links_latest(script, gh, zenodo, tmp_path):
+    base, served, directory, path, publish = zenodo
+    record = publish(NEW_RECORD, "2026-03-04", [_zenodo_file(base, NEW_RECORD, FILE, NEW_BYTES)])
+    current = json.loads((served / "api" / "records" / OLD_RECORD).read_text(encoding="utf-8"))
+    current["links"] = {}
+    (served / "api" / "records" / OLD_RECORD).write_text(json.dumps(current), encoding="utf-8")
+    assert record["conceptrecid"] == CONCEPT
+
+    code, _ = _run(script, directory, tmp_path)
+
+    assert code == 0
+    assert _entry(path)["versions"][NEW_DATE]["checksum"] == _md5(NEW_BYTES)
+
+
+def test_a_zenodo_record_without_the_named_file_fails(script, gh, zenodo, tmp_path):
+    base, _, directory, path, publish = zenodo
+    publish(
+        NEW_RECORD,
+        "2026-03-04",
+        [
+            _zenodo_file(base, NEW_RECORD, "demonet_v2.pt", NEW_BYTES),
+            _zenodo_file(base, NEW_RECORD, "README.md", b"read me"),
+        ],
+    )
+    original = path.read_text(encoding="utf-8")
+
+    code, summary = _run(script, directory, tmp_path)
+
+    assert code == 1
+    assert path.read_text(encoding="utf-8") == original
+    assert gh == []
+    assert f"no file `{FILE}`" in summary.read_text()
+
+
+def test_a_zenodo_record_whose_md5_disagrees_with_the_index_fails(script, gh, zenodo, tmp_path):
+    base, _, directory, path, publish = zenodo
+    publish(OLD_RECORD, "2026-01-01", [_zenodo_file(base, OLD_RECORD, FILE, NEW_BYTES)])
+    original = path.read_text(encoding="utf-8")
+
+    code, summary = _run(script, directory, tmp_path)
+
+    assert code == 1
+    assert path.read_text(encoding="utf-8") == original
+    assert gh == []
+    report = summary.read_text()
+    assert _md5(LATEST_BYTES) in report and _md5(NEW_BYTES) in report
+
+
+def test_backfill_archives_a_source_link_version_but_not_a_zenodo_one(
+    script, gh, unchanged, tmp_path
+):
+    base, _, directory, path = unchanged
+    zenodo_url = f"https://zenodo.org/records/{OLD_RECORD}/files/{FILE}"
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    document["DemoNet"]["versions"]["251201"] = {
+        "url": zenodo_url,
+        "checksum": _md5(LATEST_BYTES),
+        "size_bytes": len(LATEST_BYTES),
+    }
+    path.write_text(yaml.dump(document, sort_keys=False), encoding="utf-8")
+
+    code, _ = _run(script, directory, tmp_path)
+
+    assert code == 0
+    versions = _entry(path)["versions"]
+    assert versions["251201"]["url"] == zenodo_url
+    assert versions[OLD_DATE]["url"].startswith(script.RELEASE_DOWNLOADS)
+    upload = [call for call in gh if call[:2] == ["release", "upload"]]
+    assert len(upload) == 1
+    assert Path(upload[0][3]).name == f"DemoNet_{OLD_DATE}.pt"

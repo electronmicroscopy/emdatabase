@@ -61,7 +61,8 @@ MyDatasetName:
   #   quantem: ">=0.2,<0.3"
   # Required for `kind: weights`, and not allowed on a dataset. The published
   # link the entry follows; `url`, `checksum` and `size_bytes` live here rather
-  # than at the top level, and `download()` returns whatever it serves.
+  # than at the top level, and `download()` returns whatever it serves. On
+  # Zenodo, give the current record's file link.
   # latest:
   #   url: https://drive.google.com/uc?export=download&id=0123456789abcdef
   #   checksum: md5:0123456789abcdef0123456789abcdef
@@ -69,7 +70,10 @@ MyDatasetName:
   # Required for `kind: weights`, and not allowed on a dataset. One pinned
   # snapshot of what that link served, keyed by a quoted YYMMDD date, which is
   # what `download(version="260902")` hands out. At least one is needed; the
-  # weekly CI job adds a new one whenever the link's md5 changes.
+  # weekly CI job adds a new one whenever the link's md5 changes, or a new
+  # Zenodo record is published under the same concept. A version stays where
+  # its bytes are permanent - its own Zenodo record - and is copied to the
+  # `weights-archive` release only when it sits on a link that can move.
   # versions:
   #   "260902":
   #     url: https://github.com/electronmicroscopy/emdatabase/releases/download/weights-archive/MyModel_260902.pt
