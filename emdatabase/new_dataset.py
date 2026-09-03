@@ -236,12 +236,35 @@ def as_weights_family(entry: dict[str, Any], date: str) -> dict[str, Any]:
     }
 
 
+class _IndexDumper(yaml.SafeDumper):
+    """PyYAML output in the house style of the hand-written index files.
+
+    Sequences are indented under their key, a scalar that needs quoting gets
+    double quotes, and a long description is a folded block.
+    """
+
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
+        return super().increase_indent(flow, False)
+
+    def choose_scalar_style(self) -> str:
+        style = super().choose_scalar_style()
+        return '"' if style == "'" else style
+
+
+def _represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.ScalarNode:
+    style = ">" if " " in data and (len(data) > 80 or "\n" in data) else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_IndexDumper.add_representer(str, _represent_str)
+
+
 def write_document(path: Path, document: dict[str, Any]) -> None:
     """Write ``document`` to ``path`` as YAML, with the schema header on top."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         handle.write("# $schema: ./json-schema.json\n")
-        yaml.dump(document, handle, sort_keys=False)
+        yaml.dump(document, handle, Dumper=_IndexDumper, sort_keys=False, width=72)
 
 
 def _parser() -> argparse.ArgumentParser:

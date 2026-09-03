@@ -440,3 +440,30 @@ def test_keep_leaves_the_temporary_download(server, tmp_path, monkeypatch):
         ]
     )
     assert Path(tmp_path / "scratch" / "MyData.zspy").read_bytes() == CONTENT
+
+
+def test_write_document_matches_the_hand_written_style(tmp_path):
+    long_text = "word " * 30
+    url = "https://example.org/" + "x" * 90
+    document = {
+        "Demo": {
+            "description": long_text.strip(),
+            "source": url,
+            "file": "d.pt",
+            "tags": ["A", "B"],
+            "kind": "weights",
+            "model": {"class": "m.M", "framework": "torch", "quantem": ">=0.1"},
+            "latest": {"url": url, "checksum": "md5:" + "0" * 32},
+            "versions": {"260902": {"url": url, "checksum": "md5:" + "0" * 32, "size_bytes": 1}},
+        }
+    }
+    path = tmp_path / "Demo.yaml"
+    write_document(path, document)
+    text = path.read_text()
+    assert "  description: >-\n    word word" in text
+    assert "  tags:\n    - A\n    - B\n" in text
+    assert '    quantem: ">=0.1"\n' in text
+    assert '    "260902":\n' in text
+    assert "'" not in text
+    assert f"  source: {url}\n" in text
+    assert yaml.safe_load(text) == document

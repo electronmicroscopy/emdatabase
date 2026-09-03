@@ -12,8 +12,6 @@ import re
 import sys
 from pathlib import Path
 
-import yaml
-
 from emdatabase.metadata import validate_document
 from emdatabase.new_dataset import (
     as_weights_family,
@@ -21,6 +19,7 @@ from emdatabase.new_dataset import (
     content_length,
     split_url,
     version_date,
+    write_document,
 )
 
 # The form's field labels, with the ``--...--`` markers stripped off.
@@ -138,7 +137,5 @@ if __name__ == "__main__":
     if problems:
         sys.exit("fix the issue and reopen it")
 
-    with open(out_path, "w") as f:
-        f.write("# $schema: ./json-schema.json\n")
-        yaml.dump(document, f, sort_keys=False)
+    write_document(Path(out_path), document)
     print(f"wrote {out_path}")

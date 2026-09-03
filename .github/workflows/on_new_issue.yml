@@ -40,6 +40,7 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
+          token: ${{ secrets.EMDATABASE_PAT || secrets.GITHUB_TOKEN }}
           branch: add-dataset-${{ github.run_id }}
           title: "Add new dataset YAML"
           body: "This PR adds a new dataset YAML file generated from the issue form."

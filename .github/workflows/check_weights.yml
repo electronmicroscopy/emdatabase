@@ -44,6 +44,7 @@ jobs:
       - name: Open a pull request with the new versions
         uses: peter-evans/create-pull-request@v6
         with:
+          token: ${{ secrets.EMDATABASE_PAT || secrets.GITHUB_TOKEN }}
           add-paths: emdatabase/index/*.yaml
           branch: weights-archive-${{ github.run_id }}
           title: "Archive the current model weights"
