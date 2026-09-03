@@ -94,7 +94,11 @@ def upload_asset(tag: str, path: Path, asset: str) -> None:
                 "Dated copies of every weights family's latest file.",
             ]
         )
-    run_gh(["release", "upload", tag, f"{path}#{asset}", "--clobber"])
+    # gh names the asset after the file; "path#name" only sets the display label.
+    with tempfile.TemporaryDirectory() as staging:
+        named = Path(staging) / asset
+        shutil.copyfile(path, named)
+        run_gh(["release", "upload", tag, str(named), "--clobber"])
 
 
 @dataclass
@@ -129,7 +133,7 @@ def _archive(report: Report, options: Options, served: Served, asset: str) -> No
     """Put one file in the archive release, or in ``--keep-dir`` if it is too big."""
     if served.size_bytes > options.threshold_bytes:
         kept = options.keep_dir / asset
-        command = f"gh release upload {options.archive_tag} {kept}#{asset} --clobber"
+        command = f"gh release upload {options.archive_tag} {kept} --clobber"
         report.lines.append(
             f"- `{asset}` is {format_size(served.size_bytes)}, over the "
             f"{format_size(options.threshold_bytes)} threshold: it is attached to the workflow "

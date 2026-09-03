@@ -26,13 +26,6 @@ function el(tag, className, html) {
   return node;
 }
 
-function toSnake(name) {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .toLowerCase();
-}
-
 function copyText(text, btn) {
   const done = () => {
     const old = btn.textContent;
@@ -195,9 +188,8 @@ function render({ model, el: root }) {
 
     if (it.description) main.appendChild(el("p", "emdb-d-desc", esc(it.description)));
     main.appendChild(el("div", "emdb-load-label", "Load"));
-    const snippet = version
-      ? `path = emdatabase.data.${it.name}().download(version="${version}")`
-      : `${toSnake(it.name || "dataset")} = emdatabase.data.${it.name}()`;
+    const snippet = `path = emdatabase.data.${it.name}().download(`
+      + (version ? `version="${version}"` : "") + ")";
     main.appendChild(copyRow(snippet, snippet));
     if (where.downloaded && where.path) main.appendChild(copyRow(where.path, where.path, "path"));
 

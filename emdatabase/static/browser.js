@@ -31,13 +31,6 @@ function el(tag, className, html) {
 }
 
 // CamelCase class name -> snake_case variable, e.g. AlNanocrystals -> al_nanocrystals.
-function toSnake(name) {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .toLowerCase();
-}
-
 // Copy text to the clipboard (clipboard API, with a textarea fallback for
 // non-secure contexts) and briefly flash the button so the click is felt.
 function copyText(text, btn) {
@@ -360,9 +353,8 @@ function render({ model, el: root }) {
 
     // Load block: copy a ready-to-paste snippet, and the on-disk path.
     detailsEl.appendChild(el("div", "emdb-load-label", "Load"));
-    const snippet = version
-      ? `path = emdatabase.data.${item.name}().download(version="${version}")`
-      : `${toSnake(item.name)} = emdatabase.data.${item.name}()`;
+    const snippet = `path = emdatabase.data.${item.name}().download(`
+      + (version ? `version="${version}"` : "") + ")";
     detailsEl.appendChild(copyRow(snippet, snippet));
     if (where.downloaded && where.path) {
       detailsEl.appendChild(copyRow(where.path, where.path, "path"));

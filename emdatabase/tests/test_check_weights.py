@@ -137,7 +137,7 @@ def test_an_unarchived_version_is_uploaded_and_its_url_rewritten(script, gh, unc
     upload = [call for call in gh if call[:2] == ["release", "upload"]]
     assert len(upload) == 1
     assert upload[0][2] == "weights-archive"
-    assert upload[0][3].endswith(f"#DemoNet_{OLD_DATE}.pt")
+    assert Path(upload[0][3]).name == f"DemoNet_{OLD_DATE}.pt"
     assert f"DemoNet_{OLD_DATE}.pt" in summary.read_text()
 
 
@@ -199,7 +199,7 @@ def test_a_file_over_the_threshold_is_kept_for_a_maintainer(script, gh, unchange
     assert gh == []
     # The version is written anyway; the summary says how to finish the upload.
     assert _entry(path)["versions"][today]["url"].endswith(f"DemoNet_{today}.pt")
-    assert f"gh release upload weights-archive {kept}#DemoNet_{today}.pt" in summary.read_text()
+    assert f"gh release upload weights-archive {kept} --clobber" in summary.read_text()
 
 
 def test_a_link_serving_html_fails_and_writes_nothing(script, gh, http_server, index, tmp_path):
