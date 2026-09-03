@@ -9,8 +9,11 @@ Google Drive link, or anything else with a query string - is written out as
 entry passes :func:`~emdatabase.metadata.validate_document`, which is the same
 check the test suite and the issue-form workflow run.
 
-``--kind weights`` describes a model checkpoint instead, and asks for the
-version and the model it belongs to.
+``--kind weights`` describes a model checkpoint instead, and asks for the model
+it belongs to. A weights entry is a family: the link becomes both its ``latest``
+and a version dated today, so the entry starts out pinned to what is published
+now and keeps that state when the link moves on. ``--version-date YYMMDD`` files
+that version under another date.
 
 ``--validate PATH`` runs that check on a file you wrote by hand and does
 nothing else.
@@ -19,6 +22,7 @@ nothing else.
 from __future__ import annotations
 
 import argparse
+import datetime
 import email.message
 import hashlib
 import re
@@ -61,8 +65,9 @@ FIELD_ORDER = (
     "tags",
     "authors",
     "kind",
-    "version",
     "model",
+    "latest",
+    "versions",
 )
 
 
@@ -92,13 +97,16 @@ def _served_name(headers: email.message.Message) -> str:
     return Path(message.get_filename() or "").name
 
 
-def download_md5(url: str, destination: Path, progressbar: bool = True) -> tuple[str, int, str]:
-    """Stream ``url`` to ``destination``; return ``(md5 hex, byte count, name)``.
+def download_md5(
+    url: str, destination: Path, progressbar: bool = True
+) -> tuple[str, int, str, str]:
+    """Stream ``url`` to ``destination``; return ``(md5, bytes, name, type)``.
 
     The count is the fallback for ``size_bytes`` when the server would not
     answer a HEAD request, and the name is what the server called the file, if
-    it said - redirects are followed, so both come from wherever the bytes
-    actually are.
+    it said - redirects are followed, so all of it comes from wherever the bytes
+    actually are. The type is the ``Content-Type`` header, verbatim: a host that
+    answers a download link with ``text/html`` served a page, not the file.
     """
     from tqdm.auto import tqdm
 
@@ -107,6 +115,7 @@ def download_md5(url: str, destination: Path, progressbar: bool = True) -> tuple
     downloaded = 0
     with urllib.request.urlopen(request, timeout=60) as response:
         served = _served_name(response.headers)
+        content_type = response.headers.get("Content-Type", "")
         declared = response.headers.get("Content-Length")
         bar = tqdm(
             total=int(declared) if declared else None,
@@ -122,7 +131,7 @@ def download_md5(url: str, destination: Path, progressbar: bool = True) -> tuple
                 digest.update(chunk)
                 downloaded += len(chunk)
                 bar.update(len(chunk))
-    return digest.hexdigest(), downloaded, served
+    return digest.hexdigest(), downloaded, served, content_type
 
 
 def split_url(url: str) -> tuple[str, str, str]:
@@ -198,7 +207,37 @@ def build_document(name: str, entry: dict[str, Any]) -> dict[str, dict[str, Any]
     return {name: {k: entry[k] for k in FIELD_ORDER if entry.get(k) not in (None, "", [], {})}}
 
 
-def _write(path: Path, document: dict[str, Any]) -> None:
+def version_date() -> str:
+    """Today as ``YYMMDD``, the label a new weights version is filed under."""
+    return datetime.date.today().strftime("%y%m%d")
+
+
+def as_weights_family(entry: dict[str, Any], date: str) -> dict[str, Any]:
+    """The entry with its download fields moved into ``latest`` and one version.
+
+    A weights entry is a family: ``latest`` follows the published link, and a
+    dated version pins each state that link has served. A new entry is both,
+    from the same file. The top-level ``url``, ``checksum`` and ``size_bytes``
+    are cleared, so that each of those facts is written in one place.
+    """
+    pin = {
+        "url": entry.get("url") or f"{entry['source']}/{entry['file']}",
+        "checksum": entry.get("checksum"),
+        "size_bytes": entry.get("size_bytes"),
+    }
+    pin = {key: value for key, value in pin.items() if value}
+    return {
+        **entry,
+        "url": None,
+        "checksum": None,
+        "size_bytes": None,
+        "latest": pin,
+        "versions": {date: dict(pin)},
+    }
+
+
+def write_document(path: Path, document: dict[str, Any]) -> None:
+    """Write ``document`` to ``path`` as YAML, with the schema header on top."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         handle.write("# $schema: ./json-schema.json\n")
@@ -224,7 +263,13 @@ def _parser() -> argparse.ArgumentParser:
         "--kind",
         choices=("dataset", "weights"),
         default="dataset",
-        help="what the entry hands out (default dataset)",
+        help="what the entry hands out (default dataset); weights writes a family",
+    )
+    parser.add_argument(
+        "--version-date",
+        metavar="YYMMDD",
+        default=version_date(),
+        help="the date the weights version is filed under (default today)",
     )
     parser.add_argument("--yes", action="store_true", help="take the defaults and do not prompt")
     parser.add_argument("--keep", action="store_true", help="keep the downloaded temporary file")
@@ -248,6 +293,8 @@ def _entry_target(args: argparse.Namespace, filename: str) -> tuple[str, Path] |
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if not re.fullmatch(r"\d{6}", args.version_date):
+        parser.error("--version-date takes a YYMMDD date, e.g. 260902")
 
     if args.validate:
         problems = validate_file(args.validate)
@@ -278,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
     if checksum is None:
         temporary = Path(tempfile.gettempdir()) / (filename or "download")
         try:
-            digest, downloaded, served = download_md5(url, temporary)
+            digest, downloaded, served, _ = download_md5(url, temporary)
         except OSError as error:
             print(f"could not download {url}: {error}")
             return 1
@@ -334,13 +381,13 @@ def main(argv: list[str] | None = None) -> int:
     entry["tags"] = [t for t in entry["tags"] if t]
     if args.kind == "weights":
         entry["kind"] = "weights"
-        entry["version"] = _ask("model version, e.g. 3", assume_yes=args.yes)
         model = {
             "class": _ask("model class, e.g. quantem.ml.inr.INR", assume_yes=args.yes),
             "framework": _ask("framework", "torch", args.yes),
             "quantem": _ask('quantem versions, e.g. ">=0.2,<0.3"', assume_yes=args.yes),
         }
         entry["model"] = {k: v for k, v in model.items() if v}
+        entry = as_weights_family(entry, args.version_date)
 
     document = build_document(name, entry)
     problems = validate_document(document, origin=out_path)
@@ -349,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
             print(problem)
         return 1
 
-    _write(out_path, document)
+    write_document(out_path, document)
     print(f"wrote {out_path}")
     print("next: open a pull request adding this file")
     return 0

@@ -6,6 +6,11 @@ than an open bag. :class:`DatasetMetadata` is that set, and
 :meth:`DatasetMetadata.from_spec` is the only way one is built: it turns a
 parsed YAML mapping into the record and refuses anything the schema would.
 
+A ``kind: weights`` entry is a family rather than a single file: it declares a
+``latest`` link and a dated version for each state that link has served, both as
+:class:`WeightsVersion`, and :func:`versioned_filename` is what a dated copy is
+called on disk.
+
 This module also owns the small amount of shared knowledge about where the
 dataset files live - :func:`dataset_files`, :func:`load_schema`,
 :func:`load_vendors` - so the loader, the stub generator, the docs form and the
@@ -122,6 +127,16 @@ def validate_document(
     for name, spec in document.items():
         if not isinstance(spec, Mapping):
             continue
+        versions = spec.get("versions")
+        if isinstance(versions, Mapping):
+            # jsonschema's propertyNames only sees strings, so an unquoted
+            # 260902 in the YAML arrives as an int and passes the pattern.
+            problems += [
+                f"{_where(origin)}: {name}: versions: {label!r} must be quoted, "
+                "so that it stays a string"
+                for label in versions
+                if not isinstance(label, str)
+            ]
         for name_field, known in (
             ("detector_manufacturer", vendors["detector_manufacturer"]),
             ("microscope_vendor", vendors["microscope_vendor"]),
@@ -162,6 +177,12 @@ def format_size(size_bytes: int | None) -> str:
     # Enough decimals for three significant figures, so a size stays readable
     # whether it is 42.0 kB or 1.10 GB.
     return f"{value:.{max(1, 3 - len(str(int(value))))}f} {unit}"
+
+
+def versioned_filename(file: str, version: str) -> str:
+    """The local name of one dated copy: ``("w.pt", "260902") -> "w_260902.pt"``."""
+    path = Path(file)
+    return f"{path.stem}_{version}{path.suffix}"
 
 
 def _where(origin: Path | str | None) -> str:
@@ -225,6 +246,41 @@ class ModelInfo:
         )
 
 
+@dataclass(frozen=True)
+class WeightsVersion:
+    """One downloadable state of a weights family: ``latest`` or a dated copy.
+
+    ``checksum`` is what the file behind the link hashed to when the index was
+    written. For a dated version that is a pin and a download that does not
+    match it fails; for ``latest`` it is what the download is compared against
+    to notice the model has been retrained.
+    """
+
+    url: str
+    checksum: str | None = None
+    size_bytes: int | None = None
+
+    @classmethod
+    def from_spec(
+        cls, label: str, spec: Mapping[str, Any], origin: Path | str | None = None
+    ) -> WeightsVersion:
+        allowed = {f.name for f in fields(cls)}
+        unknown = sorted(set(spec) - allowed)
+        if unknown:
+            raise TypeError(
+                f"{_where(origin)}: {label} has unknown field(s) "
+                f"{', '.join(repr(k) for k in unknown)}; allowed: {', '.join(sorted(allowed))}"
+            )
+        if not spec.get("url"):
+            raise TypeError(f"{_where(origin)}: {label} is missing 'url'")
+        size_bytes = spec.get("size_bytes")
+        return cls(
+            url=str(spec["url"]),
+            checksum=spec.get("checksum"),
+            size_bytes=None if size_bytes is None else int(size_bytes),
+        )
+
+
 @dataclass(frozen=True, repr=False)
 class DatasetMetadata:
     """Everything a dataset YAML entry declares.
@@ -256,8 +312,9 @@ class DatasetMetadata:
     tags: tuple[str, ...] = ()
     authors: Mapping[str, Author] = field(default_factory=dict)
     kind: str = "dataset"
-    version: str | None = None
     model: ModelInfo | None = None
+    latest: WeightsVersion | None = None
+    versions: Mapping[str, WeightsVersion] = field(default_factory=dict)
 
     @classmethod
     def from_spec(
@@ -291,10 +348,16 @@ class DatasetMetadata:
             for name, entry in (values.get("authors") or {}).items()
         }
         values["kind"] = str(values.get("kind") or "dataset")
-        version = values.get("version")
-        values["version"] = None if version is None else str(version)
         model = values.get("model")
         values["model"] = None if model is None else ModelInfo.from_spec(model, origin)
+        latest = values.get("latest")
+        values["latest"] = (
+            None if latest is None else WeightsVersion.from_spec("latest", latest, origin)
+        )
+        values["versions"] = {
+            str(label): WeightsVersion.from_spec(str(label), spec or {}, origin)
+            for label, spec in (values.get("versions") or {}).items()
+        }
         return cls(**values)
 
     @property
@@ -330,6 +393,10 @@ class DatasetMetadata:
                 value = ", ".join(value)
             elif entry.name == "model":
                 value = " · ".join(p for p in (value.class_, value.framework, value.quantem) if p)
+            elif entry.name == "latest":
+                value = " · ".join(p for p in (value.checksum, value.url) if p)
+            elif entry.name == "versions":
+                value = ", ".join(sorted(value, reverse=True))
             rows.append((entry.name, str(value)))
         if self.size_bytes is not None:
             rows.append(("size_bytes", f"{self.size_bytes} ({self.size})"))

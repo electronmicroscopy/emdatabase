@@ -66,6 +66,8 @@ function render({ model, el: root }) {
   let nonce = 0;
   let cancelling = false;
   let downloadingNow = false;
+  // Which version of a weights family the card is showing: "" is latest.
+  let version = "";
   function cmd(action, extra) {
     model.set("_command", Object.assign({ action, nonce: nonce++ }, extra || {}));
     model.save_changes();
@@ -78,6 +80,32 @@ function render({ model, el: root }) {
     btn.addEventListener("click", (event) => { event.stopPropagation(); copyText(copyValue, btn); });
     row.appendChild(btn);
     return row;
+  }
+
+  // The download state of one version. An item's own fields describe latest,
+  // so the same reads work for either.
+  function versionState(it, want) {
+    if (!want) return it;
+    return (it.versions || []).find((v) => v.version === want) || {};
+  }
+
+  // The version picker: `latest`, then the dated snapshots, ● on the ones
+  // already on disk. The button, the path and the load snippet follow it.
+  function versionSelect(it) {
+    const select = el("select", "emdb-version");
+    select.title = "Which version to download, delete or load";
+    const choices = [["", "latest"]].concat(
+      (it.versions || []).map((v) => [v.version, v.version])
+    );
+    for (const [value, text] of choices) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text + (versionState(it, value).downloaded ? " ●" : "");
+      option.selected = value === version;
+      select.appendChild(option);
+    }
+    select.addEventListener("change", () => { version = select.value; draw(); });
+    return select;
   }
 
   function progressBox(dl) {
@@ -117,8 +145,12 @@ function render({ model, el: root }) {
     downloadingNow = downloading;
     card.innerHTML = "";
 
+    if (!(it.versions || []).some((v) => v.version === version)) version = "";
+    const where = versionState(it, version);
+
     const title = el("div", "emdb-d-title", esc(it.name || ""));
     if (it.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
+    if ((it.versions || []).length) title.appendChild(versionSelect(it));
     card.appendChild(title);
     const sub = [it.technique, it.size, it.shape].filter(Boolean).join("  ·  ");
     card.appendChild(el("div", "emdb-d-sub", esc(sub)));
@@ -126,29 +158,29 @@ function render({ model, el: root }) {
     const status = el("div", "emdb-d-status");
     if (downloading) {
       status.appendChild(el("span", "emdb-d-badge", "downloading…"));
-    } else if (it.downloaded && it.location && it.location !== "personal") {
+    } else if (where.downloaded && where.location && where.location !== "personal") {
       // `location` is the name of the shared location the copy was found in.
-      const label = "● " + it.location + (it.user_path ? " + yours" : "");
+      const label = "● " + where.location + (where.user_path ? " + yours" : "");
       const badge = el("span", "emdb-d-badge shared", esc(label));
-      badge.title = "from " + it.location + ": " + it.path
-        + (it.user_path ? "\nyour copy: " + it.user_path : "");
+      badge.title = "from " + where.location + ": " + where.path
+        + (where.user_path ? "\nyour copy: " + where.user_path : "");
       status.appendChild(badge);
-      if (it.user_path) {
+      if (where.user_path) {
         const del = el("button", "emdb-delete", "Delete yours");
-        del.title = "Remove your copy (" + it.user_path + "). The copy in "
-          + it.location + " is untouched.";
-        del.addEventListener("click", () => cmd("delete"));
+        del.title = "Remove your copy (" + where.user_path + "). The copy in "
+          + where.location + " is untouched.";
+        del.addEventListener("click", () => cmd("delete", { version }));
         status.appendChild(del);
       }
-    } else if (it.downloaded) {
+    } else if (where.downloaded) {
       status.appendChild(el("span", "emdb-d-badge on", "● downloaded"));
       const del = el("button", "emdb-delete", "Delete");
       del.title = "Remove the downloaded file from disk";
-      del.addEventListener("click", () => cmd("delete"));
+      del.addEventListener("click", () => cmd("delete", { version }));
       status.appendChild(del);
     } else {
       const btn = el("button", "emdb-dl", "Download");
-      btn.addEventListener("click", () => { btn.disabled = true; btn.textContent = "starting…"; cmd("download"); });
+      btn.addEventListener("click", () => { btn.disabled = true; btn.textContent = "starting…"; cmd("download", { version }); });
       status.appendChild(btn);
     }
     card.appendChild(status);
@@ -163,15 +195,18 @@ function render({ model, el: root }) {
 
     if (it.description) main.appendChild(el("p", "emdb-d-desc", esc(it.description)));
     main.appendChild(el("div", "emdb-load-label", "Load"));
-    const snippet = `${toSnake(it.name || "dataset")} = emdatabase.data.${it.name}()`;
+    const snippet = version
+      ? `path = emdatabase.data.${it.name}().download(version="${version}")`
+      : `${toSnake(it.name || "dataset")} = emdatabase.data.${it.name}()`;
     main.appendChild(copyRow(snippet, snippet));
-    if (it.downloaded && it.path) main.appendChild(copyRow(it.path, it.path, "path"));
+    if (where.downloaded && where.path) main.appendChild(copyRow(where.path, where.path, "path"));
 
     const pairs = [
       ["Detector", it.detector], ["Microscope", it.microscope], ["Voltage", it.voltage],
       ["Tags", (it.tags || []).join(", ")], ["Authors", (it.authors || []).join(", ")],
       ["License", it.license], ["File", it.file], ["DOI", it.doi],
-      ["Version", it.version], ["Model", it.model_class],
+      ["Versions", (it.versions || []).map((v) => v.version).join(", ")],
+      ["Model", it.model_class],
       ["Framework", it.model_framework], ["quantem", it.model_quantem],
     ];
     const meta = el("div", "emdb-d-meta");

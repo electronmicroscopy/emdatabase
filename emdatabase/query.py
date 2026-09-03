@@ -25,9 +25,10 @@ from emdatabase import catalogue
 from emdatabase.downloadable_dataset import DownloadableDataset
 
 #: Fields :func:`filter` accepts. The first group is the dataset's own metadata;
-#: ``downloaded`` and ``location`` describe what is on this machine instead -
-#: ``location`` being the name of the location a copy was found in, which is
-#: ``"personal"`` for your own directory.
+#: ``version`` is a weights family's dated versions, so it tests membership
+#: rather than equality. ``downloaded`` and ``location`` describe what is on
+#: this machine instead - ``location`` being the name of the location a copy was
+#: found in, which is ``"personal"`` for your own directory.
 FILTER_FIELDS = (
     "kind",
     "version",
@@ -77,8 +78,8 @@ def search(query: str) -> list[DownloadableDataset]:
 
     The text searched is everything the widget searches: name, description,
     technique, detector, microscope, voltage, licence, DOI, file name, tags,
-    authors and their affiliations, and for a weights entry the model class and
-    framework. Matching is case-insensitive, and terms may
+    authors and their affiliations, and for a weights entry the model class,
+    framework and version dates. Matching is case-insensitive, and terms may
     match different fields - ``"jeol eels"`` finds EELS datasets taken on a
     JEOL. An empty query returns everything.
     """
@@ -97,13 +98,14 @@ def filter(**criteria: Any) -> list[DownloadableDataset]:  # noqa: A001
     """Datasets matching every one of ``criteria``.
 
     Fields are those in :data:`FILTER_FIELDS`. String comparisons are exact but
-    case-insensitive; ``tags`` and ``authors`` test membership; passing a list
-    matches any of its values::
+    case-insensitive; ``tags``, ``authors`` and ``version`` test membership;
+    passing a list matches any of its values::
 
         emdatabase.filter(technique="4D-STEM")
         emdatabase.filter(technique="4D-STEM", tags="Strain")
         emdatabase.filter(microscope_vendor=["JEOL", "Hitachi"])
         emdatabase.filter(kind="weights")
+        emdatabase.filter(version="260902")     # a weights family with that date
         emdatabase.filter(downloaded=True)
         emdatabase.filter(location="group")     # found in the "group" location
 
@@ -131,6 +133,10 @@ def _value(ds: DownloadableDataset, row: dict, field: str) -> Any:
     """The value ``field`` is filtered on for one dataset."""
     if field in ("downloaded", "location"):
         return row[field]
+    if field == "version":
+        # A weights entry is a family of dated versions, so the question is
+        # which families have that date; a dataset has none and matches nothing.
+        return ds.versions
     return getattr(ds.metadata, field)
 
 

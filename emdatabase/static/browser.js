@@ -75,7 +75,8 @@ function render({ model, el: root }) {
     search: "",
     selected: null,   // name shown in the details panel (sticky)
     hovered: null,    // name under the cursor (transient preview)
-    optimistic: new Set(),  // names just clicked, before Python confirms
+    version: {},      // name -> chosen version of a weights family ("" = latest)
+    optimistic: new Set(),  // labels just clicked, before Python confirms
     cancelling: new Set(),  // tokens whose ✕ was clicked, awaiting teardown
     activeSig: "",    // signature of the active-download set, to avoid churn
   };
@@ -112,13 +113,38 @@ function render({ model, el: root }) {
     return (model.get("groups") || []).map((g) => g.technique);
   }
 
-  function activeNames() {
-    const names = new Set(state.optimistic);
+  // A download is labelled "Name" or "Name@260902"; the list marks the entry
+  // whatever version is running, the details panel marks the one selected.
+  function labelFor(name, version) {
+    return version ? name + "@" + version : name;
+  }
+
+  function activeLabels() {
+    const labels = new Set(state.optimistic);
     const downloads = model.get("downloads") || {};
     for (const dl of Object.values(downloads)) {
-      if (!dl.error) names.add(dl.label);
+      if (!dl.error) labels.add(dl.label);
     }
-    return names;
+    return labels;
+  }
+
+  function activeNames() {
+    return new Set([...activeLabels()].map((label) => label.split("@")[0]));
+  }
+
+  // Which version the details panel is showing: "" is latest, and is all a
+  // dataset (or a family whose selection has gone away) ever has.
+  function currentVersion(item) {
+    const chosen = state.version[item.name];
+    if (!chosen) return "";
+    return (item.versions || []).some((v) => v.version === chosen) ? chosen : "";
+  }
+
+  // The download state of one version: the same shape as an item's own fields,
+  // which describe latest, so one set of helpers reads either.
+  function versionState(item, version) {
+    if (!version) return item;
+    return (item.versions || []).find((v) => v.version === version) || {};
   }
 
   function matchesSearch(item) {
@@ -219,15 +245,16 @@ function render({ model, el: root }) {
   }
 
   // `location` is the name of the location a copy was found in; "personal" is
-  // the user's own directory.
-  function inShared(item) {
-    return item.downloaded && item.location && item.location !== "personal";
+  // the user's own directory. `where` is an item (which describes latest) or
+  // one of its versions.
+  function inShared(where) {
+    return where.downloaded && where.location && where.location !== "personal";
   }
 
   // A shared copy and your own can both exist; the tooltip names each.
-  function sharedTitle(item) {
-    const lines = ["from " + item.location + ": " + item.path];
-    if (item.user_path) lines.push("your copy: " + item.user_path);
+  function sharedTitle(where) {
+    const lines = ["from " + where.location + ": " + where.path];
+    if (where.user_path) lines.push("your copy: " + where.user_path);
     return lines.join("\n");
   }
 
@@ -262,41 +289,44 @@ function render({ model, el: root }) {
       detailsEl.appendChild(el("div", "emdb-details-empty", "Hover or select a dataset."));
       return;
     }
-    const active = activeNames().has(item.name);
+    const version = currentVersion(item);
+    const where = versionState(item, version);
+    const active = activeLabels().has(labelFor(item.name, version));
 
     const head = el("div", "emdb-d-head");
     const title = el("div", "emdb-d-title", esc(item.name));
     if (item.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
+    if ((item.versions || []).length) title.appendChild(versionSelect(item, version));
     head.appendChild(title);
     const sub = [item.technique, item.size, item.shape].filter(Boolean).join("  ·  ");
     head.appendChild(el("div", "emdb-d-sub", esc(sub)));
     detailsEl.appendChild(head);
 
-    // status / action line
+    // status / action line, for whichever version is selected
     const statusRow = el("div", "emdb-d-status");
-    if (inShared(item)) {
-      const label = "● " + item.location + (item.user_path ? " + yours" : "");
+    if (inShared(where)) {
+      const label = "● " + where.location + (where.user_path ? " + yours" : "");
       const badge = el("span", "emdb-d-badge shared", esc(label));
-      badge.title = sharedTitle(item);
+      badge.title = sharedTitle(where);
       statusRow.appendChild(badge);
-      if (item.user_path) {
+      if (where.user_path) {
         const del = el("button", "emdb-delete", "Delete yours");
-        del.title = "Remove your copy (" + item.user_path + "). The copy in "
-          + item.location + " is untouched.";
-        del.addEventListener("click", () => cmd("delete", { name: item.name }));
+        del.title = "Remove your copy (" + where.user_path + "). The copy in "
+          + where.location + " is untouched.";
+        del.addEventListener("click", () => cmd("delete", { name: item.name, version }));
         statusRow.appendChild(del);
       }
-    } else if (item.downloaded) {
+    } else if (where.downloaded) {
       statusRow.appendChild(el("span", "emdb-d-badge on", "● downloaded"));
       const del = el("button", "emdb-delete", "Delete");
       del.title = "Remove the downloaded file from disk";
-      del.addEventListener("click", () => cmd("delete", { name: item.name }));
+      del.addEventListener("click", () => cmd("delete", { name: item.name, version }));
       statusRow.appendChild(del);
     } else if (active) {
       statusRow.appendChild(el("span", "emdb-d-badge", "downloading…"));
     } else {
       const btn = el("button", "emdb-dl", "Download");
-      btn.addEventListener("click", () => startDownload(item.name));
+      btn.addEventListener("click", () => startDownload(item.name, version));
       statusRow.appendChild(btn);
     }
     detailsEl.appendChild(statusRow);
@@ -313,7 +343,7 @@ function render({ model, el: root }) {
       ["License", item.license],
       ["File", item.file],
       ["DOI", item.doi],
-      ["Version", item.version],
+      ["Versions", (item.versions || []).map((v) => v.version).join(", ")],
       ["Model", item.model_class],
       ["Framework", item.model_framework],
       ["quantem", item.model_quantem],
@@ -330,11 +360,37 @@ function render({ model, el: root }) {
 
     // Load block: copy a ready-to-paste snippet, and the on-disk path.
     detailsEl.appendChild(el("div", "emdb-load-label", "Load"));
-    const snippet = `${toSnake(item.name)} = emdatabase.data.${item.name}()`;
+    const snippet = version
+      ? `path = emdatabase.data.${item.name}().download(version="${version}")`
+      : `${toSnake(item.name)} = emdatabase.data.${item.name}()`;
     detailsEl.appendChild(copyRow(snippet, snippet));
-    if (item.downloaded && item.path) {
-      detailsEl.appendChild(copyRow(item.path, item.path, "path"));
+    if (where.downloaded && where.path) {
+      detailsEl.appendChild(copyRow(where.path, where.path, "path"));
     }
+  }
+
+  // The version picker for a weights family: `latest`, then the dated
+  // snapshots, ● on the ones already on disk. Everything below it - the
+  // Download/Delete button, the path and the load snippet - follows it.
+  function versionSelect(item, version) {
+    const select = el("select", "emdb-version");
+    select.title = "Which version to download, delete or load";
+    const choices = [["", "latest"]].concat(
+      (item.versions || []).map((v) => [v.version, v.version])
+    );
+    for (const [value, text] of choices) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text + (versionState(item, value).downloaded ? " ●" : "");
+      option.selected = value === version;
+      select.appendChild(option);
+    }
+    select.addEventListener("click", (event) => event.stopPropagation());
+    select.addEventListener("change", () => {
+      state.version[item.name] = select.value;
+      drawDetails();
+    });
+    return select;
   }
 
   function copyRow(shownText, copyValue, variant) {
@@ -350,10 +406,10 @@ function render({ model, el: root }) {
   }
 
   // --- downloads / toasts ---------------------------------------------
-  function startDownload(name) {
-    state.optimistic.add(name);
+  function startDownload(name, version) {
+    state.optimistic.add(labelFor(name, version));
     drawList();
-    cmd("download", { name });
+    cmd("download", { name, version: version || "" });
   }
 
   let lastToastSig = "";

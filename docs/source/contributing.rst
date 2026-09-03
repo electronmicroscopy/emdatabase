@@ -54,8 +54,9 @@ Contributing model weights
 --------------------------
 
 A trained model is an entry like any other, with ``kind: weights`` and a
-``model:`` block. One entry per released version, named with the version on the
-end (``DemoNet_v3``), because the entry pins one file and one checksum.
+``model:`` block. One entry per model, named without a version
+(``TutorialUNet``): the entry is a family holding every state the weights have
+been published in, not a single file.
 
 Save one ``.pt`` per model, holding plain primitives and tensors only:
 
@@ -68,12 +69,33 @@ accepted - a pickled ``nn.Module`` executes arbitrary code on load and is tied
 to the class's import path. ``config`` carries the architecture arguments the
 class needs to be rebuilt.
 
-The entry declares ``version``, ``model.class`` (the dotted import path),
+The entry declares ``model.class`` (the dotted import path),
 ``model.framework``, ``model.quantem`` (the versions the checkpoint loads
 under) and ``license``. Set the licence from the model's own terms: a model
 trained on a dataset does not inherit that dataset's licence.
 
-``python -m emdatabase.new_dataset --kind weights <url>`` asks for all of it.
+Point the tooling at the link the weights are published at:
+
+.. code-block:: bash
+
+   python -m emdatabase.new_dataset --kind weights <url>
+
+It asks for the rest and writes two things from that one link: ``latest``,
+which follows the link wherever it leads, and ``versions``, holding one dated
+snapshot pinned to the md5 the link serves now. ``--version-date YYMMDD`` files
+that snapshot under a date other than today; the :doc:`Add Dataset
+<add_dataset>` form and the issue form ask for the same date, and take today
+when it is left blank.
+
+Retraining a model means re-uploading the file to the same link. Nothing in the
+entry needs editing by hand: the weekly job below sees the new md5, archives the
+bytes and opens a pull request adding the new dated version.
+
+``download()`` returns whatever the ``latest`` link serves now. It warns with a
+``StaleIndexWarning`` when that md5 is not the one in the index, which happens
+whenever the link has moved on since the installed release.
+``download(version="260902")`` returns the dated snapshot instead, pinned to its
+checksum and failing on a mismatch the way a dataset does.
 
 What CI checks
 --------------
@@ -81,9 +103,21 @@ What CI checks
 Every pull request runs the test suite, which validates each YAML file in
 ``index/`` (the template included) against the schema, and checks the vendor
 names in ``vendors.yaml``: a name close to one already on the list fails as a
-misspelling, while a genuinely new one warns and asks for it to be added. A
-weekly job asks each source server whether the file is still there and still
-the size the entry claims.
+misspelling, while a genuinely new one warns and asks for it to be added.
+
+``check_sources.yml`` runs weekly and asks each source server whether the file
+is still there and still the size the entry claims.
+
+``check_weights.yml`` runs weekly as well. It downloads each weights family's
+``latest`` link and compares the md5 with the index. An unchanged file is
+archived on the first run that finds it unarchived, so a newly contributed
+entry stops depending on the contributor's link. A changed file becomes a new
+dated version, added in a pull request together with the new ``latest``
+checksum. The archive is the ``weights-archive`` release on this repository; a
+file over 500 MB goes to the workflow run as an artifact instead, and a
+maintainer uploads it to the release by hand. A link that answers with
+``text/html`` - a Google Drive virus-scan page rather than the file - is
+reported and nothing is archived.
 
 Hosting
 -------
@@ -92,6 +126,15 @@ Zenodo is preferred: it gives a DOI, a stable URL and a record that is not
 going to be rewritten. A GitHub URL is acceptable if it is pinned to a commit
 SHA. A URL on a moving branch is not, because the file behind it can change
 without the checksum changing with it.
+
+A weights entry's ``latest`` is the one exception: it is meant to move, because
+it follows the model's published link, and every state that link has served is
+kept as a dated version pinned to its own checksum. A dataset, and a weights
+entry's dated versions, stay pinned.
+
+Zenodo's latest link is not resolved yet. A concept DOI has no static file URL,
+only an API, so give the current record's file link and update the entry when a
+new record is published.
 
 Google Drive works for a small file, as a
 ``https://drive.google.com/uc?export=download&id=<id>`` link written to the

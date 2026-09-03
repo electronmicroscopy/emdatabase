@@ -27,8 +27,12 @@ def build_docstring(dataset_dict) -> str:
         doc += f"    License: {dataset_dict['license']}\n\n"
 
     what = "these model weights" if dataset_dict.get("kind") == "weights" else "this dataset"
+    latest = dataset_dict.get("latest") or {}
     doc += f"    You can download {what} here:\n"
-    doc += f"    {dataset_dict.get('url') or dataset_dict['source']}\n\n"
+    doc += f"    {latest.get('url') or dataset_dict.get('url') or dataset_dict['source']}\n\n"
+    versions = sorted((str(v) for v in dataset_dict.get("versions") or {}), reverse=True)
+    if versions:
+        doc += f"    Versions: {', '.join(versions)}\n\n"
     return doc
 
 

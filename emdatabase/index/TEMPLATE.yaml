@@ -53,11 +53,25 @@ MyDatasetName:
       orcid: 0000-0002-1825-0097
   # What the entry hands out: `dataset` (the default) or `weights` for a model checkpoint.
   kind: dataset
-  # The released version this entry pins, quoted. One entry per version.
-  version: "1"
   # Required for `kind: weights`, and not allowed on a dataset. `class` is the
   # dotted import path of the model, `quantem` the versions it loads under.
   # model:
   #   class: quantem.diffractive_imaging.ObjectINR
   #   framework: torch
   #   quantem: ">=0.2,<0.3"
+  # Required for `kind: weights`, and not allowed on a dataset. The published
+  # link the entry follows; `url`, `checksum` and `size_bytes` live here rather
+  # than at the top level, and `download()` returns whatever it serves.
+  # latest:
+  #   url: https://drive.google.com/uc?export=download&id=0123456789abcdef
+  #   checksum: md5:0123456789abcdef0123456789abcdef
+  #   size_bytes: 1000000
+  # Required for `kind: weights`, and not allowed on a dataset. One pinned
+  # snapshot of what that link served, keyed by a quoted YYMMDD date, which is
+  # what `download(version="260902")` hands out. At least one is needed; the
+  # weekly CI job adds a new one whenever the link's md5 changes.
+  # versions:
+  #   "260902":
+  #     url: https://github.com/electronmicroscopy/emdatabase/releases/download/weights-archive/MyModel_260902.pt
+  #     checksum: md5:0123456789abcdef0123456789abcdef
+  #     size_bytes: 1000000

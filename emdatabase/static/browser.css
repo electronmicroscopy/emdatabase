@@ -141,6 +141,13 @@
   font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--emdb-mauve); border: 1px solid var(--emdb-surface1);
 }
+.emdb-version {
+  margin-left: 8px; vertical-align: middle; padding: 1px 6px; border-radius: 6px;
+  font-family: var(--emdb-mono); font-size: 10.5px; font-weight: 600;
+  color: var(--emdb-subtext); background: var(--emdb-surface0);
+  border: 1px solid var(--emdb-surface1); cursor: pointer;
+}
+.emdb-version:hover { color: var(--emdb-text); }
 .emdb-d-badge { font-size: 11.5px; color: var(--emdb-subtext); }
 .emdb-d-badge.on { color: var(--emdb-green); font-weight: 600; }
 .emdb-d-badge.shared { color: var(--emdb-blue); font-weight: 600; }

@@ -94,9 +94,6 @@
           ],
           "default": "dataset"
         },
-        "version": {
-          "type": "string"
-        },
         "model": {
           "type": "object",
           "properties": {
@@ -115,6 +112,30 @@
             "framework"
           ],
           "additionalProperties": false
+        },
+        "latest": {
+          "$ref": "#/$defs/weightsFile"
+        },
+        "versions": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^\\d{6}$"
+          },
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/weightsFile"
+              },
+              {
+                "required": [
+                  "url",
+                  "checksum",
+                  "size_bytes"
+                ]
+              }
+            ]
+          }
         }
       },
       "required": [
@@ -135,17 +156,84 @@
       },
       "then": {
         "required": [
-          "model"
+          "model",
+          "latest",
+          "versions"
+        ],
+        "allOf": [
+          {
+            "not": {
+              "required": [
+                "url"
+              ]
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "checksum"
+              ]
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "size_bytes"
+              ]
+            }
+          }
         ]
       },
       "else": {
-        "not": {
-          "required": [
-            "model"
-          ]
-        }
+        "allOf": [
+          {
+            "not": {
+              "required": [
+                "model"
+              ]
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "latest"
+              ]
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "versions"
+              ]
+            }
+          }
+        ]
       }
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "weightsFile": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^md5:[A-Fa-f0-9]{32}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "url",
+        "checksum"
+      ],
+      "additionalProperties": false
+    }
+  }
 }

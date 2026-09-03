@@ -33,7 +33,7 @@ for ds in emdatabase.search("jeol eels"):
 
 # %%
 # ``filter`` matches named fields instead. Strings compare exactly but
-# case-insensitively, ``tags`` and ``authors`` test membership, and a list
+# case-insensitively, ``tags``, ``authors`` and ``version`` test membership, and a list
 # means any of its values.
 for ds in emdatabase.filter(technique="4D-STEM", tags="Strain"):
     print(ds, "·", ", ".join(ds.metadata.tags))

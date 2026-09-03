@@ -15,7 +15,7 @@ import warnings
 from pathlib import Path
 
 from emdatabase.downloadable_dataset import DownloadableDataset
-from emdatabase.metadata import DatasetMetadata
+from emdatabase.metadata import DatasetMetadata, format_size
 
 # Techniques in the order the browser should show them - the modalities the
 # collection is built around first, then anything else alphabetically.
@@ -87,8 +87,41 @@ def _location(path: Path | None) -> str | None:
     return "personal"
 
 
+def _versions(ds: DownloadableDataset) -> list[dict]:
+    """One row per dated version of a weights family, newest first.
+
+    Each carries its own link, pin and on-disk state, because a family's
+    versions are downloaded and deleted one at a time; a dataset has none, so
+    this is empty for everything but weights.
+    """
+    rows = []
+    for version in ds.versions:
+        pin = ds.metadata.versions[version]
+        try:
+            found = ds.filepaths(version)
+        except Exception:
+            found = []
+        path = found[0] if found else None
+        rows.append(
+            {
+                "version": version,
+                "url": pin.url,
+                "checksum": pin.checksum or "",
+                "size": format_size(pin.size_bytes),
+                "downloaded": path is not None,
+                "path": str(path) if path else "",
+                "location": _location(path),
+            }
+        )
+    return rows
+
+
 def entry(name: str, ds: DownloadableDataset) -> dict:
-    """One catalogue row - everything the browser draws for a dataset."""
+    """One catalogue row - everything the browser draws for a dataset.
+
+    For a weights family the top-level ``downloaded``/``path``/``location``
+    describe ``latest``; ``versions`` holds the dated snapshots.
+    """
     md = ds.metadata
     try:
         found = ds.filepaths()
@@ -119,7 +152,8 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         "source": md.source,
         "file": md.file,
         "url": ds.download_url,
-        "version": md.version or "",
+        "latest_checksum": ds.latest_checksum or "",
+        "versions": _versions(ds),
         "model_class": md.model.class_ if md.model else "",
         "model_framework": md.model.framework if md.model else "",
         "model_quantem": (md.model.quantem or "") if md.model else "",
@@ -142,6 +176,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         " ".join(a.affiliation for a in md.authors.values()),
         row["model_class"],
         row["model_framework"],
+        " ".join(v["version"] for v in row["versions"]),
     ]
     row["search"] = " ".join(str(s) for s in searchable if s).lower()
     return row

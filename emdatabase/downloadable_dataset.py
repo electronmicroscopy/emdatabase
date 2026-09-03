@@ -4,13 +4,35 @@ import sys
 import threading
 import warnings
 from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
 
 import pooch
 
 from emdatabase.config import LocationName
-from emdatabase.metadata import DatasetMetadata
+from emdatabase.metadata import DatasetMetadata, versioned_filename
+
+
+class StaleIndexWarning(UserWarning):
+    """The file behind a weights family's ``latest`` link is not the one the
+    index describes, so the shipped checksum is out of date."""
+
+
+@dataclass(frozen=True)
+class _Resolved:
+    """What one call to :meth:`DownloadableDataset.download` fetches.
+
+    ``pinned`` is False only for a weights family's ``latest``, where the
+    checksum describes what the link served when the index was written rather
+    than what it has to serve now.
+    """
+
+    url: str
+    checksum: str | None
+    size_bytes: int | None
+    file: str
+    pinned: bool
 
 
 class Progress(Protocol):
@@ -221,6 +243,10 @@ class DownloadableDataset:
     needs are also reachable directly, as :attr:`source`, :attr:`file`,
     :attr:`url`, :attr:`checksum` and :attr:`size_bytes`; the link that is
     actually fetched is :attr:`download_url`.
+
+    A ``kind: weights`` entry is a family rather than a single file:
+    :attr:`versions` lists the dated snapshots it can be pinned to, and the
+    accessors above describe its ``latest``.
     """
 
     _spec: ClassVar[dict[str, Any]] = {}
@@ -247,24 +273,89 @@ class DownloadableDataset:
     def url(self) -> str | None:
         return self.metadata.url
 
+    def _resolve(self, version: str | None = None) -> _Resolved:
+        """The link, checksum and local name for one version of this entry.
+
+        A dataset is a single pinned file and takes no version. A weights entry
+        is a family: with no version it is the ``latest`` link, which is not
+        pinned, and with one it is that dated snapshot, which is.
+        """
+        md = self.metadata
+        if md.kind != "weights":
+            if version is not None:
+                raise ValueError(f"{type(self).__name__} is a dataset and has no versions")
+            return _Resolved(
+                url=md.url or f"{md.source}/{md.file}",
+                checksum=md.checksum,
+                size_bytes=md.size_bytes,
+                file=md.file,
+                pinned=True,
+            )
+        if version is None:
+            if md.latest is None:
+                raise ValueError(f"{type(self).__name__} is a weights entry with no 'latest'")
+            return _Resolved(
+                url=md.latest.url,
+                checksum=md.latest.checksum,
+                size_bytes=md.latest.size_bytes,
+                file=md.file,
+                pinned=False,
+            )
+        pin = md.versions.get(version)
+        if pin is None:
+            raise ValueError(
+                f"{type(self).__name__} has no version {version!r}; "
+                f"available: {', '.join(self.versions) or 'none'}"
+            )
+        return _Resolved(
+            url=pin.url,
+            checksum=pin.checksum,
+            size_bytes=pin.size_bytes,
+            file=versioned_filename(md.file, version),
+            pinned=True,
+        )
+
     @property
     def download_url(self) -> str:
-        """The link the file is fetched from.
+        """The link the file is fetched from, ``latest`` for a weights family.
 
         ``source`` is where the file comes from and ``file`` is what it is
         called locally, which for most hosts is also the last segment of the
         link. Where it is not - a Google Drive link, or anything else with a
-        query string - the entry gives the whole link as ``url`` instead.
+        query string - the entry gives the whole link as ``url`` instead, and a
+        weights entry gives one link per version.
         """
-        return self.url or f"{self.source}/{self.file}"
+        return self._resolve(None).url
 
     @property
     def checksum(self) -> str | None:
-        return self.metadata.checksum
+        return self._resolve(None).checksum
 
     @property
     def size_bytes(self) -> int | None:
-        return self.metadata.size_bytes
+        return self._resolve(None).size_bytes
+
+    @property
+    def versions(self) -> tuple[str, ...]:
+        """The dated versions of a weights family, newest first.
+
+        Empty for a dataset, which is one pinned file and has no versions.
+        """
+        return tuple(sorted(self.metadata.versions, reverse=True))
+
+    @property
+    def latest_checksum(self) -> str | None:
+        """What the ``latest`` link served when the index was written."""
+        return self._resolve(None).checksum
+
+    def filename(self, version: str | None = None) -> str:
+        """The name the file is saved under locally.
+
+        A dated version of a weights family carries the date - ``w.pt`` becomes
+        ``w_260902.pt`` - so that it sits next to ``latest`` rather than
+        replacing it.
+        """
+        return self._resolve(version).file
 
     @property
     def size(self) -> str:
@@ -315,6 +406,7 @@ class DownloadableDataset:
         progressbar: bool | Progress = True,
         chunk_size: int = 4096,
         background: bool = True,
+        version: str | None = None,
     ) -> DatasetPath:
         """Return a verified local path to the file, downloading it if needed.
 
@@ -350,6 +442,20 @@ class DownloadableDataset:
             (``hs.load(dataset.download())``): it blocks only at the point the file
             is actually opened. Use ``.done`` to poll and ``.result()`` to wait
             explicitly. If False, the download blocks until the file is there.
+        version : str, optional
+            For a ``kind: weights`` entry, the dated version to fetch, e.g.
+            ``"260902"`` - see :attr:`versions`. It is saved under its own name
+            (``w_260902.pt``) and is pinned: a download that does not match the
+            checksum in the index fails. ``None`` (the default) fetches the
+            ``latest`` link, which serves whatever the current file is; if
+            those bytes are not the ones the index describes the download still
+            succeeds and warns with :class:`StaleIndexWarning`. A copy of
+            ``latest`` already on disk is handed back as it is, so refreshing a
+            stale one means :meth:`delete` and then ``download`` again. There is
+            no checksum to fail on for ``latest``, so a host that answers with
+            an HTML page instead of the file - Google Drive's virus-scan
+            interstitial for a large file - is saved and warned about rather
+            than refused. A dataset has no versions and passing one is an error.
 
         Returns
         -------
@@ -358,13 +464,14 @@ class DownloadableDataset:
             reports download state. With ``background`` False it is already done.
         """
         if not background:
-            return DatasetPath(self._retrieve(destination, progressbar, chunk_size))
+            return DatasetPath(self._retrieve(destination, progressbar, chunk_size, version))
         # Resolve where the file will end up: an existing copy in a shared
         # location or in the personal one, otherwise the personal one.
+        name = self.filename(version)
         if destination is not None:
-            target = self._resolve_destination(destination) / self.file
+            target = self._resolve_destination(destination) / name
         else:
-            target = self.filepath() or self._resolve_destination(None) / self.file
+            target = self.filepath(version) or self._resolve_destination(None) / name
         # In Jupyter (with the widget installed) a background download pops a
         # cancelable toast; the toast's monitor replaces the plain progress bar.
         monitor = finish = None
@@ -372,11 +479,12 @@ class DownloadableDataset:
             try:
                 from emdatabase.widget import _attach_toast
 
-                monitor, finish = _attach_toast(type(self).__name__)
+                label = type(self).__name__ + (f"@{version}" if version else "")
+                monitor, finish = _attach_toast(label)
             except Exception:
                 monitor = finish = None
         progress = monitor if monitor is not None else progressbar
-        future = _get_executor().submit(self._retrieve, destination, progress, chunk_size)
+        future = _get_executor().submit(self._retrieve, destination, progress, chunk_size, version)
         if finish is not None:
             future.add_done_callback(finish)
         return DatasetPath(target)._attach(future)
@@ -386,6 +494,7 @@ class DownloadableDataset:
         destination: Path | LocationName | None = None,
         progressbar: bool | Progress = True,
         chunk_size: int = 4096,
+        version: str | None = None,
     ) -> Path:
         """Fetch the file and return its local path (blocking).
 
@@ -393,6 +502,7 @@ class DownloadableDataset:
         used as-is (never re-downloaded); otherwise pooch downloads into the
         personal directory.
         """
+        resolved = self._resolve(version)
         if progressbar is True:
             try:
                 import tqdm  # noqa: F401
@@ -401,9 +511,9 @@ class DownloadableDataset:
                 progressbar = False
             else:
                 # Our own bar rather than pooch's; see _TqdmProgress.
-                progressbar = _TqdmProgress(self.file)
+                progressbar = _TqdmProgress(resolved.file)
         if destination is None:
-            shared = self._find_in_shared_locations()
+            shared = self._find_in_shared_locations(version)
             if shared is not None:
                 return shared
             destination = self._resolve_destination(None)
@@ -417,13 +527,16 @@ class DownloadableDataset:
             headers=headers,
         )
         try:
-            filepath = pooch.retrieve(
-                url=self.download_url,
-                known_hash=self.checksum,
-                fname=self.file,
-                path=destination,
-                downloader=downloader,  # pyright: ignore[reportArgumentType]
-            )
+            if resolved.pinned:
+                filepath = pooch.retrieve(
+                    url=resolved.url,
+                    known_hash=resolved.checksum,
+                    fname=resolved.file,
+                    path=destination,
+                    downloader=downloader,  # pyright: ignore[reportArgumentType]
+                )
+            else:
+                filepath = self._retrieve_latest(resolved, Path(destination), downloader)
         finally:
             # pooch only closes the bar on the happy path, so a failed or
             # cancelled download would leave it hanging open.
@@ -431,19 +544,58 @@ class DownloadableDataset:
                 progressbar.close()
         return Path(filepath)
 
-    def _find_in_shared_locations(self) -> Path | None:
+    def _retrieve_latest(self, resolved: _Resolved, destination: Path, downloader: Any) -> str:
+        """Fetch a weights family's ``latest`` link, warning on a new checksum.
+
+        The link serves whatever the newest file is, so the checksum in the
+        index goes stale the moment the model is retrained. Verifying it would
+        refuse the download of a file that is not wrong, only newer, so the
+        file is fetched unverified and hashed afterwards.
+
+        A copy already on disk is used as it is: its bytes cannot be told apart
+        from a newer or an older publication of the same link, and re-fetching
+        would need the network for a file that is already there.
+        """
+        target = destination / resolved.file
+        already_there = target.exists()
+        filepath = pooch.retrieve(
+            url=resolved.url,
+            known_hash=None,
+            fname=resolved.file,
+            path=destination,
+            downloader=downloader,
+        )
+        if already_there or not resolved.checksum:
+            return filepath
+        digest = f"md5:{pooch.file_hash(filepath, 'md5')}"
+        if digest != resolved.checksum:
+            pinned = (
+                f'download(version="{self.versions[0]}")' if self.versions else "an older copy"
+            )
+            warnings.warn(
+                f"{type(self).__name__}: the latest weights are {digest}, but the index "
+                f"describes {resolved.checksum}. The file was kept - it is what the link "
+                f"serves now - but it is not the one this version of emdatabase was built "
+                f"against; upgrade emdatabase, or use {pinned} for the state it knows.",
+                StaleIndexWarning,
+                stacklevel=2,
+            )
+        return filepath
+
+    def _find_in_shared_locations(self, version: str | None = None) -> Path | None:
         """Path to an existing copy in a configured shared location, or None."""
         from emdatabase import config
 
+        name = self.filename(version)
         for location in config.locations():
             if location.kind == "personal":
                 continue
-            candidate = location.path / self.file
+            candidate = location.path / name
             if candidate.exists():
                 return candidate
         return None
 
-    def filepaths(self) -> list[Path]:
+    def filepaths(self, version: str | None = None) -> list[Path]:
         """Every copy of the dataset on disk, in search order.
 
         A dataset can be in more than one place at once - a copy in a shared
@@ -452,20 +604,31 @@ class DownloadableDataset:
         winner; this returns all of them, so a caller can tell the difference
         between the one copy that is shared and a shared copy that you also
         have your own of.
+
+        ``version`` asks about one dated version of a weights family; with no
+        version it is the ``latest`` file, which is a different name on disk.
         """
         from emdatabase import config
 
-        return [d / self.file for d in config.data_search_dirs() if (d / self.file).exists()]
+        name = self.filename(version)
+        return [d / name for d in config.data_search_dirs() if (d / name).exists()]
 
-    def filepath(self) -> Path | None:
+    def filepath(self, version: str | None = None) -> Path | None:
         """Return the local file path of the dataset if present.
 
         Looks in the configured shared locations first, then the personal
-        directory. Returns None if the dataset is not downloaded anywhere."""
-        found = self.filepaths()
+        directory. Returns None if the dataset is not downloaded anywhere.
+
+        With no ``version`` this asks whether ``latest`` is on disk, so a
+        weights family with only a dated copy downloaded answers None: handing
+        back pinned old bytes as the latest weights is exactly the substitution
+        the checksums are there to prevent."""
+        found = self.filepaths(version)
         return found[0] if found else None
 
-    def delete(self, destination: Path | LocationName | None = None) -> bool:
+    def delete(
+        self, destination: Path | LocationName | None = None, version: str | None = None
+    ) -> bool:
         """Delete the downloaded file if it is present.
 
         Parameters
@@ -475,13 +638,17 @@ class DownloadableDataset:
             location configured with :func:`emdatabase.add_location` resolves to
             that location's directory; anything else is a path. If None, uses
             the personal directory - never a shared one - by default None.
+        version : str, optional
+            Which dated version of a weights family to remove. None (the
+            default) is the ``latest`` file, which is also how a stale copy of
+            it is refreshed: delete it, then download again.
 
         Returns
         -------
         bool
             True if a file was removed, False if there was nothing to delete.
         """
-        path = self._resolve_destination(destination) / self.file
+        path = self._resolve_destination(destination) / self.filename(version)
         if path.exists():
             path.unlink()
             return True
