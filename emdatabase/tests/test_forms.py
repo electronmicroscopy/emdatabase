@@ -11,6 +11,7 @@ loaded from its path. Nothing here touches the network - the one call that would
 (``content_length``) is stubbed out.
 """
 
+import datetime
 import importlib.util
 import json
 import shutil
@@ -23,7 +24,7 @@ import pytest
 import yaml
 
 from emdatabase.metadata import load_schema, validate_document
-from emdatabase.new_dataset import FIELD_ORDER, build_document
+from emdatabase.new_dataset import FIELD_ORDER, as_weights_family, build_document
 
 pytest.importorskip("jsonschema")
 
@@ -86,6 +87,8 @@ def run_form(build_docs, tmp_path):
     return run
 
 
+VERSION_DATE = "260902"
+
 DATASET_FIELDS: dict[str, Any] = {
     "name": "MgONanoCrystals",
     "description": "A 4D-STEM dataset of MgO nanocrystals, calibrated in mrad.",
@@ -108,16 +111,15 @@ DATASET_FIELDS: dict[str, Any] = {
         {"name": "Jane Doe", "aff": "University of Somewhere", "orcid": "0000-0002-1825-0097"}
     ],
     "kind": "dataset",
-    "version": "1",
 }
 
 WEIGHTS_FIELDS: dict[str, Any] = dict(
     DATASET_FIELDS,
-    name="DemoNet_v3",
+    name="DemoNet",
     description="Trained weights for the peak-finding U-Net.",
-    file="DemoNet_v3.pt",
+    file="DemoNet.pt",
     kind="weights",
-    version="3",
+    version_date=VERSION_DATE,
     model_class="quantem.core.ml.CNN2d",
     model_framework="torch",
     model_quantem=">=0.2,<0.3",
@@ -135,6 +137,19 @@ def _entry(text):
 def _assert_in_field_order(entry):
     keys = list(entry)
     assert keys == [k for k in FIELD_ORDER if k in keys]
+
+
+def _assert_weights_family(entry, url, size_bytes=1104287335):
+    """A weights entry is a family: one `latest`, one dated version, nothing loose."""
+    assert entry["kind"] == "weights"
+    assert entry["latest"] == {
+        "url": url,
+        "checksum": DATASET_FIELDS["checksum"],
+        "size_bytes": size_bytes,
+    }
+    assert entry["versions"] == {VERSION_DATE: entry["latest"]}
+    assert list(entry["versions"]) == [VERSION_DATE]
+    assert not {"url", "checksum", "size_bytes"} & set(entry)
 
 
 def test_form_dataset_with_an_opaque_url_validates(run_form):
@@ -158,13 +173,17 @@ def test_form_weights_validates_and_carries_the_model(run_form):
     document, entry = _entry(text)
     assert validate_document(document) == []
     _assert_in_field_order(entry)
-    assert entry["kind"] == "weights"
-    assert entry["version"] == "3"
     assert entry["model"] == {
         "class": "quantem.core.ml.CNN2d",
         "framework": "torch",
         "quantem": ">=0.2,<0.3",
     }
+    _assert_weights_family(entry, WEIGHTS_FIELDS["url"], int(WEIGHTS_FIELDS["size_bytes"]))
+
+
+def test_form_takes_today_when_the_version_date_is_blank(run_form):
+    _, entry = _entry(run_form(dict(WEIGHTS_FIELDS, version_date="")))
+    assert list(entry["versions"]) == [datetime.date.today().strftime("%y%m%d")]
 
 
 def test_form_drops_the_model_block_for_a_dataset(run_form):
@@ -195,22 +214,24 @@ def test_form_and_cli_write_the_same_document(run_form):
         "framework": WEIGHTS_FIELDS["model_framework"],
         "quantem": WEIGHTS_FIELDS["model_quantem"],
     }
+    entry = as_weights_family(entry, VERSION_DATE)
     from_cli = build_document(WEIGHTS_FIELDS["name"], entry)[WEIGHTS_FIELDS["name"]]
     assert from_form == from_cli
     assert list(from_form) == list(from_cli)
+    _assert_weights_family(from_cli, WEIGHTS_FIELDS["url"], int(WEIGHTS_FIELDS["size_bytes"]))
 
 
-def test_form_keeps_the_underscore_in_a_weights_entry_name(run_form):
-    """A weights entry is named with its version on the end - `DemoNet_v3`."""
-    document, _ = _entry(run_form(WEIGHTS_FIELDS))
-    assert list(document) == ["DemoNet_v3"]
+def test_form_keeps_the_underscore_in_an_entry_name(run_form):
+    """An underscore is legal in an entry name, so it survives the cleaning."""
+    document, _ = _entry(run_form(dict(DATASET_FIELDS, name="AmorphousFilm4nm_4DSTEM")))
+    assert list(document) == ["AmorphousFilm4nm_4DSTEM"]
 
 
 def test_form_has_a_field_for_every_schema_property(build_docs):
     html = build_docs.generate_add_dataset_html()
     properties = load_schema()["patternProperties"]["^.+$"]["properties"]
     for name in properties:
-        if name in ("authors", "model"):
+        if name in ("authors", "model", "latest", "versions"):
             continue
         assert f'id="f-{name}"' in html, name
     for name in properties["model"]["properties"]:
@@ -250,11 +271,11 @@ def test_issue_labels_match_the_fields_the_parser_looks_for(issue_to_yaml):
 def test_issue_weights_entry_validates(parse):
     body = _issue_body(
         **{
-            "--Dataset Name--": "DemoNet_v3",
+            "--Dataset Name--": "DemoNet",
             "--Author--": "Jane Doe",
             "--Affiliation--": "University of Somewhere",
             "--ORCID--": "0000-0002-1825-0097",
-            "--URL--": "https://zenodo.org/records/15490547/files/DemoNet_v3.pt",
+            "--URL--": "https://zenodo.org/records/15490547/files/DemoNet.pt",
             "--File Name--": "_No response_",
             "--Checksum--": "md5:df9376d5c020a23f0f7f51cfe79f303f",
             "--Description--": "Trained weights for the peak-finding U-Net.",
@@ -269,30 +290,48 @@ def test_issue_weights_entry_validates(parse):
             "DOI": "10.5281/zenodo.15490547",
             "Tags": "Machine Learning, Segmentation",
             "Kind": "weights",
-            "Version": "3",
+            "Version Date": VERSION_DATE,
             "Model Class": "quantem.core.ml.CNN2d",
             "Model Framework": "torch",
             "Model quantem": ">=0.2,<0.3",
         }
     )
     document, name = parse(body)
-    assert name == "DemoNet_v3"
+    assert name == "DemoNet"
     assert validate_document(document) == []
     entry = document[name]
     _assert_in_field_order(entry)
     assert "url" not in entry
     assert entry["source"] == "https://zenodo.org/records/15490547/files"
-    assert entry["file"] == "DemoNet_v3.pt"
+    assert entry["file"] == "DemoNet.pt"
     assert entry["doi"] == "10.5281/zenodo.15490547"
     assert entry["tags"] == ["Machine Learning", "Segmentation"]
     assert entry["authors"]["Jane Doe"]["orcid"] == "0000-0002-1825-0097"
-    assert entry["kind"] == "weights"
-    assert entry["version"] == "3"
     assert entry["model"] == {
         "class": "quantem.core.ml.CNN2d",
         "framework": "torch",
         "quantem": ">=0.2,<0.3",
     }
+    _assert_weights_family(entry, "https://zenodo.org/records/15490547/files/DemoNet.pt")
+
+
+def test_issue_takes_today_when_the_version_date_is_blank(parse):
+    body = _issue_body(
+        **{
+            "--Dataset Name--": "DemoNet",
+            "--URL--": "https://zenodo.org/records/15490547/files/DemoNet.pt",
+            "--Checksum--": "md5:df9376d5c020a23f0f7f51cfe79f303f",
+            "--Description--": "Trained weights for the peak-finding U-Net.",
+            "--Dataset License--": "MIT",
+            "Kind": "weights",
+            "Version Date": "_No response_",
+            "Model Class": "quantem.core.ml.CNN2d",
+            "Model Framework": "torch",
+        }
+    )
+    document, name = parse(body)
+    assert validate_document(document) == []
+    assert list(document[name]["versions"]) == [datetime.date.today().strftime("%y%m%d")]
 
 
 def test_issue_drive_link_becomes_url_plus_file_name(parse):

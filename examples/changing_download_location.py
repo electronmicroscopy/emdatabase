@@ -2,49 +2,81 @@
 Configuration and the Download Location
 =======================================
 
-``emdatabase.config`` is a dask-style configuration: shipped defaults, then the
-yaml files in ``~/.config/emdatabase/``, then ``EMDATABASE_*`` environment
-variables, then :class:`emdatabase.config.set`. This example shows how to read a
-value, change where downloads go, and declare a shared store.
+Data lives in named locations. ``personal`` is the one writable location, where
+downloads go; every other one is read-only and searched first, so a copy already
+on a group drive is used instead of refetched.
+:func:`emdatabase.config.add_location`,
+:func:`emdatabase.config.locations` and
+:func:`emdatabase.config.remove_location` are how you manage them.
+
+Every call here passes ``persist=False``, so this example changes nothing on
+disk. Drop it and the location is written to
+``~/.config/emdatabase/config.yaml``, which is read on every import.
 """
 
-import emdatabase
 from emdatabase import config
 
 # %%
-# The data directory is where datasets download to. Unset, it is pooch's cache
-# directory for emdatabase (``~/.cache/emdatabase`` on Linux).
-print("configured    :", config.get("data_dir"))
-print("download dir  :", emdatabase.get_data_dir())
+# The personal location is where datasets download to. Unset, it is pooch's
+# cache directory for emdatabase (``~/.cache/emdatabase`` on Linux).
+print("configured    :", config.get("locations.personal"))
+print("download dir  :", config.data_dir())
 
 # %%
-# Change it for this process.
-emdatabase.set_data_dir("/path/to/scratch")
-print("download dir  :", emdatabase.get_data_dir())
+# Point it somewhere with room on it.
+config.add_location("/path/to/scratch", name="personal", persist=False)
+print("download dir  :", config.data_dir())
 
 # %%
-# Or for a block, after which the previous value is restored.
-with config.set({"data_dir": "/somewhere/else"}):
-    print("inside        :", emdatabase.get_data_dir())
-print("outside       :", emdatabase.get_data_dir())
+# A shared location is searched before the personal one, so a colleague's copy
+# is found instead of downloaded again. Downloads go to the personal location
+# unless you name the shared one as the destination.
+config.add_location("/group/example_data", persist=False)
 
 # %%
-# ``config.write()`` persists the whole configuration to
-# ``~/.config/emdatabase/config.yaml``, which is read on every import. The same
-# keys can come from the environment instead::
-#
-#     export EMDATABASE_DATA_DIR=/scratch/emdatabase
-#     export EMDATABASE_STORES__GROUP=/group/example_data
-
-# %%
-# A store is a named read-only directory searched before your data directory, so
-# a copy already on a group drive is used instead of downloaded again. Downloads
-# still go to ``data_dir``.
-config.set({"stores": {"group": "/group/example_data"}})
-print("stores        :", config.stores())
-print("search order  :", config.data_search_dirs())
-
-# %%
-# The name is the provenance: it is what the widgets and
+# A location is named after the last component of its path unless you pass
+# ``name=``. The name is the provenance: it is what the widgets and
 # ``emdatabase.filter(location=...)`` report for a copy found there.
+config.add_location("/cluster/em_data", name="cluster", persist=False)
+
+# %%
+# That name is also what seeds the share - ``destination=`` takes it, and the
+# copy lands where everyone configured with it will find it. Run it once, from
+# an account with write access, and ``chmod`` the file group-readable afterwards
+# if your umask does not; emdatabase does not set permissions for you::
+#
+#     from emdatabase import data
+#
+#     seeded = data.CuZnHAADF().download(destination="example_data")
+#     os.chmod(seeded, 0o664)
+
+# %%
+# :func:`~emdatabase.config.locations` is the search order — the shared
+# locations in the order they were added, then ``personal`` last.
+for location in config.locations():
+    print(f"{location.kind:9} {location.name:13} {location.path}")
+
+# %%
+# Remove one by name or by path. ``"personal"`` is not deleted but reset,
+# putting downloads back in the default cache directory.
+config.remove_location("cluster", persist=False)
+config.remove_location("/group/example_data", persist=False)
+print("locations     :", config.locations())
+
+# %%
+# For a change that lasts only for a block, use :class:`emdatabase.config.set`
+# as a context manager.
+with config.set({"locations.personal": "/somewhere/else"}):
+    print("inside        :", config.data_dir())
+print("outside       :", config.data_dir())
+
+# %%
+# On HPC, where a config file is often the wrong place for a machine-specific
+# path, set the key from the environment instead — no file and no write access
+# needed::
+#
+#     export EMDATABASE_LOCATIONS__PERSONAL=/scratch/emdatabase
+#     export EMDATABASE_LOCATIONS__GROUP=/group/example_data
+
+# %%
 config.refresh()  # drop the changes this example made

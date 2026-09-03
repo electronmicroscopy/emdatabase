@@ -15,7 +15,13 @@ from pathlib import Path
 import yaml
 
 from emdatabase.metadata import validate_document
-from emdatabase.new_dataset import build_document, content_length, split_url
+from emdatabase.new_dataset import (
+    as_weights_family,
+    build_document,
+    content_length,
+    split_url,
+    version_date,
+)
 
 # The form's field labels, with the ``--...--`` markers stripped off.
 FIELDS = (
@@ -38,7 +44,7 @@ FIELDS = (
     "DOI",
     "Tags",
     "Kind",
-    "Version",
+    "Version Date",
     "Model Class",
     "Model Framework",
     "Model quantem",
@@ -104,7 +110,6 @@ def build_yaml(data):
         "technique": data["Technique"],
         "doi": data["DOI"],
         "tags": [t.strip() for t in data["Tags"].split(",") if t.strip()],
-        "version": data["Version"],
     }
     if data["Author"]:
         author = {"affiliation": data["Affiliation"] or "Unspecified"}
@@ -119,6 +124,7 @@ def build_yaml(data):
             "quantem": data["Model quantem"],
         }
         entry["model"] = {k: v for k, v in model.items() if v}
+        entry = as_weights_family(entry, data["Version Date"] or version_date())
     return build_document(name, entry), name
 
 

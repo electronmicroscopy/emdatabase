@@ -50,30 +50,33 @@ def test_catalogue_entry_has_expected_fields():
         "tags",
         "source",
         "file",
+        "latest_checksum",
+        "versions",
     ):
         assert key in row
     assert row["name"] == TINY_DATASET
     assert row["technique"] == "STEM"
     assert isinstance(row["downloaded"], bool)
+    assert row["versions"] == []  # a dataset is one pinned file, not a family
 
 
 def test_catalogue_entry_reports_where_the_file_came_from(tmp_path):
-    store, user = tmp_path / "group", tmp_path / "user"
-    store.mkdir()
+    group, user = tmp_path / "group", tmp_path / "user"
+    group.mkdir()
     user.mkdir()
-    config.set({"data_dir": str(user), "stores": {"group": str(store)}})
+    config.set({"locations": {"group": str(group), "personal": str(user)}})
 
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     assert catalogue.entry(TINY_DATASET, ds)["location"] is None
     (user / ds.file).write_bytes(b"x")
-    assert catalogue.entry(TINY_DATASET, ds)["location"] == "user"
-    (store / ds.file).write_bytes(b"x")
+    assert catalogue.entry(TINY_DATASET, ds)["location"] == "personal"
+    (group / ds.file).write_bytes(b"x")
     assert catalogue.entry(TINY_DATASET, ds)["location"] == "group"
 
 
 def test_catalogue_downloaded_flag_tracks_the_file(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path))
+    config.add_location(tmp_path, name="personal", persist=False)
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     assert catalogue.entry(TINY_DATASET, ds)["downloaded"] is False
@@ -113,13 +116,26 @@ def test_command_trait_routes_to_actions(monkeypatch):
     """Setting the `_command` trait (what the frontend does) dispatches."""
     widget = _browser()
     calls = []
-    monkeypatch.setattr(widget, "_start_download", lambda name: calls.append(("dl", name)))
+    monkeypatch.setattr(
+        widget, "_start_download", lambda name, version=None: calls.append(("dl", name, version))
+    )
     monkeypatch.setattr(widget, "_cancel", lambda token: calls.append(("cancel", token)))
-    monkeypatch.setattr(widget, "_delete", lambda name: calls.append(("del", name)))
+    monkeypatch.setattr(
+        widget, "_delete", lambda name, version=None: calls.append(("del", name, version))
+    )
     widget._command = {"action": "download", "name": "X", "nonce": 1}
     widget._command = {"action": "cancel", "token": "t", "nonce": 2}
     widget._command = {"action": "delete", "name": "Y", "nonce": 3}
-    assert calls == [("dl", "X"), ("cancel", "t"), ("del", "Y")]
+    # A weights family's buttons name the version the selector is showing.
+    widget._command = {"action": "download", "name": "Z", "version": "260902", "nonce": 4}
+    widget._command = {"action": "delete", "name": "Z", "version": "260902", "nonce": 5}
+    assert calls == [
+        ("dl", "X", None),
+        ("cancel", "t"),
+        ("del", "Y", None),
+        ("dl", "Z", "260902"),
+        ("del", "Z", "260902"),
+    ]
 
 
 def test_widget_does_not_shadow_ipywidgets_comm_handler():
@@ -137,7 +153,7 @@ def test_command_update_routes_through_real_comm_handler(monkeypatch):
     TypeError that a shadowed _handle_msg used to raise."""
     widget = _browser()
     got = []
-    monkeypatch.setattr(widget, "_start_download", lambda name: got.append(name))
+    monkeypatch.setattr(widget, "_start_download", lambda name, version=None: got.append(name))
     msg = {
         "content": {
             "data": {
@@ -161,7 +177,7 @@ def test_search_blob_includes_authors_and_affiliation():
 
 
 def test_delete_removes_downloaded_file(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path))
+    config.add_location(tmp_path, name="personal", persist=False)
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     (tmp_path / ds.file).write_bytes(b"x")
@@ -169,6 +185,25 @@ def test_delete_removes_downloaded_file(tmp_path):
     assert ds.delete() is True
     assert ds.filepath() is None
     assert ds.delete() is False  # nothing left to delete
+
+
+def test_a_dated_download_passes_the_version_and_names_the_toast(monkeypatch):
+    """The toast label is what the frontend matches a running download to, so a
+    dated one says which version it is."""
+    widget = _browser()
+    seen = {}
+
+    class _Family:
+        def download(self, progressbar, background=True, version=None):
+            seen["version"] = version
+            seen["label"] = progressbar.label
+            return "somewhere"
+
+    monkeypatch.setattr(catalogue, "resolve", lambda name: _Family())
+    future = widget._start_download("DemoNet", "260902")
+    assert future is not None
+    future.result(timeout=30)
+    assert seen == {"version": "260902", "label": "DemoNet@260902"}
 
 
 def test_cancel_sets_the_event():
@@ -205,9 +240,10 @@ def test_dataset_card_is_populated_and_routes(monkeypatch):
     assert widget.info["name"] == TINY_DATASET
     assert widget.info["technique"] == "STEM"
     calls = []
-    monkeypatch.setattr(widget, "_start_download", lambda: calls.append("dl"))
+    monkeypatch.setattr(widget, "_start_download", lambda version=None: calls.append(version))
     widget._command = {"action": "download", "nonce": 1}
-    assert calls == ["dl"]
+    widget._command = {"action": "download", "version": "260902", "nonce": 2}
+    assert calls == [None, "260902"]
 
 
 def test_dataset_display_is_a_widget_card():
@@ -283,7 +319,7 @@ def test_download_toasts_plumbing():
 
 @pytest.mark.slow
 def test_widget_download_end_to_end(tmp_path):
-    emdatabase.set_data_dir(str(tmp_path))
+    config.add_location(tmp_path, name="personal", persist=False)
     widget = _browser()
     future = widget._start_download(TINY_DATASET)
     assert future is not None

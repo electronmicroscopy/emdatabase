@@ -1,0 +1,51 @@
+name: check weights
+
+# Separate from check_sources.yml because this one downloads whole files and
+# needs write permission to archive them and open a pull request.
+on:
+  schedule:
+    - cron: "0 6 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  weights:
+    name: latest weights are archived
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies and package
+        run: pip install -U -e .'[dev]'
+
+      - name: Follow each latest link
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .github/scripts/check_latest_weights.py \
+            --summary changes.md --keep-dir oversize
+
+      - name: Upload the files too big to archive
+        if: ${{ always() && hashFiles('oversize/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: oversize-weights
+          path: oversize/
+
+      - name: Open a pull request with the new versions
+        uses: peter-evans/create-pull-request@v6
+        with:
+          add-paths: emdatabase/index/*.yaml
+          branch: weights-archive-${{ github.run_id }}
+          title: "Archive the current model weights"
+          body-path: changes.md
+          commit-message: "Add dated weights versions from the weekly check"

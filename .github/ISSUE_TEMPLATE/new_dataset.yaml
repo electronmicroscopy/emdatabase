@@ -169,19 +169,19 @@ body:
       options:
         - dataset
         - weights
-  - type: input
-    id: version
-    attributes:
-      label: Version
-      description: The released version this entry pins. One entry per version.
-      placeholder: ex. 1
-    validations:
-      required: false
   - type: markdown
     attributes:
       value: |
-        The three fields below apply to `Kind: weights` only. Leave them blank for a
+        The four fields below apply to `Kind: weights` only. Leave them blank for a
         dataset - a dataset entry with a model block is rejected.
+  - type: input
+    id: version_date
+    attributes:
+      label: Version Date
+      description: The date, as YYMMDD, to file this state of the weights under. Leave it blank for today. `latest` follows the link you gave above; the dated version pins what it serves now.
+      placeholder: ex. 260902
+    validations:
+      required: false
   - type: input
     id: model_class
     attributes:

@@ -48,6 +48,17 @@ TINY_DATASET = "CuZnHAADF"
 ALL_DATASETS = sorted(data.__all__)
 
 
+def _url_cases():
+    """``(name, version)`` for every entry, and for every dated weights version."""
+    for name in ALL_DATASETS:
+        yield name, None
+        for version in getattr(data, name)().versions:
+            yield name, version
+
+
+URL_CASES = list(_url_cases())
+
+
 def _head(url, timeout=60):
     """Return the response for a HEAD request, following redirects."""
     request = urllib.request.Request(
@@ -57,9 +68,13 @@ def _head(url, timeout=60):
 
 
 @pytest.mark.network
-@pytest.mark.parametrize("name", ALL_DATASETS)
-def test_source_url_resolves(name):
-    """Every dataset's source URL must still exist.
+@pytest.mark.parametrize(
+    ("name", "version"),
+    URL_CASES,
+    ids=[name if version is None else f"{name}@{version}" for name, version in URL_CASES],
+)
+def test_source_url_resolves(name, version):
+    """Every link in the index must still exist.
 
     This is what actually breaks over time - a Zenodo record superseded, a
     GitHub ref rewritten - and it is invisible until someone tries to download.
@@ -67,8 +82,8 @@ def test_source_url_resolves(name):
     of the push matrix meant 120 of them per push. The weekly check_sources
     workflow runs it instead.
     """
-    dataset = getattr(data, name)()
-    url = dataset.download_url
+    resolved = getattr(data, name)()._resolve(version)
+    url = resolved.url
     try:
         response = _head(url)
     except urllib.error.HTTPError as error:
@@ -78,11 +93,12 @@ def test_source_url_resolves(name):
     assert response.status == 200, f"{name}: {url} returned {response.status}"
     # The header the declared size came from. Checking it also catches the
     # source file being replaced, which is otherwise invisible until someone's
-    # checksum fails.
+    # checksum fails. A weights family's `latest` link is meant to serve new
+    # bytes, so only a pinned link is held to its declared size.
     length = response.headers.get("Content-Length")
-    if length is not None and dataset.size_bytes is not None:
-        assert int(length) == dataset.size_bytes, (
-            f"{name}: {url} is {int(length)} bytes, but the YAML declares {dataset.size_bytes}"
+    if resolved.pinned and length is not None and resolved.size_bytes is not None:
+        assert int(length) == resolved.size_bytes, (
+            f"{name}: {url} is {int(length)} bytes, but the YAML declares {resolved.size_bytes}"
         )
 
 
@@ -145,7 +161,9 @@ def test_download_handle_is_nonblocking_then_blocks_on_use(tmp_path, monkeypatch
     dataset = getattr(data, TINY_DATASET)()
     started = threading.Event()
 
-    def slow_retrieve(destination=None, progressbar=True, chunk_size=4096):
+    def slow_retrieve(
+        destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False
+    ):
         started.set()
         time.sleep(0.4)
         target = tmp_path / dataset.file
@@ -168,7 +186,9 @@ def test_download_handle_derived_paths_also_wait(tmp_path, monkeypatch):
     dataset = getattr(data, TINY_DATASET)()
     started = threading.Event()
 
-    def slow_retrieve(destination=None, progressbar=True, chunk_size=4096):
+    def slow_retrieve(
+        destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False
+    ):
         started.set()
         time.sleep(0.4)
         target = tmp_path / dataset.file
@@ -189,7 +209,9 @@ def test_a_path_that_is_not_downloading_never_waits(tmp_path, monkeypatch):
     """Only the file being fetched is pending - its directory is not."""
     dataset = getattr(data, TINY_DATASET)()
 
-    def slow_retrieve(destination=None, progressbar=True, chunk_size=4096):
+    def slow_retrieve(
+        destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False
+    ):
         time.sleep(0.3)
         target = tmp_path / dataset.file
         target.write_bytes(b"payload")
@@ -228,6 +250,14 @@ def test_keyword_overrides_leave_the_class_spec_alone():
     overridden = base(checksum="md5:" + "0" * 32)
     assert overridden.checksum == "md5:" + "0" * 32
     assert base().checksum != overridden.checksum
+
+
+def test_a_dataset_rejects_a_version():
+    """Versions are a weights family's; a dataset is one pinned file."""
+    dataset = getattr(data, TINY_DATASET)()
+    assert dataset.versions == ()
+    with pytest.raises(ValueError, match="is a dataset and has no versions"):
+        dataset.download(version="260902")
 
 
 def test_a_dataset_without_a_source_is_an_error():

@@ -102,6 +102,18 @@ def test_filter_on_authors_tests_membership():
     assert type(ds).__name__ in names(emdatabase.filter(authors=author))
 
 
+def test_filter_on_version_finds_a_weights_family():
+    """A weights entry is a family of dated versions, so ``version`` tests
+    membership; a dataset has none and matches nothing."""
+    found = names(emdatabase.filter(version="260902"))
+    assert "TutorialUNet" in found
+    for name in found:
+        ds = catalogue.resolve(name)
+        assert ds is not None
+        assert "260902" in ds.versions
+    assert emdatabase.filter(version="000000") == []
+
+
 def test_filter_rejects_an_unknown_field():
     with pytest.raises(TypeError, match="techniqu"):
         emdatabase.filter(techniqu="4D-STEM")
@@ -114,10 +126,10 @@ def test_filter_fields_are_all_actually_filterable():
 
 
 def test_filter_on_downloaded_and_location(tmp_path):
-    store, user = tmp_path / "group", tmp_path / "user"
-    store.mkdir()
+    group, user = tmp_path / "group", tmp_path / "user"
+    group.mkdir()
     user.mkdir()
-    config.set({"data_dir": str(user), "stores": {"group": str(store)}})
+    config.set({"locations": {"group": str(group), "personal": str(user)}})
 
     assert emdatabase.filter(downloaded=True) == []
     assert names(emdatabase.filter(downloaded=False)) == names(emdatabase.list_datasets())
@@ -125,12 +137,12 @@ def test_filter_on_downloaded_and_location(tmp_path):
     ds = BilayerWS2()
     (user / ds.file).write_bytes(b"mine")
     assert names(emdatabase.filter(downloaded=True)) == [type(ds).__name__]
-    assert names(emdatabase.filter(location="user")) == [type(ds).__name__]
+    assert names(emdatabase.filter(location="personal")) == [type(ds).__name__]
     assert emdatabase.filter(location="group") == []
 
-    (store / ds.file).write_bytes(b"theirs")
+    (group / ds.file).write_bytes(b"theirs")
     assert names(emdatabase.filter(location="group")) == [type(ds).__name__]
-    assert emdatabase.filter(location="user") == []
+    assert emdatabase.filter(location="personal") == []
 
 
 def test_the_query_api_is_on_the_top_level_namespace():

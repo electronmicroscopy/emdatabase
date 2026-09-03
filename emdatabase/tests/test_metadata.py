@@ -15,6 +15,7 @@ from emdatabase.metadata import (
     TEMPLATE_PATH,
     Author,
     DatasetMetadata,
+    WeightsVersion,
     check_vendor,
     dataset_files,
     format_size,
@@ -22,6 +23,7 @@ from emdatabase.metadata import (
     load_vendors,
     validate_document,
     validate_file,
+    versioned_filename,
 )
 
 pytest.importorskip("jsonschema")
@@ -83,6 +85,22 @@ def test_schema_and_dataclass_agree():
 def test_author_schema_and_dataclass_agree():
     author_schema = ENTRY_SCHEMA["properties"]["authors"]["patternProperties"]["^.+$"]
     assert list(author_schema["properties"]) == [f.name for f in dataclasses.fields(Author)]
+
+
+def test_weights_file_schema_and_dataclass_agree():
+    """``latest`` and every dated version are the same three fields."""
+    weights_file = SCHEMA["$defs"]["weightsFile"]
+    assert list(weights_file["properties"]) == [f.name for f in dataclasses.fields(WeightsVersion)]
+    assert weights_file["required"] == ["url", "checksum"]
+    assert ENTRY_SCHEMA["properties"]["latest"] == {"$ref": "#/$defs/weightsFile"}
+
+
+@pytest.mark.parametrize(
+    ("file", "expected"),
+    [("w.pt", "w_260902.pt"), ("weights", "weights_260902"), ("a.tar.gz", "a.tar_260902.gz")],
+)
+def test_versioned_filename(file, expected):
+    assert versioned_filename(file, "260902") == expected
 
 
 def test_unknown_field_names_the_file_and_the_key():

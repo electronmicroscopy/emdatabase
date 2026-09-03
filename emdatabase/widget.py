@@ -79,6 +79,15 @@ def _prepare_frontend():
     _enable_colab_widgets()
 
 
+def _label(name, version=None):
+    """What a download is called in a toast: ``Name`` or ``Name@260902``.
+
+    The frontend splits on the ``@`` to find the entry a running download
+    belongs to, so a dated download still marks its row.
+    """
+    return f"{name}@{version}" if version else name
+
+
 class DownloadCancelled(Exception):
     """Raised inside pooch's stream when the user cancels a download.
 
@@ -192,43 +201,49 @@ def _make_browser_class():
 
         def _dispatch(self, command):
             action = command.get("action") or command.get("type")
+            version = command.get("version") or None
             if action == "download":
-                self._start_download(str(command.get("name", "")))
+                self._start_download(str(command.get("name", "")), version)
             elif action == "cancel":
                 self._cancel(str(command.get("token", "")))
             elif action == "dismiss":
                 self._clear_progress(str(command.get("token", "")))
             elif action == "delete":
-                self._delete(str(command.get("name", "")))
+                self._delete(str(command.get("name", "")), version)
             elif action == "refresh":
                 self.refresh()
 
-        def _delete(self, name):
+        def _delete(self, name, version=None):
             """Delete a dataset's downloaded file and refresh its status."""
             ds = _catalogue.resolve(name)
             if ds is not None:
                 try:
-                    ds.delete()
+                    ds.delete(version=version)
                 except OSError as error:  # read-only dir, permissions, a vanished file
                     warnings.warn(f"could not delete {name}: {error}", stacklevel=2)
                 self.refresh()
 
         # -- downloads ------------------------------------------------------
-        def _start_download(self, name):
+        def _start_download(self, name, version=None):
             """Kick off a background download for ``name`` and show a toast."""
             ds = _catalogue.resolve(name)
             if ds is None:
                 return None
-            token = f"{name}-{next(self._counter)}"
+            label = _label(name, version)
+            token = f"{label}-{next(self._counter)}"
             cancel = threading.Event()
             with self._lock:
                 self._cancels[token] = cancel
             # Show the toast immediately - indeterminate until the first bytes,
             # and it also covers the cached case where no bytes ever flow.
-            self._set_progress(token, name, 0, 0)
-            monitor = _WidgetProgress(self, token, name, cancel)
-            future = _get_executor().submit(ds.download, progressbar=monitor, background=False)
-            future.add_done_callback(lambda f, tk=token, nm=name: self._finish_download(tk, nm, f))
+            self._set_progress(token, label, 0, 0)
+            monitor = _WidgetProgress(self, token, label, cancel)
+            future = _get_executor().submit(
+                ds.download, progressbar=monitor, background=False, version=version
+            )
+            future.add_done_callback(
+                lambda f, tk=token, nm=label: self._finish_download(tk, nm, f)
+            )
             return future
 
         def _finish_download(self, token, name, future):
@@ -302,8 +317,9 @@ def _make_card_class():
         def _on_command(self, change):
             command = change.get("new") or {}
             action = command.get("action")
+            version = command.get("version") or None
             if action == "download":
-                self._start_download()
+                self._start_download(version)
             elif action == "cancel":
                 with self._lock:
                     event = self._cancel
@@ -313,23 +329,24 @@ def _make_card_class():
                 self.download = {}
             elif action == "delete":
                 try:
-                    self._dataset.delete()
+                    self._dataset.delete(version=version)
                 except Exception:
                     pass
                 self.refresh()
             elif action == "refresh":
                 self.refresh()
 
-        def _start_download(self):
+        def _start_download(self, version=None):
             with self._lock:
                 if self._cancel is not None:
                     return  # already downloading
                 self._cancel = threading.Event()
-            token = f"{self._name}-{next(self._counter)}"
-            self.download = {"label": self._name, "done": 0, "total": 0}
-            monitor = _WidgetProgress(self, token, self._name, self._cancel)
+            label = _label(self._name, version)
+            token = f"{label}-{next(self._counter)}"
+            self.download = {"label": label, "done": 0, "total": 0}
+            monitor = _WidgetProgress(self, token, label, self._cancel)
             future = _get_executor().submit(
-                self._dataset.download, progressbar=monitor, background=False
+                self._dataset.download, progressbar=monitor, background=False, version=version
             )
             future.add_done_callback(self._finish_download)
             return future

@@ -15,7 +15,7 @@ import warnings
 from pathlib import Path
 
 from emdatabase.downloadable_dataset import DownloadableDataset
-from emdatabase.metadata import DatasetMetadata
+from emdatabase.metadata import DatasetMetadata, format_size
 
 # Techniques in the order the browser should show them - the modalities the
 # collection is built around first, then anything else alphabetically.
@@ -74,31 +74,64 @@ def _join(*parts) -> str:
 
 
 def _location(path: Path | None) -> str | None:
-    """Which search location a downloaded file came from: the name of the store
-    holding it, or "user" for the user's own data directory."""
+    """Which configured location a downloaded file came from: the name of the
+    shared location holding it, or "personal" for the user's own directory."""
     if path is None:
         return None
     from emdatabase import config
 
     parent = path.resolve().parent
-    for name, directory in config.stores().items():
-        if parent == directory.resolve():
-            return name
-    return "user"
+    for location in config.locations():
+        if location.kind != "personal" and parent == location.path.resolve():
+            return location.name
+    return "personal"
+
+
+def _versions(ds: DownloadableDataset) -> list[dict]:
+    """One row per dated version of a weights family, newest first.
+
+    Each carries its own link, pin and on-disk state, because a family's
+    versions are downloaded and deleted one at a time; a dataset has none, so
+    this is empty for everything but weights.
+    """
+    rows = []
+    for version in ds.versions:
+        pin = ds.metadata.versions[version]
+        try:
+            found = ds.filepaths(version)
+        except Exception:
+            found = []
+        path = found[0] if found else None
+        rows.append(
+            {
+                "version": version,
+                "url": pin.url,
+                "checksum": pin.checksum or "",
+                "size": format_size(pin.size_bytes),
+                "downloaded": path is not None,
+                "path": str(path) if path else "",
+                "location": _location(path),
+            }
+        )
+    return rows
 
 
 def entry(name: str, ds: DownloadableDataset) -> dict:
-    """One catalogue row - everything the browser draws for a dataset."""
+    """One catalogue row - everything the browser draws for a dataset.
+
+    For a weights family the top-level ``downloaded``/``path``/``location``
+    describe ``latest``; ``versions`` holds the dated snapshots.
+    """
     md = ds.metadata
     try:
         found = ds.filepaths()
     except Exception:
         found = []
     path = found[0] if found else None
-    # The copy in the user's own directory, which may sit behind a store's in
-    # the search order. It is the only copy delete() will touch, so the widgets
-    # need it to know whether there is anything to offer deleting.
-    user_path = next((p for p in found if _location(p) == "user"), None)
+    # The copy in the user's own directory, which may sit behind a shared one
+    # in the search order. It is the only copy delete() will touch, so the
+    # widgets need it to know whether there is anything to offer deleting.
+    user_path = next((p for p in found if _location(p) == "personal"), None)
     row = {
         "name": name,
         "kind": md.kind,
@@ -119,7 +152,8 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         "source": md.source,
         "file": md.file,
         "url": ds.download_url,
-        "version": md.version or "",
+        "latest_checksum": ds.latest_checksum or "",
+        "versions": _versions(ds),
         "model_class": md.model.class_ if md.model else "",
         "model_framework": md.model.framework if md.model else "",
         "model_quantem": (md.model.quantem or "") if md.model else "",
@@ -142,6 +176,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         " ".join(a.affiliation for a in md.authors.values()),
         row["model_class"],
         row["model_framework"],
+        " ".join(v["version"] for v in row["versions"]),
     ]
     row["search"] = " ".join(str(s) for s in searchable if s).lower()
     return row
@@ -163,8 +198,9 @@ def _group(row: dict) -> str:
 def catalogue(kind: str | None = None) -> dict:
     """The whole browser payload, grouped by technique.
 
-    ``{"data_dir", "stores", "groups": [{"technique", "items"}], "n_downloaded",
-    "n_total"}`` - one group per technique in :data:`TECHNIQUE_ORDER`, then any
+    ``{"data_dir", "locations", "groups": [{"technique", "items"}],
+    "n_downloaded", "n_total"}`` - one group per technique in
+    :data:`TECHNIQUE_ORDER`, then any
     others alphabetically, then :data:`WEIGHTS_GROUP` holding every weights
     entry whatever its technique. ``kind`` limits the payload to one kind of
     entry; with no ``kind`` it holds both.
@@ -183,7 +219,7 @@ def catalogue(kind: str | None = None) -> dict:
     groups = [{"technique": g, "items": by_group[g]} for g in sorted(by_group, key=_order)]
     return {
         "data_dir": str(config.data_dir()),
-        "stores": {name: str(path) for name, path in config.stores().items()},
+        "locations": {loc.name: str(loc.path) for loc in config.locations()},
         "groups": groups,
         "n_downloaded": sum(1 for it in items if it["downloaded"]),
         "n_total": len(items),

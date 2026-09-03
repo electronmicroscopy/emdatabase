@@ -298,9 +298,9 @@ class SPEDAg(DownloadableDataset):
     """
     ...
 
-class TutorialUNet_v1(DownloadableDataset):
+class TutorialUNet(DownloadableDataset):
     """
-    TutorialUNet_v1
+    TutorialUNet
 
     Trained weights for the small U-Net from the quantem tutorial neural_networks_02_unet.ipynb (quantem.core.ml.CNN2d, single-channel segmentation of synthetic shapes). A plain state dict saved with torch.save(model.state_dict(), path); load with torch.load(path, weights_only=True) into CNN2d(in_channels=1, out_channels=1, final_activation=torch.nn.Sigmoid()).
 
@@ -308,6 +308,8 @@ class TutorialUNet_v1(DownloadableDataset):
 
     You can download these model weights here:
     https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40CcdTSiXGnpG_oRAWdKwHL
+
+    Versions: 260902
 
 
     """
@@ -328,4 +330,4 @@ class ZrNbPrecipitate(DownloadableDataset):
     """
     ...
 
-__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'SPEDAg', 'TutorialUNet_v1', 'ZrNbPrecipitate']
+__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'SPEDAg', 'TutorialUNet', 'ZrNbPrecipitate']

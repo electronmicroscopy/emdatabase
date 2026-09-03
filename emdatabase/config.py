@@ -1,23 +1,44 @@
 """Configuration for emdatabase, in the style of dask's (and quantem's) config.
 
-Two keys are shipped, in ``emdatabase/emdatabase.yaml``: ``data_dir``, where
-downloads are written (``null`` means pooch's cache directory), and ``stores``, a
-name to read-only directory mapping searched before ``data_dir``.
+Two keys are shipped, in ``emdatabase/emdatabase.yaml``. ``locations`` is a
+mapping of name to directory: ``personal`` is the reserved name for the one
+writable location, where downloads go (``null`` means pooch's cache directory);
+every other entry is a read-only directory, searched before it::
 
-Read and write them from Python::
+    locations:
+      example_data: /group/example_data
+      personal: /big/disk/emdatabase
+
+``check_updates`` (true by default) is whether downloading a weights family's
+``latest`` asks the index on the project's ``main`` branch whether newer
+weights have been published, and warns if they have.
+
+Add and remove entries with :func:`add_location`, :func:`locations` and
+:func:`remove_location`::
 
     from emdatabase import config
 
-    config.get("data_dir")
-    config.set({"data_dir": "/big/disk/emdatabase"})   # for this process
-    with config.set({"data_dir": "/scratch"}):         # or for a block
+    config.add_location("/group/example_data")                       # read-only
+    config.add_location("/big/disk/emdatabase", name="personal")     # downloads
+    config.locations()                                               # search order
+    config.remove_location("example_data")
+
+Each of those persists to the config file unless called with ``persist=False``.
+A location's name is also what a download writes into, which is how a shared
+location is seeded: ``data.CuZnHAADF().download(destination="example_data")``.
+
+Or read and write the key directly::
+
+    config.get("locations")
+    config.set({"locations.personal": "/big/disk/emdatabase"})  # for this process
+    with config.set({"locations.personal": "/scratch"}):        # or for a block
         ...
-    config.write()                                     # persist to the yaml file
+    config.write()                                              # persist to the yaml
 
 Or from the environment, prefix ``EMDATABASE_``, double underscore to nest::
 
-    EMDATABASE_DATA_DIR=/scratch/data
-    EMDATABASE_STORES__GROUP=/wigeon/shared/example_data
+    EMDATABASE_LOCATIONS__PERSONAL=/scratch/data
+    EMDATABASE_LOCATIONS__GROUP=/wigeon/shared/example_data
 
 Files live in ``~/.config/emdatabase`` (or wherever ``EMDATABASE_CONFIG``
 points); every ``*.yaml`` and ``*.yml`` in that directory is merged, in name
@@ -32,8 +53,9 @@ import logging
 import os
 import warnings
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
 import pooch
 import yaml
@@ -280,7 +302,7 @@ def update(
     check: bool
         Whether to run the keys through :func:`check_key_val`. False on the
         recursive call, because the unknown-key warning is about top-level keys
-        and a store's name is not one.
+        and a location's name is not one.
 
     Examples
     --------
@@ -523,40 +545,228 @@ def write(path: Path | str | None = None) -> None:
 
 _NOTICE_SHOWN = False
 
+LocationName = Annotated[str, "the name of a location configured with add_location"]
+
+
+@dataclass(frozen=True)
+class Location:
+    """One place datasets are looked for.
+
+    Attributes
+    ----------
+    name : str
+        The entry's name in the ``locations`` mapping.
+    path : Path
+        The directory, with ``~`` expanded.
+    kind : str
+        ``"personal"`` for the location named ``personal``, ``"shared"`` for
+        every other one.
+    """
+
+    name: str
+    path: Path
+    kind: str
+
+
+def _configured() -> dict[str, Path | None]:
+    """The ``locations`` mapping, in declaration order, with ``~`` expanded.
+
+    A path may be ``None``: that is what ``personal: null`` means, and a user's
+    yaml could leave any other entry empty the same way.
+    """
+    configured = get("locations", None) or {}
+    return {
+        str(name): (Path(str(path)).expanduser() if path else None)
+        for name, path in configured.items()
+    }
+
 
 def data_dir() -> Path:
     """The directory downloads are written to.
 
-    ``data_dir`` if it is set, otherwise pooch's cache directory for
-    emdatabase (``~/.cache/emdatabase`` on Linux).
+    The ``personal`` location if it is set, otherwise pooch's cache directory
+    for emdatabase (``~/.cache/emdatabase`` on Linux).
     """
-    configured = get("data_dir", None)
-    if configured:
-        return Path(str(configured)).expanduser()
+    configured = _configured().get("personal")
+    if configured is not None:
+        return configured
     cache = Path(pooch.os_cache("emdatabase"))
     if not cache.exists():
         first_run_notice(cache)
     return cache
 
 
-def stores() -> dict[str, Path]:
-    """The named read-only directories searched before :func:`data_dir`.
+def locations() -> list[Location]:
+    """Every configured location, in search order.
 
-    In declaration order. A store's path may be a string (it usually comes from
-    yaml or an environment variable); ``~`` is expanded.
+    The shared locations in declaration order, then ``personal`` last. Entries
+    with no path are skipped; ``personal`` is always present, falling back to
+    the cache directory.
+
+    Examples
+    --------
+    >>> config.locations()  # doctest: +SKIP
+    [Location(name='group', path=PosixPath('/group/example_data'), kind='shared'),
+     Location(name='personal', path=PosixPath('/big/disk/emdatabase'), kind='personal')]
     """
-    configured = get("stores", None) or {}
-    return {str(name): Path(str(path)).expanduser() for name, path in configured.items()}
+    found = [
+        Location(name, path, "shared")
+        for name, path in _configured().items()
+        if name != "personal" and path is not None
+    ]
+    found.append(Location("personal", data_dir(), "personal"))
+    return found
 
 
 def data_search_dirs() -> list[Path]:
-    """Everywhere to look for an existing dataset: the stores, then
+    """Everywhere to look for an existing dataset: the shared locations, then
     :func:`data_dir`."""
     dirs: list[Path] = []
-    for directory in [*stores().values(), data_dir()]:
-        if directory not in dirs:
-            dirs.append(directory)
+    for location in locations():
+        if location.path not in dirs:
+            dirs.append(location.path)
     return dirs
+
+
+def resolve_destination(destination: Path | LocationName | None) -> Path | None:
+    """The directory a ``destination=`` argument names, or None.
+
+    A string that is exactly the name of a configured location (``"personal"``
+    included) is that location's directory; every other string, and every
+    :class:`~pathlib.Path`, is a path, with ``~`` expanded. ``None`` stays
+    ``None``, for the caller to fill in with whatever its own default is.
+
+    Examples
+    --------
+    >>> config.resolve_destination("example_data")  # doctest: +SKIP
+    PosixPath('/group/example_data')
+    >>> config.resolve_destination("data")  # no location of that name  # doctest: +SKIP
+    PosixPath('data')
+    """
+    if destination is None:
+        return None
+    if isinstance(destination, str):
+        for location in locations():
+            if location.name == destination:
+                return location.path
+    return Path(destination).expanduser()
+
+
+def add_location(path: Path | str, name: str | None = None, persist: bool = True) -> Path:
+    """Add a location, or repoint one that is already configured.
+
+    Parameters
+    ----------
+    path : Path or str
+        The directory. ``~`` is expanded. It does not have to exist yet - a
+        share may be mounted later - but a warning says so if it does not.
+    name : str, optional
+        The entry's name, and its provenance in the widgets and in
+        ``filter(location=...)``. Defaults to the last component of ``path``.
+        ``"personal"`` is the writable location downloads go to; every other
+        name is read-only and searched before it. Passing a name already in use
+        repoints that entry.
+    persist : bool, optional
+        Write the configuration to ``~/.config/emdatabase/config.yaml`` (see
+        :func:`write`) so the location survives the session. ``False`` changes
+        this process only; :class:`set` as a context manager is the way to make
+        a change that lasts for a block.
+
+    Returns
+    -------
+    Path
+        The expanded path.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` was not given and the name derived from ``path`` is already
+        taken by a different directory. Pass ``name=`` to choose another.
+
+    Examples
+    --------
+    >>> config.add_location("/group/example_data")  # doctest: +SKIP
+    PosixPath('/group/example_data')
+    >>> config.add_location("/big/disk/emdatabase", name="personal")  # doctest: +SKIP
+    PosixPath('/big/disk/emdatabase')
+    """
+    expanded = Path(str(path)).expanduser()
+    if not expanded.exists():
+        warnings.warn(
+            f"{expanded} does not exist. It is still configured, in case it is mounted "
+            "or created later."
+        )
+
+    current = _configured()
+    if name is None:
+        name = expanded.name
+        if name in current and current[name] != expanded:
+            raise ValueError(
+                f"A location named {name!r} already points at {current[name]}, not "
+                f"{expanded}. Pass name= to add this one under a different name."
+            )
+    # Assignment, not a merge: an existing name keeps its position, a new one
+    # lands last, which is the search order.
+    updated = {n: (str(p) if p is not None else None) for n, p in current.items()}
+    updated[name] = str(expanded)
+    set({"locations": updated})
+
+    if persist:
+        write()
+    return expanded
+
+
+def remove_location(name_or_path: Path | str, persist: bool = True) -> None:
+    """Remove a location, or reset ``personal`` to the cache directory.
+
+    Parameters
+    ----------
+    name_or_path : Path or str
+        A location's name or its path. Names are matched first. ``"personal"``
+        is not deleted but set back to ``null``, so downloads go to pooch's
+        cache directory again.
+    persist : bool, optional
+        As in :func:`add_location`.
+
+    Raises
+    ------
+    KeyError
+        If nothing is configured under that name or path.
+
+    Examples
+    --------
+    >>> config.remove_location("group")                # doctest: +SKIP
+    >>> config.remove_location("/group/example_data")  # the same thing, by path  # doctest: +SKIP
+    >>> config.remove_location("personal")             # back to the cache dir  # doctest: +SKIP
+    """
+    target = str(name_or_path)
+    expanded = Path(target).expanduser()
+    current = _configured()
+
+    name = target if target in current else None
+    if name is None:
+        name = next((n for n, p in current.items() if p == expanded), None)
+    if name is None:
+        if target == "personal" or expanded == data_dir():
+            name = "personal"
+        else:
+            raise KeyError(
+                f"No location named or located at {target!r}. Configured: "
+                f"{[(loc.name, str(loc.path)) for loc in locations()]}"
+            )
+
+    updated: dict[str, str | None] = {}
+    for n, p in current.items():
+        if n == name:
+            if n == "personal":
+                updated[n] = None
+            continue
+        updated[n] = str(p) if p is not None else None
+    if name == "personal":
+        updated.setdefault("personal", None)
+    set({"locations": updated})
+    if persist:
+        write()
 
 
 def first_run_notice(directory: Path | None = None) -> None:
@@ -574,8 +784,8 @@ def first_run_notice(directory: Path | None = None) -> None:
         directory = Path(pooch.os_cache("emdatabase"))
     lines = [
         f"emdatabase will download datasets to {directory}.",
-        'Change it with emdatabase.set_data_dir("/somewhere/else") or by setting '
-        "EMDATABASE_DATA_DIR.",
+        'Change it with emdatabase.add_location("/somewhere/else", name="personal") or by '
+        "setting EMDATABASE_LOCATIONS__PERSONAL.",
     ]
     old = [d for d in (Path.home() / "em_database", Path.home() / "emdatabase") if d.exists()]
     if old:

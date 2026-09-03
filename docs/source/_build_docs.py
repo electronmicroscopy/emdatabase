@@ -400,7 +400,8 @@ _DOCS_BROWSER_JS = r"""
   // What this page is browsing; baked in next to DATA so one script serves the
   // dataset pages and the weights page.
   var WHAT = (typeof LABEL !== "undefined" && LABEL) ? LABEL : "Datasets";
-  var state = { tab: "All", search: "", selected: null, hovered: null };
+  // `version` maps a weights family to the version being shown ("" = latest).
+  var state = { tab: "All", search: "", selected: null, hovered: null, version: {} };
 
   function esc(v) {
     return String(v).replace(/[&<>"']/g, function (c) {
@@ -509,19 +510,60 @@ _DOCS_BROWSER_JS = r"""
     row.appendChild(btn);
     return row;
   }
+  // Which version of an entry is being shown: "" is latest, and is all a
+  // dataset (or a family whose selection has gone away) ever has.
+  function currentVersion(it) {
+    var chosen = state.version[it.name];
+    if (!chosen) return "";
+    return (it.versions || []).some(function (v) { return v.version === chosen; }) ? chosen : "";
+  }
+  // The link, pin and local file name of one version; an entry's own fields
+  // describe latest, so the same reads serve either.
+  function versionState(it, want) {
+    if (!want) return { url: it.url, checksum: it.latest_checksum, file: it.file };
+    var row = (it.versions || []).filter(function (v) { return v.version === want; })[0] || {};
+    return { url: row.url, checksum: row.checksum, file: versionedFile(it.file, want) };
+  }
+  // Mirrors emdatabase.metadata.versioned_filename: w.pt -> w_260902.pt.
+  function versionedFile(file, version) {
+    return String(file || "").replace(/(\.[^.]*)$/, "_" + version + "$1");
+  }
+  function versionSelect(it, version) {
+    var select = el("select", "emdb-version");
+    select.title = "Which version to load or download";
+    [["", "latest"]].concat((it.versions || []).map(function (v) {
+      return [v.version, v.version];
+    })).forEach(function (choice) {
+      var option = document.createElement("option");
+      option.value = choice[0];
+      option.textContent = choice[1];
+      option.selected = choice[0] === version;
+      select.appendChild(option);
+    });
+    select.addEventListener("change", function () {
+      state.version[it.name] = select.value;
+      drawDetails();
+    });
+    return select;
+  }
   function drawDetails() {
     var it = findItem(state.hovered || state.selected);
     detailsEl.innerHTML = "";
     if (!it) { detailsEl.appendChild(el("div", "emdb-details-empty", "Hover or select an entry.")); return; }
+    var version = currentVersion(it);
+    var pin = versionState(it, version);
     var title = el("div", "emdb-d-title", esc(it.name));
     if (it.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
+    if ((it.versions || []).length) title.appendChild(versionSelect(it, version));
     detailsEl.appendChild(title);
     detailsEl.appendChild(el("div", "emdb-d-sub",
       esc([it.technique, it.size, it.shape].filter(Boolean).join("  ·  "))));
     if (it.description) detailsEl.appendChild(el("p", "emdb-d-desc", esc(it.description)));
     var pairs = [["Detector", it.detector], ["Microscope", it.microscope], ["Voltage", it.voltage],
       ["Tags", (it.tags || []).join(", ")], ["Authors", (it.authors || []).join(", ")],
-      ["License", it.license], ["DOI", it.doi], ["Version", it.version],
+      ["License", it.license], ["DOI", it.doi],
+      ["Versions", (it.versions || []).map(function (v) { return v.version; }).join(", ")],
+      ["md5", it.kind === "weights" ? String(pin.checksum || "").replace(/^md5:/, "") : ""],
       ["Model", it.model_class], ["Framework", it.model_framework],
       ["quantem", it.model_quantem]];
     var meta = el("div", "emdb-d-meta");
@@ -534,16 +576,17 @@ _DOCS_BROWSER_JS = r"""
     });
     detailsEl.appendChild(meta);
     detailsEl.appendChild(el("div", "emdb-load-label", "Load"));
+    var call = version ? '().download(version="' + version + '")' : "().download()";
     var snippet = it.kind === "weights"
       ? "import torch\nfrom emdatabase import data\n\npath = data." + it.name
-        + "().download()\ncheckpoint = torch.load(path, weights_only=True)"
+        + call + "\ncheckpoint = torch.load(path, weights_only=True)"
       : toSnake(it.name) + " = emdatabase.data." + it.name + "()";
     detailsEl.appendChild(copyRow(snippet, snippet));
-    if (it.url) {
+    if (pin.url) {
       var wrap = el("div", "emdb-dl-link");
       var a = document.createElement("a");
-      a.href = it.url; a.target = "_blank"; a.rel = "noopener";
-      a.className = "emdb-dl-anchor"; a.textContent = "⤓ Download " + it.file;
+      a.href = pin.url; a.target = "_blank"; a.rel = "noopener";
+      a.className = "emdb-dl-anchor"; a.textContent = "⤓ Download " + pin.file;
       wrap.appendChild(a);
       detailsEl.appendChild(wrap);
     }
@@ -882,10 +925,11 @@ def generate_all_data_html() -> str:
 def generate_weights_html() -> str:
     """The Model Weights page: the same browser, over the weights entries.
 
-    Each entry is one released version of one model. emdatabase downloads the
-    checkpoint and nothing else, so the load snippet is where the page says how
-    to open it - ``weights_only=True``, which is the condition of a checkpoint
-    being accepted in the first place.
+    Each entry is one model, with a ``latest`` link and a dated version for
+    every state that link has served. emdatabase downloads the checkpoint and
+    nothing else, so the load snippet is where the page says how to open it -
+    ``weights_only=True``, which is the condition of a checkpoint being
+    accepted in the first place.
     """
     payload, tabs = _catalogue_payload(kind="weights")
     note = "" if payload.get("groups") else "<p>No model weights are published yet.</p>"
@@ -893,9 +937,15 @@ def generate_weights_html() -> str:
         '<main class="app-main">'
         '<div class="app-hero" style="padding:18px 0 4px">'
         '<h1 style="font-size:30px">Model Weights</h1>'
-        "<p>Trained model checkpoints, one entry per released version. Each is a "
-        "single file with a checksum, downloaded the same way a dataset is; the "
-        "load snippet opens it with <code>weights_only=True</code>.</p>" + note + "</div>"
+        "<p>Trained model checkpoints, one entry per model. Downloading an entry "
+        "follows its <code>latest</code> link, which serves whatever the current "
+        "weights are; every earlier state of that link is kept as a dated version, "
+        "pinned to its checksum. Pick one with the selector; the load snippet "
+        "opens it with <code>weights_only=True</code>.</p>"
+        "<p><code>download()</code> warns when the index on the project's "
+        "<code>main</code> branch has newer weights than your installed release, "
+        "and <code>download(refresh=True)</code> fetches them; the "
+        "<code>check_updates</code> config key turns that check off.</p>" + note + "</div>"
         '<div id="root"></div>'
         "</main>"
     )
@@ -1102,11 +1152,6 @@ def generate_add_dataset_html() -> str:
         _KINDS,
         hint="What the entry hands out.",
         default="dataset",
-    ) + _text_field(
-        "f-version",
-        "Version",
-        placeholder="1",
-        hint="The released version this entry pins. One entry per version.",
     )
 
     model_fields = (
@@ -1129,6 +1174,12 @@ def generate_add_dataset_html() -> str:
             "quantem Versions",
             placeholder=">=0.2,<0.3",
             hint="The versions the checkpoint loads under.",
+        )
+        + _text_field(
+            "f-version_date",
+            "Version Date",
+            placeholder="260902",
+            hint="YYMMDD of the first dated version; today if blank.",
         )
     )
 
@@ -1155,8 +1206,9 @@ def generate_add_dataset_html() -> str:
         '<div class="grid2">' + entry_fields + "</div>"
         '<div id="model-group" hidden>'
         '<div class="section-title">Model</div>'
-        '<div class="field-hint" style="margin-bottom:10px">Required for model weights, '
-        "and not allowed on a dataset.</div>"
+        '<div class="field-hint" style="margin-bottom:10px">Model weights only - a '
+        "dataset entry with a model block is rejected. The class and framework are "
+        "required.</div>"
         '<div class="grid2">' + model_fields + "</div>"
         "</div>"
         "</form>"
@@ -1197,10 +1249,18 @@ ADD_DATASET_YAML_JS = r"""
 // and the DOM stay with the caller - so the test suite can run it under node.
 // Key order matches new_dataset.FIELD_ORDER, so the web form, the issue form
 // and the CLI all write the same file.
-// The YAML key and the file name. An underscore survives, because a weights
-// entry is named with its version on the end - `TutorialUNet_v1`.
+
+// The YAML key and the file name. An underscore survives, because a name may
+// carry one - `AmorphousFilm4nm_4DSTEM`.
 function emdbEntryName(value) {
   return String(value == null ? "" : value).replace(/[^A-Za-z0-9_]+/g, "");
+}
+
+// Today as YYMMDD, the label a new weights version is filed under.
+function emdbVersionDate() {
+  var d = new Date();
+  function two(n) { return ("0" + n).slice(-2); }
+  return two(d.getFullYear() % 100) + two(d.getMonth() + 1) + two(d.getDate());
 }
 
 // Emit a YAML scalar: plain when safe, double-quoted (with escapes) otherwise.
@@ -1231,13 +1291,17 @@ function emdbBuildYaml(fields) {
   function add(key, value) {
     if (value) lines.push("  " + key + ": " + emdbYamlStr(value));
   }
+  // A weights entry writes these inside `latest` and its dated version instead.
+  var weights = get("kind") === "weights";
+  var bytes = get("size_bytes").replace(/[^0-9]/g, "");
   add("description", get("description"));
   add("source", get("source"));
-  add("url", get("url"));
-  add("checksum", get("checksum"));
+  if (!weights) {
+    add("url", get("url"));
+    add("checksum", get("checksum"));
+  }
   add("file", get("file"));
-  var bytes = get("size_bytes").replace(/[^0-9]/g, "");
-  if (bytes) lines.push("  size_bytes: " + bytes);
+  if (bytes && !weights) lines.push("  size_bytes: " + bytes);
   add("detector_manufacturer", get("detector_manufacturer"));
   add("detector", get("detector"));
   add("microscope_vendor", get("microscope_vendor"));
@@ -1262,10 +1326,8 @@ function emdbBuildYaml(fields) {
     });
   }
   // `kind` is always written, `dataset` included; only a weights entry may
-  // carry a model block.
-  var weights = get("kind") === "weights";
+  // carry a model block, a `latest` link and dated versions.
   lines.push("  kind: " + (weights ? "weights" : "dataset"));
-  add("version", get("version"));
   if (weights) {
     var model = [
       ["class", get("model_class")],
@@ -1278,6 +1340,22 @@ function emdbBuildYaml(fields) {
         lines.push("    " + pair[0] + ": " + emdbYamlStr(pair[1]));
       });
     }
+    var pin = [
+      ["url", get("url") || (get("source") + "/" + get("file"))],
+      ["checksum", get("checksum")]
+    ].filter(function (pair) { return pair[1]; });
+    if (bytes) pin.push(["size_bytes", bytes]);
+    lines.push("  latest:");
+    pin.forEach(function (pair) {
+      lines.push("    " + pair[0] + ": " + (pair[0] === "size_bytes" ? pair[1]
+        : emdbYamlStr(pair[1])));
+    });
+    lines.push("  versions:");
+    lines.push('    "' + (get("version_date") || emdbVersionDate()) + '":');
+    pin.forEach(function (pair) {
+      lines.push("      " + pair[0] + ": " + (pair[0] === "size_bytes" ? pair[1]
+        : emdbYamlStr(pair[1])));
+    });
   }
   return lines.join("\n") + "\n";
 }
@@ -1303,7 +1381,7 @@ _ADD_DATASET_JS = r"""
     "name", "description", "source", "url", "checksum", "file", "size_bytes",
     "detector_manufacturer", "detector", "microscope_vendor", "microscope_model",
     "camera_length", "voltage", "license", "technique", "doi",
-    "kind", "version", "model_class", "model_framework", "model_quantem"
+    "kind", "version_date", "model_class", "model_framework", "model_quantem"
   ];
 
   function val(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
@@ -1363,6 +1441,9 @@ _ADD_DATASET_JS = r"""
     var volt = val("f-voltage");
     if (volt && !/^[0-9]+\s?kV$/.test(volt)) { setError("f-voltage", "e.g. 200 kV"); ok = false; }
     else setError("f-voltage", "");
+    var vdate = val("f-version_date");
+    if (vdate && !/^\d{6}$/.test(vdate)) { setError("f-version_date", "YYMMDD, or blank for today"); ok = false; }
+    else setError("f-version_date", "");
     if (val("f-kind") === "weights") {
       if (!requireField("f-model_class")) ok = false;
       if (!requireField("f-model_framework")) ok = false;

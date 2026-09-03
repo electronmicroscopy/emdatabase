@@ -1,37 +1,10 @@
 ### Example datasets ###
 from emdatabase import config, data
+from emdatabase.config import LocationName, add_location, locations, remove_location
 from emdatabase.downloadable_dataset import DownloadableDataset
 from emdatabase.query import filter, list_datasets, list_weights, search  # noqa: A004
 
 __all__ = []
-
-
-def get_data_dir():
-    """
-    Get the directory where example datasets are stored.
-
-    Returns
-    -------
-    Path
-        Path to the example datasets directory.
-    """
-    return config.data_dir()
-
-
-def set_data_dir(path: str):
-    """
-    Set the directory where example datasets are stored.
-
-    The change applies to this process. Write it to
-    ``~/.config/emdatabase/config.yaml`` with :func:`emdatabase.config.write` to
-    keep it across sessions.
-
-    Parameters
-    ----------
-    path : str
-        Path to the desired example datasets directory.
-    """
-    config.set({"data_dir": str(path)})
 
 
 def browse(**kwargs):
@@ -55,8 +28,10 @@ __all__ = [
     "list_weights",
     "search",
     "filter",
-    "get_data_dir",
-    "set_data_dir",
+    "add_location",
+    "remove_location",
+    "locations",
+    "LocationName",
     "browse",
     "config",
     "data",

@@ -13,7 +13,13 @@ import pytest
 import yaml
 
 from emdatabase.metadata import validate_file
-from emdatabase.new_dataset import default_name, main
+from emdatabase.new_dataset import (
+    default_name,
+    download_md5,
+    main,
+    version_date,
+    write_document,
+)
 
 pytest.importorskip("jsonschema")
 
@@ -157,10 +163,11 @@ def test_prompts_fill_in_the_optional_fields(server, tmp_path, monkeypatch):
     assert "doi" not in entry
 
 
-def test_kind_weights_asks_for_the_model(server, tmp_path, monkeypatch):
+def _weights_answers(monkeypatch, name="DemoNet"):
+    """The prompts a ``--kind weights`` run asks, in order."""
     _answers(
         monkeypatch,
-        "DemoNet_v3",  # entry name
+        name,  # entry name
         "A peak-detection network for 4D-STEM patterns.",  # description
         "4D-STEM",  # technique
         "CC-BY-4.0",  # license
@@ -173,24 +180,56 @@ def test_kind_weights_asks_for_the_model(server, tmp_path, monkeypatch):
         "",  # DOI
         "",  # tags
         "",  # no authors
-        "3",  # version
         "quantem.diffractive_imaging.ObjectINR",  # model class
         "",  # framework: the default
         ">=0.2,<0.3",  # quantem
     )
+
+
+def test_kind_weights_asks_for_the_model(server, tmp_path, monkeypatch):
+    _weights_answers(monkeypatch)
     base, _ = server
     assert main([f"{base}/MyData.zspy", "--kind", "weights", "--out", str(tmp_path)]) == 0
 
-    path = tmp_path / "DemoNet_v3.yaml"
+    path = tmp_path / "DemoNet.yaml"
     assert validate_file(path) == []
-    entry = _document(path)["DemoNet_v3"]
+    entry = _document(path)["DemoNet"]
     assert entry["kind"] == "weights"
-    assert entry["version"] == "3"
     assert entry["model"] == {
         "class": "quantem.diffractive_imaging.ObjectINR",
         "framework": "torch",
         "quantem": ">=0.2,<0.3",
     }
+    # The link becomes the family's `latest` and a version dated today.
+    assert list(entry["versions"]) == [version_date()]
+    assert entry["versions"][version_date()] == entry["latest"]
+    assert entry["latest"] == {
+        "url": f"{base}/MyData.zspy",
+        "checksum": f"md5:{MD5}",
+        "size_bytes": len(CONTENT),
+    }
+    assert not {"url", "checksum", "size_bytes"} & set(entry)
+
+
+def test_version_date_files_the_version_under_another_date(server, tmp_path, monkeypatch):
+    _weights_answers(monkeypatch)
+    base, _ = server
+    args = [f"{base}/MyData.zspy", "--kind", "weights", "--out", str(tmp_path)]
+    assert main([*args, "--version-date", "260902"]) == 0
+
+    path = tmp_path / "DemoNet.yaml"
+    assert validate_file(path) == []
+    entry = _document(path)["DemoNet"]
+    assert list(entry["versions"]) == ["260902"]
+    assert entry["versions"]["260902"] == entry["latest"]
+
+
+def test_a_version_date_that_is_not_yymmdd_is_refused(server, tmp_path, capsys):
+    base, _ = server
+    with pytest.raises(SystemExit):
+        main([f"{base}/MyData.zspy", "--out", str(tmp_path), "--version-date", "2026-09-02"])
+    assert "YYMMDD" in capsys.readouterr().err
+    assert not list(tmp_path.glob("*.yaml"))
 
 
 def test_a_dataset_entry_says_nothing_about_a_model(server, tmp_path):
@@ -331,6 +370,33 @@ def test_validate_checks_a_file_written_by_hand(tmp_path, capsys):
 )
 def test_default_name(filename, expected):
     assert default_name(filename) == expected
+
+
+def test_write_document_writes_the_header_and_makes_the_directory(tmp_path):
+    """The CI script reuses this to rewrite a family file."""
+    path = tmp_path / "index" / "MyData.yaml"
+    document = {"MyData": {"description": "d", "file": "f"}}
+    write_document(path, document)
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith("# $schema: ./json-schema.json\n")
+    assert yaml.safe_load(text) == document
+
+
+def test_download_md5_reports_the_content_type(server, tmp_path):
+    """A host that answers a download link with a page, not the file."""
+    base, served = server
+    (served / "scan.html").write_text("<html>virus scan warning</html>", encoding="utf-8")
+    _, _, name, content_type = download_md5(
+        f"{base}/scan.html", tmp_path / "scan", progressbar=False
+    )
+    assert content_type.startswith("text/html")
+    assert name == ""
+
+    digest, size, name, content_type = download_md5(
+        f"{base}/uc?export=download&id=MyData.zspy", tmp_path / "data", progressbar=False
+    )
+    assert (digest, size, name) == (MD5, len(CONTENT), "MyData.zspy")
+    assert content_type == "application/octet-stream"
 
 
 def test_the_temporary_download_does_not_stay_behind(server, tmp_path, monkeypatch):

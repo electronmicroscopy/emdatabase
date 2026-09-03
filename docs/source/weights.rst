@@ -3,8 +3,10 @@
 Model Weights
 =============
 
-Trained model checkpoints, one entry per released version. Each is a single
-file with a checksum, downloaded exactly the way a dataset is.
+Trained model checkpoints, one entry per model. Downloading an entry follows
+its ``latest`` link, which serves whatever the current weights are; every
+earlier state of that link is kept as a dated version, pinned to its checksum
+and fetched with ``download(version="260902")``.
 
 .. note::
 
