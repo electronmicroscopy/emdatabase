@@ -1,13 +1,17 @@
 """Configuration for emdatabase, in the style of dask's (and quantem's) config.
 
-One key is shipped, in ``emdatabase/emdatabase.yaml``: ``locations``, a mapping
-of name to directory. ``personal`` is the reserved name for the one writable
-location, where downloads go (``null`` means pooch's cache directory); every
-other entry is a read-only directory, searched before it::
+Two keys are shipped, in ``emdatabase/emdatabase.yaml``. ``locations`` is a
+mapping of name to directory: ``personal`` is the reserved name for the one
+writable location, where downloads go (``null`` means pooch's cache directory);
+every other entry is a read-only directory, searched before it::
 
     locations:
       example_data: /group/example_data
       personal: /big/disk/emdatabase
+
+``check_updates`` (true by default) is whether downloading a weights family's
+``latest`` asks the index on the project's ``main`` branch whether newer
+weights have been published, and warns if they have.
 
 Add and remove entries with :func:`add_location`, :func:`locations` and
 :func:`remove_location`::

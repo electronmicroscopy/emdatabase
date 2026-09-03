@@ -98,6 +98,12 @@ whenever the link has moved on since the installed release.
 ``download(version="260902")`` returns the dated snapshot instead, pinned to its
 checksum and failing on a mismatch the way a dataset does.
 
+``download()`` also reads the family's index file from the ``main`` branch,
+which the weekly job keeps current, and warns when newer weights are published
+there than the installed release knows about; ``download(refresh=True)``
+fetches them, pinned to that entry's checksum. The ``check_updates`` config key
+turns the check off.
+
 What CI checks
 --------------
 

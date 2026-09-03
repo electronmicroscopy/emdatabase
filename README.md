@@ -129,7 +129,8 @@ your umask is not; emdatabase does not set permissions for you.
 Configuration is dask-style: shipped defaults, then every `*.yaml` in
 `~/.config/emdatabase/` (or wherever `EMDATABASE_CONFIG` points), then
 environment variables, then `config.set` — each layer overriding the one before.
-There is one key, and `add_location` is a wrapper over writing it yourself:
+There are two keys, and `add_location` is a wrapper over writing the first one
+yourself:
 
 ```yaml
 # ~/.config/emdatabase/config.yaml
@@ -137,10 +138,16 @@ locations:
   example_data: /group/example_data
   cluster: /cluster/em_data
   personal: /big/disk/emdatabase
+check_updates: true
 ```
 
 `personal: null` means pooch's cache directory (`~/.cache/emdatabase` on Linux),
 and `config.data_dir()` reports whichever it resolves to.
+
+`check_updates` is whether downloading a model's `latest` weights asks the index
+on the project's `main` branch — kept current by a weekly job — whether newer
+weights have been published, and warns if they have; `download(refresh=True)`
+fetches them. Set it to `false` to skip the request.
 
 On HPC, where a config file is often the wrong place to put a machine-specific
 path, set the same key from the environment instead — prefix `EMDATABASE_`,

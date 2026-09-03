@@ -2,21 +2,99 @@ import atexit
 import os
 import sys
 import threading
+import urllib.request
 import warnings
+from collections.abc import Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
 
 import pooch
+import yaml
 
 from emdatabase.config import LocationName
-from emdatabase.metadata import DatasetMetadata, versioned_filename
+from emdatabase.metadata import DatasetMetadata, WeightsVersion, versioned_filename
+
+USER_AGENT = "emdatabase (https://github.com/electronmicroscopy/emdatabase)"
+
+# The index as it stands on main, which the weekly job keeps current: a weights
+# family retrained since this release was cut has its new checksum there long
+# before it has it in an installed copy.
+UPSTREAM_INDEX = (
+    "https://raw.githubusercontent.com/electronmicroscopy/emdatabase/main/emdatabase/index/"
+)
+
+# Parsed upstream documents by file name, and the families already warned
+# about, both for the life of the process: a notebook loop asks about the same
+# weights over and over, and neither the fetch nor the warning is worth
+# repeating. A failed fetch caches as None, so an offline session pays the
+# timeout once.
+_UPSTREAM_CACHE: dict[str, dict[str, Any] | None] = {}
+_UPSTREAM_LOCK = threading.Lock()
+_WARNED_STALE: set[str] = set()
 
 
 class StaleIndexWarning(UserWarning):
     """The file behind a weights family's ``latest`` link is not the one the
     index describes, so the shipped checksum is out of date."""
+
+
+def _clear_upstream_cache() -> None:
+    """Forget the fetched index documents and which families have warned."""
+    with _UPSTREAM_LOCK:
+        _UPSTREAM_CACHE.clear()
+    _WARNED_STALE.clear()
+
+
+def _upstream_document(origin_filename: str) -> dict[str, Any] | None:
+    """The parsed index file of that name from main, or None if it is not had.
+
+    Every failure - no network, a 404, a proxy serving something that is not
+    YAML - is the same answer: nothing to compare against. An update check is
+    not worth an exception in the middle of a download.
+    """
+    with _UPSTREAM_LOCK:
+        if origin_filename in _UPSTREAM_CACHE:
+            return _UPSTREAM_CACHE[origin_filename]
+    document: dict[str, Any] | None = None
+    try:
+        request = urllib.request.Request(
+            UPSTREAM_INDEX + origin_filename, headers={"User-Agent": USER_AGENT}
+        )
+        with urllib.request.urlopen(request, timeout=3) as response:
+            parsed = yaml.safe_load(response.read())
+        if isinstance(parsed, dict):
+            document = parsed
+    except Exception:
+        document = None
+    with _UPSTREAM_LOCK:
+        _UPSTREAM_CACHE[origin_filename] = document
+    return document
+
+
+def upstream_metadata(name: str, origin_filename: str) -> DatasetMetadata | None:
+    """The entry named ``name`` in ``origin_filename`` on main, or None.
+
+    ``origin_filename`` is the index file the entry ships in, so a file holding
+    several entries is fetched once and read for whichever one is asked about.
+    """
+    document = _upstream_document(origin_filename)
+    if document is None:
+        return None
+    spec = document.get(name)
+    if spec is None:
+        # The class name is the YAML key with its spaces and hyphens replaced.
+        spec = next(
+            (v for k, v in document.items() if str(k).replace(" ", "_").replace("-", "_") == name),
+            None,
+        )
+    if not isinstance(spec, Mapping):
+        return None
+    try:
+        return DatasetMetadata.from_spec(spec, origin_filename)
+    except Exception:
+        return None
 
 
 @dataclass(frozen=True)
@@ -246,7 +324,10 @@ class DownloadableDataset:
 
     A ``kind: weights`` entry is a family rather than a single file:
     :attr:`versions` lists the dated snapshots it can be pinned to, and the
-    accessors above describe its ``latest``.
+    accessors above describe its ``latest``. Downloading that ``latest`` also
+    asks the index on the project's ``main`` branch whether newer weights have
+    been published since this release, warning if they have and fetching them
+    with ``download(refresh=True)``.
     """
 
     _spec: ClassVar[dict[str, Any]] = {}
@@ -407,6 +488,7 @@ class DownloadableDataset:
         chunk_size: int = 4096,
         background: bool = True,
         version: str | None = None,
+        refresh: bool = False,
     ) -> DatasetPath:
         """Return a verified local path to the file, downloading it if needed.
 
@@ -451,11 +533,25 @@ class DownloadableDataset:
             those bytes are not the ones the index describes the download still
             succeeds and warns with :class:`StaleIndexWarning`. A copy of
             ``latest`` already on disk is handed back as it is, so refreshing a
-            stale one means :meth:`delete` and then ``download`` again. There is
-            no checksum to fail on for ``latest``, so a host that answers with
-            an HTML page instead of the file - Google Drive's virus-scan
-            interstitial for a large file - is saved and warned about rather
-            than refused. A dataset has no versions and passing one is an error.
+            stale one means ``refresh=True`` (or :meth:`delete` and then
+            ``download`` again). There is no checksum to fail on for ``latest``,
+            so a host that answers with an HTML page instead of the file -
+            Google Drive's virus-scan interstitial for a large file - is saved
+            and warned about rather than refused. A dataset has no versions and
+            passing one is an error.
+        refresh : bool, optional
+            Fetch the file again rather than using the copy on disk. For a
+            weights family's ``latest`` this also reads the family's entry from
+            the index on the project's ``main`` branch, which is kept current
+            between releases, and downloads from there - pinned to that entry's
+            checksum - when it names newer weights than the installed index
+            knows about. Otherwise the shipped ``latest`` link is re-fetched.
+            The file is always written to the resolved destination, never to a
+            shared location. ``False`` (the default) still asks the index on
+            ``main`` about a weights family's ``latest`` and warns with
+            :class:`StaleIndexWarning`, once per family, if newer weights are
+            published there; the ``check_updates`` config key turns that check
+            off.
 
         Returns
         -------
@@ -464,12 +560,16 @@ class DownloadableDataset:
             reports download state. With ``background`` False it is already done.
         """
         if not background:
-            return DatasetPath(self._retrieve(destination, progressbar, chunk_size, version))
+            return DatasetPath(
+                self._retrieve(destination, progressbar, chunk_size, version, refresh)
+            )
         # Resolve where the file will end up: an existing copy in a shared
         # location or in the personal one, otherwise the personal one.
         name = self.filename(version)
         if destination is not None:
             target = self._resolve_destination(destination) / name
+        elif refresh:
+            target = self._resolve_destination(None) / name
         else:
             target = self.filepath(version) or self._resolve_destination(None) / name
         # In Jupyter (with the widget installed) a background download pops a
@@ -484,7 +584,9 @@ class DownloadableDataset:
             except Exception:
                 monitor = finish = None
         progress = monitor if monitor is not None else progressbar
-        future = _get_executor().submit(self._retrieve, destination, progress, chunk_size, version)
+        future = _get_executor().submit(
+            self._retrieve, destination, progress, chunk_size, version, refresh
+        )
         if finish is not None:
             future.add_done_callback(finish)
         return DatasetPath(target)._attach(future)
@@ -495,14 +597,18 @@ class DownloadableDataset:
         progressbar: bool | Progress = True,
         chunk_size: int = 4096,
         version: str | None = None,
+        refresh: bool = False,
     ) -> Path:
         """Fetch the file and return its local path (blocking).
 
         With no explicit destination, an existing copy in a shared location is
         used as-is (never re-downloaded); otherwise pooch downloads into the
-        personal directory.
+        personal directory. ``refresh`` skips both: the file is re-fetched into
+        the resolved destination, from the newer link on ``main`` if there is
+        one.
         """
         resolved = self._resolve(version)
+        newer = self._check_upstream(version, refresh)
         if progressbar is True:
             try:
                 import tqdm  # noqa: F401
@@ -513,21 +619,35 @@ class DownloadableDataset:
                 # Our own bar rather than pooch's; see _TqdmProgress.
                 progressbar = _TqdmProgress(resolved.file)
         if destination is None:
-            shared = self._find_in_shared_locations(version)
+            # A refresh is about replacing your own copy, so it never reads and
+            # never writes a shared location.
+            shared = None if refresh else self._find_in_shared_locations(version)
             if shared is not None:
                 return shared
             destination = self._resolve_destination(None)
         else:
             destination = self._resolve_destination(destination)
         # Instantiate an Http downloader with a custom user agent
-        headers = {"User-Agent": "emdatabase (https://github.com/electronmicroscopy/emdatabase)"}
+        headers = {"User-Agent": USER_AGENT}
         downloader = pooch.HTTPDownloader(
             progressbar=progressbar,  # pyright: ignore[reportArgumentType]
             chunk_size=chunk_size,
             headers=headers,
         )
         try:
-            if resolved.pinned:
+            if refresh:
+                # pooch keeps a file whose hash it was not given anything to
+                # check against, so the copy has to go before it will re-fetch.
+                (Path(destination) / resolved.file).unlink(missing_ok=True)
+            if newer is not None:
+                filepath = pooch.retrieve(
+                    url=newer.url,
+                    known_hash=newer.checksum,
+                    fname=resolved.file,
+                    path=destination,
+                    downloader=downloader,  # pyright: ignore[reportArgumentType]
+                )
+            elif resolved.pinned:
                 filepath = pooch.retrieve(
                     url=resolved.url,
                     known_hash=resolved.checksum,
@@ -543,6 +663,42 @@ class DownloadableDataset:
             if isinstance(progressbar, _TqdmProgress):
                 progressbar.close()
         return Path(filepath)
+
+    def _check_upstream(self, version: str | None, refresh: bool) -> WeightsVersion | None:
+        """Ask the index on ``main`` whether this family's ``latest`` has moved.
+
+        The weekly job keeps that index current, so it knows about weights
+        retrained since this release was cut. Returns the newer ``latest`` to
+        download from, which only happens for ``refresh``; otherwise a family
+        that has moved on warns once and the shipped link is used as it is.
+
+        Only a weights family's ``latest`` asks: a dataset and a dated version
+        are pinned, and there is nothing for a newer index to tell them.
+        """
+        from emdatabase import config
+
+        if self.metadata.kind != "weights" or version is not None or self._origin is None:
+            return None
+        if not refresh and not config.get("check_updates", True):
+            return None
+        upstream = upstream_metadata(type(self).__name__, self._origin.name)
+        latest = upstream.latest if upstream is not None else None
+        if upstream is None or latest is None or latest.checksum == self._resolve(None).checksum:
+            return None
+        if refresh:
+            return latest
+        key = f"{self._origin.name}:{type(self).__name__}"
+        if key not in _WARNED_STALE:
+            _WARNED_STALE.add(key)
+            versions = ", ".join(sorted(upstream.versions, reverse=True))
+            warnings.warn(
+                f"{type(self).__name__}: newer weights are in the emdatabase index "
+                f"({latest.checksum}" + (f", versions {versions}" if versions else "") + "); "
+                "upgrade emdatabase, or download(refresh=True) to fetch them now.",
+                StaleIndexWarning,
+                stacklevel=2,
+            )
+        return None
 
     def _retrieve_latest(self, resolved: _Resolved, destination: Path, downloader: Any) -> str:
         """Fetch a weights family's ``latest`` link, warning on a new checksum.

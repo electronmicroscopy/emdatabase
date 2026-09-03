@@ -26,6 +26,7 @@ def _write_yaml(tmp_path: Path, **values) -> Path:
 
 def test_shipped_defaults():
     assert config.get("locations") == {"personal": None}
+    assert config.get("check_updates") is True
 
 
 def test_yaml_file_is_read(tmp_path):
@@ -39,6 +40,12 @@ def test_env_var_overrides_the_yaml_file(tmp_path, monkeypatch):
     monkeypatch.setenv("EMDATABASE_LOCATIONS__PERSONAL", str(tmp_path / "from-env"))
     config.refresh()
     assert config.data_dir() == tmp_path / "from-env"
+
+
+def test_env_var_turns_the_update_check_off(monkeypatch):
+    monkeypatch.setenv("EMDATABASE_CHECK_UPDATES", "false")
+    config.refresh()
+    assert config.get("check_updates") is False
 
 
 def test_env_var_nests_on_a_double_underscore():
@@ -94,7 +101,8 @@ def test_write_round_trips(tmp_path):
     path = tmp_path / "config" / "config.yaml"
     config.write()
     assert yaml.safe_load(path.read_text()) == {
-        "locations": {"group": "/group", "personal": str(tmp_path / "written")}
+        "locations": {"group": "/group", "personal": str(tmp_path / "written")},
+        "check_updates": True,
     }
     config.refresh()  # the file is in the isolated config dir, so it is read back
     assert config.get("locations") == {"group": "/group", "personal": str(tmp_path / "written")}

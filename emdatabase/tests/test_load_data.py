@@ -161,7 +161,9 @@ def test_download_handle_is_nonblocking_then_blocks_on_use(tmp_path, monkeypatch
     dataset = getattr(data, TINY_DATASET)()
     started = threading.Event()
 
-    def slow_retrieve(destination=None, progressbar=True, chunk_size=4096, version=None):
+    def slow_retrieve(
+        destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False
+    ):
         started.set()
         time.sleep(0.4)
         target = tmp_path / dataset.file
@@ -184,7 +186,9 @@ def test_download_handle_derived_paths_also_wait(tmp_path, monkeypatch):
     dataset = getattr(data, TINY_DATASET)()
     started = threading.Event()
 
-    def slow_retrieve(destination=None, progressbar=True, chunk_size=4096, version=None):
+    def slow_retrieve(
+        destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False
+    ):
         started.set()
         time.sleep(0.4)
         target = tmp_path / dataset.file
@@ -205,7 +209,9 @@ def test_a_path_that_is_not_downloading_never_waits(tmp_path, monkeypatch):
     """Only the file being fetched is pending - its directory is not."""
     dataset = getattr(data, TINY_DATASET)()
 
-    def slow_retrieve(destination=None, progressbar=True, chunk_size=4096, version=None):
+    def slow_retrieve(
+        destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False
+    ):
         time.sleep(0.3)
         target = tmp_path / dataset.file
         target.write_bytes(b"payload")

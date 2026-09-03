@@ -941,7 +941,11 @@ def generate_weights_html() -> str:
         "follows its <code>latest</code> link, which serves whatever the current "
         "weights are; every earlier state of that link is kept as a dated version, "
         "pinned to its checksum. Pick one with the selector; the load snippet "
-        "opens it with <code>weights_only=True</code>.</p>" + note + "</div>"
+        "opens it with <code>weights_only=True</code>.</p>"
+        "<p><code>download()</code> warns when the index on the project's "
+        "<code>main</code> branch has newer weights than your installed release, "
+        "and <code>download(refresh=True)</code> fetches them; the "
+        "<code>check_updates</code> config key turns that check off.</p>" + note + "</div>"
         '<div id="root"></div>'
         "</main>"
     )

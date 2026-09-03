@@ -10,17 +10,25 @@ Everything here builds its own entry - two checkpoints written to a directory
 served by ``conftest``'s local HTTP server, and a class installed into
 ``emdatabase.data`` for the length of one test - and asserts that it is found,
 rather than that it is the only one: ``index/`` ships weights entries of its own.
-Nothing touches the network.
+Nothing touches the network: the index on ``main`` that a download asks about
+newer weights is served by the same local server, with ``UPSTREAM_INDEX``
+pointed at it.
 """
 
 import hashlib
 import warnings
+from pathlib import Path
 
 import pytest
+import yaml
 
 import emdatabase
-from emdatabase import catalogue, config
-from emdatabase.downloadable_dataset import DownloadableDataset, StaleIndexWarning
+from emdatabase import catalogue, config, downloadable_dataset
+from emdatabase.downloadable_dataset import (
+    DownloadableDataset,
+    StaleIndexWarning,
+    _clear_upstream_cache,
+)
 from emdatabase.metadata import (
     DatasetMetadata,
     ModelInfo,
@@ -427,3 +435,192 @@ def test_the_catalogue_row_tracks_each_version_on_disk(in_the_index, tmp_path):
 
 def test_search_matches_a_version_date(in_the_index):
     assert in_the_index in [type(ds).__name__ for ds in emdatabase.search(VERSION)]
+
+
+# -- newer weights upstream -------------------------------------------------
+
+NEW_VERSION = "260910"
+
+
+@pytest.fixture(autouse=True)
+def _forget_upstream():
+    """The fetched index and the warned-once set both live for the process."""
+    _clear_upstream_cache()
+    yield
+    _clear_upstream_cache()
+
+
+@pytest.fixture
+def upstream(family, monkeypatch):
+    """``(class, write, spec, served)`` for a family whose index on main is local.
+
+    ``write(entry)`` publishes one entry as the served ``index/DemoNet.yaml``,
+    which is where :data:`UPSTREAM_INDEX` is pointed. Not calling it leaves the
+    path 404ing, which is what an unreachable index looks like.
+    """
+    spec, served = family
+    index = served / "index"
+    index.mkdir()
+    monkeypatch.setattr(downloadable_dataset, "UPSTREAM_INDEX", f"{spec['source']}/index/")
+    cls = type("DemoNet", (DownloadableDataset,), {"_spec": spec, "_origin": Path("DemoNet.yaml")})
+
+    def write(entry):
+        (index / "DemoNet.yaml").write_text(yaml.safe_dump({"DemoNet": entry}), encoding="utf-8")
+
+    return cls, write, spec, served
+
+
+@pytest.fixture
+def asked(monkeypatch):
+    """Every upstream lookup that happens, so a test can assert none did."""
+    calls = []
+
+    def record(name, origin_filename):
+        calls.append((name, origin_filename))
+        return None
+
+    monkeypatch.setattr(downloadable_dataset, "upstream_metadata", record)
+    return calls
+
+
+def _retrained(spec, checksum="md5:" + "c" * 32):
+    """``spec`` as the index on main would hold it after a retrain."""
+    return {
+        **spec,
+        "latest": {**spec["latest"], "checksum": checksum},
+        "versions": {
+            **spec["versions"],
+            NEW_VERSION: {**spec["latest"], "checksum": checksum},
+        },
+    }
+
+
+def test_an_index_that_agrees_says_nothing(upstream, tmp_path):
+    cls, write, spec, _ = upstream
+    write(spec)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        path = cls().download(destination=tmp_path, progressbar=False, background=False)
+    assert path.is_file()
+
+
+def test_newer_weights_upstream_warn(upstream, tmp_path):
+    cls, write, spec, _ = upstream
+    write(_retrained(spec))
+    ds = cls()
+    with pytest.warns(StaleIndexWarning, match="refresh=True") as record:
+        ds.download(destination=tmp_path, progressbar=False, background=False)
+    assert NEW_VERSION in str(record[0].message)
+    # The question is about the index, not the disk, so a copy already
+    # downloaded is no reason not to ask it.
+    _clear_upstream_cache()
+    with pytest.warns(StaleIndexWarning):
+        ds.download(destination=tmp_path, progressbar=False, background=False)
+
+
+def test_the_warning_is_once_per_family(upstream, tmp_path):
+    """A notebook loop asks about the same weights over and over."""
+    cls, write, spec, _ = upstream
+    write(_retrained(spec))
+    ds = cls()
+    with pytest.warns(StaleIndexWarning):
+        ds.download(destination=tmp_path, progressbar=False, background=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", StaleIndexWarning)
+        ds.download(destination=tmp_path, progressbar=False, background=False)
+
+
+def test_refresh_fetches_the_weights_the_index_on_main_names(upstream, tmp_path):
+    cls, write, spec, served = upstream
+    retrained = served / "DemoNet_new.pt"
+    retrained.write_bytes(b"the retrained weights")
+    write({**spec, "latest": _pin(retrained, f"{spec['source']}/{retrained.name}")})
+
+    ds = cls()
+    with pytest.warns(StaleIndexWarning):
+        first = ds.download(destination=tmp_path, progressbar=False, background=False)
+    assert first.read_bytes() != b"the retrained weights"
+
+    second = ds.download(destination=tmp_path, progressbar=False, background=False, refresh=True)
+    assert second == first
+    assert second.read_bytes() == b"the retrained weights"
+
+
+def test_refresh_verifies_the_upstream_checksum(upstream, tmp_path):
+    """The upstream entry is a pin, so it is downloaded like one."""
+    cls, write, spec, served = upstream
+    retrained = served / "DemoNet_new.pt"
+    retrained.write_bytes(b"the retrained weights")
+    write(
+        {
+            **spec,
+            "latest": {"url": f"{spec['source']}/{retrained.name}", "checksum": "md5:" + "c" * 32},
+        }
+    )
+    with pytest.raises(Exception):
+        cls().download(destination=tmp_path, progressbar=False, background=False, refresh=True)
+
+
+def test_refresh_without_an_index_upstream_refetches_the_shipped_link(upstream, tmp_path):
+    """Nothing is written to the served index, so the lookup 404s."""
+    cls, _, spec, served = upstream
+    ds = cls()
+    first = ds.download(destination=tmp_path, progressbar=False, background=False)
+    (served / spec["file"]).write_bytes(b"the retrained weights")
+    with pytest.warns(StaleIndexWarning):
+        second = ds.download(
+            destination=tmp_path, progressbar=False, background=False, refresh=True
+        )
+    assert second == first
+    assert second.read_bytes() == b"the retrained weights"
+
+
+def test_check_updates_off_asks_nothing(upstream, asked, tmp_path):
+    cls, write, spec, _ = upstream
+    write(_retrained(spec))
+    with config.set({"check_updates": False}):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", StaleIndexWarning)
+            cls().download(destination=tmp_path, progressbar=False, background=False)
+    assert asked == []
+
+
+def test_a_pinned_version_asks_nothing(upstream, asked, tmp_path):
+    cls, write, spec, _ = upstream
+    write(_retrained(spec))
+    cls().download(destination=tmp_path, progressbar=False, background=False, version=VERSION)
+    assert asked == []
+
+
+def test_refresh_refetches_a_dated_version(upstream, asked, tmp_path):
+    cls, _, spec, _ = upstream
+    ds = cls()
+    path = ds.download(destination=tmp_path, progressbar=False, background=False, version=VERSION)
+    path.write_bytes(b"a corrupted copy")
+    again = ds.download(
+        destination=tmp_path, progressbar=False, background=False, version=VERSION, refresh=True
+    )
+    assert again == path
+    assert again.read_bytes() != b"a corrupted copy"
+    assert asked == []
+
+
+def test_a_dataset_asks_nothing(family, asked, tmp_path):
+    """There is no family for a newer index to say anything about."""
+    spec, served = family
+    served_file = served / "MyData.bin"
+    served_file.write_bytes(b"some data")
+    entry = {
+        **DATASET,
+        "source": spec["source"],
+        "file": served_file.name,
+        **_pin(served_file, f"{spec['source']}/{served_file.name}"),
+    }
+    cls = type(
+        "DemoData", (DownloadableDataset,), {"_spec": entry, "_origin": Path("DemoData.yaml")}
+    )
+    ds = cls()
+    ds.download(destination=tmp_path, progressbar=False, background=False)
+    path = ds.download(destination=tmp_path, progressbar=False, background=False, refresh=True)
+    assert path.read_bytes() == b"some data"
+    assert asked == []
