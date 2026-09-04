@@ -41,11 +41,16 @@ jobs:
           name: oversize-weights
           path: oversize/
 
+      - name: Regenerate the data stub for the changed index
+        run: python -m emdatabase._create_stubs
+
       - name: Open a pull request with the new versions
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.EMDATABASE_PAT || secrets.GITHUB_TOKEN }}
-          add-paths: emdatabase/index/*.yaml
+          add-paths: |
+            emdatabase/index/*.yaml
+            emdatabase/data/__init__.pyi
           branch: weights-archive-${{ github.run_id }}
           title: "Archive the current model weights"
           body-path: changes.md

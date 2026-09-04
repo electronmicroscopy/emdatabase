@@ -306,10 +306,7 @@ class TutorialUNet(DownloadableDataset):
 
     License: MIT
 
-    You can download these model weights here:
-    https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40CcdTSiXGnpG_oRAWdKwHL
-
-    Versions: 260902
+    Model weights hosted at https://drive.google.com; see ``.versions`` for the dated snapshots.
 
 
     """
