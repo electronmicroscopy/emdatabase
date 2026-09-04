@@ -1,11 +1,10 @@
 # $schema: ./json-schema.json
 TutorialUNet:
   description: >-
-    Trained weights for the small U-Net from the quantem tutorial
-    neural_networks_02_unet.ipynb (quantem.core.ml.CNN2d, single-channel
-    segmentation of synthetic shapes). A plain state dict saved with
-    torch.save(model.state_dict(), path); load with torch.load(path,
-    weights_only=True) into CNN2d(in_channels=1, out_channels=1,
+    Trained weights for the small U-Net from the quantem tutorial neural_networks_02_unet.ipynb
+    (quantem.core.ml.CNN2d, single-channel segmentation of synthetic shapes).
+    A plain state dict saved with torch.save(model.state_dict(), path); load
+    with torch.load(path, weights_only=True) into CNN2d(in_channels=1, out_channels=1,
     final_activation=torch.nn.Sigmoid()).
   source: https://drive.google.com
   file: nn02_unet1_weights.pt
@@ -25,10 +24,14 @@ TutorialUNet:
     quantem: ">=0.1"
   latest:
     url: https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40CcdTSiXGnpG_oRAWdKwHL
-    checksum: md5:bcdc37950e37dc132499b63660f44485
-    size_bytes: 2632696
+    checksum: md5:6245e563e965316cf72dd89d58a2fdb2
+    size_bytes: 2632962
   versions:
     "260902":
       url: https://github.com/electronmicroscopy/emdatabase/releases/download/weights-archive/TutorialUNet_260902.pt
       checksum: md5:bcdc37950e37dc132499b63660f44485
       size_bytes: 2632696
+    "260904":
+      url: https://github.com/electronmicroscopy/emdatabase/releases/download/weights-archive/TutorialUNet_260904.pt
+      checksum: md5:6245e563e965316cf72dd89d58a2fdb2
+      size_bytes: 2632962
