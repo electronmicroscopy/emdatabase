@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Weights &amp;middot; EM-Database</title>
+<style>
+/* browser.css - emdatabase.browse()
+ *
+ * Themed after SpyDE (Catppuccin Mocha), dark by design like the app itself.
+ * The palette lives on both the widget root and the (body-level) toast root so
+ * the pinned toasts are themed even though they render outside .emdb.
+ */
+.emdb, .emdb-toast-root {
+  --emdb-base: #1e1e2e;
+  --emdb-mantle: #181825;
+  --emdb-crust: #11111b;
+  --emdb-surface0: #313244;
+  --emdb-surface1: #45475a;
+  --emdb-surface2: #585b70;
+  --emdb-overlay: #2a2a3c;
+  --emdb-text: #cdd6f4;
+  --emdb-subtext: #a6adc8;
+  --emdb-muted: #7f849c;
+  --emdb-blue: #89b4fa;
+  --emdb-mauve: #cba6f7;
+  --emdb-green: #a6e3a1;
+  --emdb-red: #f38ba8;
+  --emdb-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --emdb-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+.emdb {
+  font-family: var(--emdb-font);
+  font-size: 13px;
+  color: var(--emdb-text);
+  background: var(--emdb-base);
+  border: 1px solid var(--emdb-surface0);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 75%;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* Header ------------------------------------------------------------- */
+.emdb-header {
+  padding: 12px 14px 10px;
+  background: linear-gradient(#1c1c2b, var(--emdb-mantle));
+  border-bottom: 1px solid var(--emdb-surface0);
+}
+.emdb-header-top { display: flex; align-items: center; justify-content: space-between; }
+.emdb-brand { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+.emdb-diamond {
+  background: linear-gradient(135deg, var(--emdb-blue), var(--emdb-mauve));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  margin-right: 4px;
+}
+.emdb-count { font-size: 11.5px; color: var(--emdb-subtext); }
+.emdb-search {
+  margin-top: 10px; width: 100%; box-sizing: border-box;
+  background: var(--emdb-crust); color: var(--emdb-text);
+  border: 1px solid var(--emdb-surface0); border-radius: 7px;
+  padding: 6px 10px; font-size: 12.5px; font-family: var(--emdb-font); outline: none;
+}
+.emdb-search::placeholder { color: var(--emdb-muted); }
+.emdb-search:focus { border-color: var(--emdb-blue); }
+
+/* Tabs --------------------------------------------------------------- */
+.emdb-tabs {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  padding: 8px 12px; background: var(--emdb-mantle);
+  border-bottom: 1px solid var(--emdb-surface0);
+}
+.emdb-tab {
+  cursor: pointer; font-family: var(--emdb-font); font-size: 11.5px; font-weight: 600;
+  color: var(--emdb-subtext); background: transparent;
+  border: 1px solid transparent; border-radius: 999px; padding: 3px 11px;
+}
+.emdb-tab:hover { color: var(--emdb-text); background: var(--emdb-overlay); }
+.emdb-tab.active {
+  color: var(--emdb-blue); background: rgba(137, 180, 250, 0.14);
+  border-color: rgba(137, 180, 250, 0.4);
+}
+
+/* Body: list + details ---------------------------------------------- */
+.emdb-body { display: flex; height: 440px; }
+/* List is only as wide as its content (the longest row); the details panel,
+   with the description, takes all the remaining width. */
+.emdb-list {
+  flex: 0 1 auto; width: max-content; max-width: 62%; min-width: 560px;
+  overflow-y: auto; border-right: 1px solid var(--emdb-surface0);
+}
+.emdb-details { flex: 1 1 0; overflow-y: auto; padding: 14px 18px; background: var(--emdb-mantle); }
+
+/* Scrollbars (both columns) */
+.emdb-list, .emdb-details { scrollbar-width: thin; scrollbar-color: var(--emdb-surface1) transparent; }
+.emdb-list::-webkit-scrollbar, .emdb-details::-webkit-scrollbar { width: 10px; height: 10px; }
+.emdb-list::-webkit-scrollbar-track, .emdb-details::-webkit-scrollbar-track { background: transparent; }
+.emdb-list::-webkit-scrollbar-thumb, .emdb-details::-webkit-scrollbar-thumb {
+  background: var(--emdb-surface1); border-radius: 6px;
+  border: 3px solid transparent; background-clip: padding-box;
+}
+.emdb-list::-webkit-scrollbar-thumb:hover, .emdb-details::-webkit-scrollbar-thumb:hover {
+  background: var(--emdb-surface2); border-width: 2px;
+}
+
+.emdb-group-head {
+  position: sticky; top: 0; z-index: 1;
+  padding: 6px 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--emdb-muted);
+  background: var(--emdb-base); border-bottom: 1px solid var(--emdb-surface0);
+}
+.emdb-empty, .emdb-details-empty { padding: 18px 14px; color: var(--emdb-muted); font-size: 12px; }
+
+.emdb-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 14px; cursor: pointer;
+  border-bottom: 1px solid rgba(49, 50, 68, 0.5);
+}
+.emdb-row:hover { background: var(--emdb-overlay); }
+.emdb-row.selected { background: rgba(137, 180, 250, 0.1); box-shadow: inset 2px 0 0 var(--emdb-blue); }
+.emdb-glyph { flex: 0 0 auto; width: 12px; text-align: center; font-size: 10px; }
+.emdb-glyph.on { color: var(--emdb-green); }
+.emdb-glyph.off { color: var(--emdb-muted); }
+.emdb-glyph.shared { color: var(--emdb-blue); }
+.emdb-name { font-weight: 600; white-space: nowrap; }
+.emdb-meta { flex: 1; color: var(--emdb-subtext); font-size: 11px; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emdb-actions { flex: 0 0 auto; min-width: 78px; text-align: right; }
+.emdb-check { color: var(--emdb-green); font-weight: 700; }
+.emdb-spinner { color: var(--emdb-blue); font-size: 11px; }
+
+.emdb-dl {
+  cursor: pointer; font-family: var(--emdb-font); font-size: 11.5px; font-weight: 600;
+  color: var(--emdb-crust); background: var(--emdb-blue); border: 0;
+  border-radius: 6px; padding: 4px 12px;
+}
+.emdb-dl:hover { filter: brightness(1.08); }
+.emdb-dl:active { transform: translateY(1px); }
+
+/* Details panel content */
+.emdb-d-title { font-size: 15px; font-weight: 700; }
+.emdb-d-sub { margin-top: 2px; font-size: 11px; color: var(--emdb-subtext); }
+.emdb-d-status { margin: 10px 0 12px; display: flex; align-items: center; gap: 10px; }
+.emdb-kind {
+  margin-left: 8px; vertical-align: middle; padding: 1px 7px; border-radius: 999px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--emdb-mauve); border: 1px solid var(--emdb-surface1);
+}
+.emdb-version {
+  margin-left: 8px; vertical-align: middle; padding: 1px 6px; border-radius: 6px;
+  font-family: var(--emdb-mono); font-size: 10.5px; font-weight: 600;
+  color: var(--emdb-subtext); background: var(--emdb-surface0);
+  border: 1px solid var(--emdb-surface1); cursor: pointer;
+}
+.emdb-version:hover { color: var(--emdb-text); }
+.emdb-d-badge { font-size: 11.5px; color: var(--emdb-subtext); }
+.emdb-d-badge.on { color: var(--emdb-green); font-weight: 600; }
+.emdb-d-badge.shared { color: var(--emdb-blue); font-weight: 600; }
+.emdb-delete {
+  cursor: pointer; font-family: var(--emdb-font); font-size: 11px; font-weight: 600;
+  color: var(--emdb-red); background: transparent;
+  border: 1px solid var(--emdb-surface1); border-radius: 6px; padding: 3px 10px;
+}
+.emdb-delete:hover { border-color: var(--emdb-red); background: rgba(243, 139, 168, 0.1); }
+.emdb-d-desc { margin: 0 0 12px; font-size: 12px; line-height: 1.5; color: var(--emdb-text); }
+.emdb-d-meta {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 5px 20px;
+}
+.emdb-kv { display: flex; gap: 8px; font-size: 11.5px; }
+.emdb-k { flex: 0 0 82px; color: var(--emdb-muted); }
+.emdb-v { flex: 1; color: var(--emdb-text); word-break: break-word; }
+
+/* Load block: copy snippet / path */
+.emdb-load-label {
+  margin: 14px 0 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--emdb-muted);
+}
+.emdb-copy {
+  display: flex; align-items: stretch; gap: 6px; margin-bottom: 6px;
+}
+.emdb-code {
+  flex: 1; min-width: 0; font-family: var(--emdb-mono); font-size: 11.5px;
+  color: var(--emdb-text); background: var(--emdb-crust);
+  border: 1px solid var(--emdb-surface0); border-radius: 6px; padding: 7px 9px;
+  white-space: pre-wrap; word-break: break-word;   /* wrap, never scroll */
+}
+.emdb-copy.path .emdb-code { color: var(--emdb-subtext); }
+.emdb-copy-btn {
+  flex: 0 0 auto; cursor: pointer; font-family: var(--emdb-font);
+  font-size: 11px; font-weight: 600; color: var(--emdb-blue);
+  background: transparent; border: 1px solid var(--emdb-surface1);
+  border-radius: 6px; padding: 0 10px;
+}
+.emdb-copy-btn:hover { border-color: var(--emdb-blue); background: rgba(137, 180, 250, 0.1); }
+.emdb-copy-btn.copied { color: var(--emdb-green); border-color: var(--emdb-green); }
+
+/* Single-dataset card (display(dataset)) --------------------------- */
+.emdb-card-host { max-width: 75%; }
+.emdb-card { padding: 18px 20px; }
+/* Two columns: a wide description (+ load) on the left, metadata on the right,
+   so the description gets the space and nothing sprawls edge to edge. */
+.emdb-card-cols {
+  display: grid; grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 28px; align-items: start; margin-top: 4px;
+}
+.emdb-card-col-main { min-width: 0; }
+.emdb-card .emdb-d-desc { max-width: none; }           /* fill the main column */
+.emdb-card-col-side .emdb-d-meta { grid-template-columns: 1fr; }
+.emdb-inline-toast {
+  margin: 2px 0 12px; display: flex; flex-direction: column; gap: 6px;
+  background: var(--emdb-mantle); border: 1px solid var(--emdb-surface0);
+  border-radius: 8px; padding: 8px 10px;
+}
+.emdb-inline-toast.cancelling { opacity: 0.65; }
+.emdb-inline-toast.error { border-color: var(--emdb-red); }
+
+/* Toasts: pinned to the bottom-right of the viewport ----------------- */
+.emdb-toast-root {
+  position: fixed; right: 16px; bottom: 16px; z-index: 99999;
+  display: flex; flex-direction: column; gap: 10px; width: 300px;
+  font-family: var(--emdb-font);
+}
+.emdb-toast {
+  background: var(--emdb-base); border: 1px solid var(--emdb-surface0);
+  border-radius: 9px; padding: 10px 12px; color: var(--emdb-text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  display: flex; flex-direction: column; gap: 7px;
+}
+.emdb-toast.error { border-color: var(--emdb-red); }
+.emdb-toast.cancelling { opacity: 0.65; }
+.emdb-x:disabled { opacity: 0.5; cursor: default; }
+.emdb-toast-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.emdb-toast-title { font-size: 12.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emdb-x {
+  flex: 0 0 auto; cursor: pointer; line-height: 1;
+  background: transparent; color: var(--emdb-subtext);
+  border: 1px solid var(--emdb-surface1); border-radius: 5px;
+  padding: 4px 9px; font-size: 13px;
+}
+.emdb-x:hover { color: var(--emdb-red); border-color: var(--emdb-red); background: rgba(243, 139, 168, 0.12); }
+.emdb-toast-err { font-size: 11px; color: var(--emdb-red); word-break: break-word; }
+.emdb-track { height: 6px; border-radius: 3px; background: var(--emdb-surface0); overflow: hidden; }
+.emdb-fill {
+  height: 100%; border-radius: 3px; transition: width 200ms linear;
+  background: linear-gradient(90deg, var(--emdb-blue), var(--emdb-mauve));
+}
+.emdb-fill.indet { animation: emdb-slide 1.2s ease-in-out infinite; }
+.emdb-bytes { font-size: 10.5px; color: var(--emdb-subtext); }
+
+@keyframes emdb-slide {
+  0% { margin-left: 0%; }
+  50% { margin-left: 68%; }
+  100% { margin-left: 0%; }
+}
+
+
+:root {
+  --emdb-base: #1e1e2e; --emdb-mantle: #181825; --emdb-crust: #11111b;
+  --emdb-surface0: #313244; --emdb-surface1: #45475a; --emdb-surface2: #585b70;
+  --emdb-overlay: #2a2a3c; --emdb-text: #cdd6f4; --emdb-subtext: #a6adc8;
+  --emdb-muted: #7f849c; --emdb-blue: #89b4fa; --emdb-mauve: #cba6f7;
+  --emdb-green: #a6e3a1; --emdb-red: #f38ba8; --emdb-yellow: #f9e2af;
+  --emdb-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --emdb-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--emdb-base); color: var(--emdb-text);
+  font-family: var(--emdb-font); font-size: 16px; line-height: 1.55; min-height: 100vh;
+}
+a { color: var(--emdb-blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Top navigation ----------------------------------------------------- */
+.app-nav {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 10px 22px; background: linear-gradient(#1c1c2b, var(--emdb-mantle));
+  border-bottom: 1px solid var(--emdb-surface0); box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+}
+.app-brand {
+  font-size: 16px; font-weight: 800; letter-spacing: 0.2px; margin-right: auto;
+  display: flex; align-items: center; gap: 8px; color: var(--emdb-text);
+}
+.app-brand:hover { text-decoration: none; }
+.app-brand .diamond {
+  background: linear-gradient(135deg, var(--emdb-blue), var(--emdb-mauve));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.app-navlink {
+  font-size: 14px; font-weight: 600; color: var(--emdb-subtext);
+  padding: 7px 15px; border-radius: 999px; border: 1px solid transparent;
+}
+.app-navlink:hover { color: var(--emdb-text); background: var(--emdb-overlay); text-decoration: none; }
+.app-navlink.active {
+  color: var(--emdb-blue); background: rgba(137, 180, 250, 0.14);
+  border-color: rgba(137, 180, 250, 0.4);
+}
+
+.app-main { max-width: 100%; margin: 0; padding: 20px 40px 60px; }
+
+/* Hero --------------------------------------------------------------- */
+.app-hero { text-align: center; padding: 30px 0 14px; }
+.app-hero h1 {
+  margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1;
+  background: linear-gradient(135deg, #89b4fa, #cba6f7);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.app-hero p { margin: 12px auto 0; max-width: 720px; color: var(--emdb-subtext); font-size: 16px; }
+.app-hero code {
+  font-family: var(--emdb-mono); background: var(--emdb-crust);
+  border: 1px solid var(--emdb-surface0); border-radius: 5px; padding: 1px 6px; color: var(--emdb-text);
+}
+
+
+.emdb { max-width: 100%; margin: 8px 0 0; font-size: 14px; }
+.emdb-diamond { display: none; }
+.emdb-body { height: 600px; }
+.emdb-list { min-width: 360px; max-width: 50%; }
+.emdb-dl-link { margin-top: 14px; }
+.emdb-dl-anchor { color: var(--emdb-blue); text-decoration: none; font-size: 14px; font-weight: 600; }
+.emdb-dl-anchor:hover { text-decoration: underline; }
+/* Bigger, more legible text on the website (the notebook widget stays compact) */
+.emdb-search { font-size: 15px; padding: 10px 13px; }
+.emdb-tab { font-size: 13.5px; padding: 5px 13px; }
+.emdb-count { font-size: 13px; }
+.emdb-group-head { font-size: 11.5px; }
+.emdb-name { font-size: 14.5px; }
+.emdb-meta { font-size: 13px; }
+.emdb-glyph { font-size: 12px; }
+.emdb-d-title { font-size: 20px; }
+.emdb-d-sub { font-size: 13.5px; }
+.emdb-d-desc { font-size: 14.5px; line-height: 1.6; max-width: 760px; }
+.emdb-kv { font-size: 13.5px; }
+.emdb-k { flex-basis: 92px; }
+.emdb-code { font-size: 13px; }
+.emdb-load-label, .emdb-d-status { font-size: 12px; }
+.emdb-copy-btn, .emdb-dl { font-size: 13px; }
+/* Keep the metadata a tidy two-column block instead of sprawling edge to edge */
+.emdb-d-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 820px; gap: 6px 30px; }
+
+.emdb-body { height: 620px; }
+
+</style>
+</head>
+<body>
+<nav class="app-nav"><a class="app-brand" href="index.html">EM-Database</a><a class="app-navlink" href="examples/index.html">Examples</a><a class="app-navlink" href="reference/index.html">API</a><a class="app-navlink" href="all_data.html">All Data</a><a class="app-navlink active" href="weights.html">Model Weights</a><a class="app-navlink" href="add_dataset.html">Add Dataset</a></nav>
+<main class="app-main"><div class="app-hero" style="padding:18px 0 4px"><h1 style="font-size:30px">Model Weights</h1><p>Trained model checkpoints, one entry per model. Downloading an entry follows its <code>latest</code> link, which serves whatever the current weights are; every earlier state of that link is kept as a dated version, pinned to its checksum. Pick one with the selector; the load snippet opens it with <code>weights_only=True</code>.</p><p><code>download()</code> warns when the index on the project's <code>main</code> branch has newer weights than your installed release, and <code>download(refresh=True)</code> fetches them; the <code>check_updates</code> config key turns that check off.</p></div><div id="root"></div></main>
+<script>
+const DATA = {"data_dir": "/home/runner/.cache/emdatabase", "locations": {"personal": "/home/runner/.cache/emdatabase"}, "groups": [{"technique": "Model weights", "items": [{"name": "TutorialUNet", "kind": "weights", "technique": "Other", "size": "", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "Trained weights for the small U-Net from the quantem tutorial neural_networks_02_unet.ipynb (quantem.core.ml.CNN2d, single-channel segmentation of synthetic shapes). A plain state dict saved with torch.save(model.state_dict(), path); load with torch.load(path, weights_only=True) into CNN2d(in_channels=1, out_channels=1, final_activation=torch.nn.Sigmoid()).", "detector": "", "microscope": "", "voltage": "", "tags": ["Machine Learning", "Segmentation", "Tutorial"], "authors": ["Arthur McCray"], "license": "MIT", "doi": "", "source": "https://drive.google.com", "file": "nn02_unet1_weights.pt", "url": "https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40CcdTSiXGnpG_oRAWdKwHL", "latest_checksum": "md5:6245e563e965316cf72dd89d58a2fdb2", "versions": [{"version": "260904", "url": "https://github.com/electronmicroscopy/emdatabase/releases/download/weights-archive/TutorialUNet_260904.pt", "checksum": "md5:6245e563e965316cf72dd89d58a2fdb2", "size": "2.63 MB", "downloaded": false, "path": "", "location": null}, {"version": "260902", "url": "https://github.com/electronmicroscopy/emdatabase/releases/download/weights-archive/TutorialUNet_260902.pt", "checksum": "md5:bcdc37950e37dc132499b63660f44485", "size": "2.63 MB", "downloaded": false, "path": "", "location": null}], "model_class": "quantem.core.ml.CNN2d", "model_framework": "torch", "model_quantem": ">=0.1", "search": "tutorialunet other trained weights for the small u-net from the quantem tutorial neural_networks_02_unet.ipynb (quantem.core.ml.cnn2d, single-channel segmentation of synthetic shapes). a plain state dict saved with torch.save(model.state_dict(), path); load with torch.load(path, weights_only=true) into cnn2d(in_channels=1, out_channels=1, final_activation=torch.nn.sigmoid()). mit nn02_unet1_weights.pt machine learning segmentation tutorial arthur mccray stanford university quantem.core.ml.cnn2d torch 260904 260902"}]}], "n_downloaded": 0, "n_total": 1};
+const TABS = ["Model weights"];
+const LABEL = "Model weights";
+
+(function () {
+  var root = document.getElementById("root");
+  root.classList.add("emdb");
+  var TAB_LABEL = { "In-situ TEM": "In-situ", "Cryo-EM": "Cryo" };
+  // What this page is browsing; baked in next to DATA so one script serves the
+  // dataset pages and the weights page.
+  var WHAT = (typeof LABEL !== "undefined" && LABEL) ? LABEL : "Datasets";
+  // `version` maps a weights family to the version being shown ("" = latest).
+  var state = { tab: "All", search: "", selected: null, hovered: null, version: {} };
+
+  function esc(v) {
+    return String(v).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function el(tag, cls, html) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+  function toSnake(name) {
+    return name.replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").toLowerCase();
+  }
+  function copyText(text, btn) {
+    var done = function () {
+      var old = btn.textContent; btn.textContent = "Copied!"; btn.classList.add("copied");
+      setTimeout(function () { btn.textContent = old; btn.classList.remove("copied"); }, 1100);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
+    } else { fallbackCopy(text, done); }
+  }
+  function fallbackCopy(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) {}
+    ta.remove();
+  }
+
+  var header = el("div", "emdb-header");
+  var tabsEl = el("div", "emdb-tabs");
+  var body = el("div", "emdb-body");
+  var listEl = el("div", "emdb-list");
+  var detailsEl = el("div", "emdb-details");
+  body.appendChild(listEl); body.appendChild(detailsEl);
+  root.appendChild(header); root.appendChild(tabsEl); root.appendChild(body);
+
+  function allItems() {
+    return (DATA.groups || []).reduce(function (a, g) { return a.concat(g.items); }, []);
+  }
+  function techniques() { return (DATA.groups || []).map(function (g) { return g.technique; }); }
+  function matchesSearch(it) {
+    if (!state.search) return true;
+    var blob = it.search || it.name.toLowerCase();
+    return state.search.toLowerCase().split(/\s+/).every(function (t) { return blob.indexOf(t) !== -1; });
+  }
+  function findItem(n) { return allItems().filter(function (i) { return i.name === n; })[0] || null; }
+
+  function drawHeader() {
+    header.innerHTML = "";
+    var top = el("div", "emdb-header-top");
+    top.appendChild(el("div", "emdb-brand",
+      '<span class="emdb-diamond">◆</span> ' + esc(WHAT)));
+    top.appendChild(el("div", "emdb-count", DATA.n_total + " " + WHAT.toLowerCase()));
+    header.appendChild(top);
+    var search = el("input", "emdb-search");
+    search.type = "text"; search.value = state.search;
+    search.placeholder = "Search " + WHAT.toLowerCase() + "…";
+    search.addEventListener("input", function () { state.search = search.value; drawList(); });
+    header.appendChild(search);
+  }
+  function drawTabs() {
+    tabsEl.innerHTML = "";
+    var tabList = (typeof TABS !== "undefined" && TABS) ? TABS : techniques();
+    ["All"].concat(tabList).forEach(function (tab) {
+      var label = tab === "All" ? "All" : (TAB_LABEL[tab] || tab);
+      var b = el("button", "emdb-tab" + (state.tab === tab ? " active" : ""), esc(label));
+      b.addEventListener("click", function () { state.tab = tab; drawTabs(); drawList(); });
+      tabsEl.appendChild(b);
+    });
+  }
+  function drawList() {
+    listEl.innerHTML = "";
+    var shown = 0;
+    (DATA.groups || []).forEach(function (g) {
+      if (state.tab !== "All" && g.technique !== state.tab) return;
+      var items = g.items.filter(matchesSearch);
+      if (!items.length) return;
+      if (state.tab === "All") listEl.appendChild(el("div", "emdb-group-head", esc(g.technique)));
+      items.forEach(function (it) { listEl.appendChild(drawRow(it)); shown++; });
+    });
+    if (!shown) listEl.appendChild(
+      el("div", "emdb-empty", "No " + WHAT.toLowerCase() + " match."));
+    if (!state.selected && allItems().length) state.selected = allItems()[0].name;
+    drawDetails();
+  }
+  function drawRow(it) {
+    var row = el("div", "emdb-row" + (state.selected === it.name ? " selected" : ""));
+    row.appendChild(el("span", "emdb-glyph off", "•"));
+    row.appendChild(el("span", "emdb-name", esc(it.name)));
+    var meta = [it.size, it.shape].filter(Boolean).join("  ·  ");
+    row.appendChild(el("span", "emdb-meta", esc(meta)));
+    row.addEventListener("mouseenter", function () { state.hovered = it.name; drawDetails(); });
+    row.addEventListener("click", function () { state.selected = it.name; drawList(); });
+    return row;
+  }
+  function copyRow(shown, val) {
+    var row = el("div", "emdb-copy");
+    row.appendChild(el("code", "emdb-code", esc(shown)));
+    var btn = el("button", "emdb-copy-btn", "Copy");
+    btn.addEventListener("click", function () { copyText(val, btn); });
+    row.appendChild(btn);
+    return row;
+  }
+  // Which version of an entry is being shown: "" is latest, and is all a
+  // dataset (or a family whose selection has gone away) ever has.
+  function currentVersion(it) {
+    var chosen = state.version[it.name];
+    if (!chosen) return "";
+    return (it.versions || []).some(function (v) { return v.version === chosen; }) ? chosen : "";
+  }
+  // The link, pin and local file name of one version; an entry's own fields
+  // describe latest, so the same reads serve either.
+  function versionState(it, want) {
+    if (!want) return { url: it.url, checksum: it.latest_checksum, file: it.file };
+    var row = (it.versions || []).filter(function (v) { return v.version === want; })[0] || {};
+    return { url: row.url, checksum: row.checksum, file: versionedFile(it.file, want) };
+  }
+  // Mirrors emdatabase.metadata.versioned_filename: w.pt -> w_260902.pt.
+  function versionedFile(file, version) {
+    return String(file || "").replace(/(\.[^.]*)$/, "_" + version + "$1");
+  }
+  function versionSelect(it, version) {
+    var select = el("select", "emdb-version");
+    select.title = "Which version to load or download";
+    [["", "latest"]].concat((it.versions || []).map(function (v) {
+      return [v.version, v.version];
+    })).forEach(function (choice) {
+      var option = document.createElement("option");
+      option.value = choice[0];
+      option.textContent = choice[1];
+      option.selected = choice[0] === version;
+      select.appendChild(option);
+    });
+    select.addEventListener("change", function () {
+      state.version[it.name] = select.value;
+      drawDetails();
+    });
+    return select;
+  }
+  function drawDetails() {
+    var it = findItem(state.hovered || state.selected);
+    detailsEl.innerHTML = "";
+    if (!it) { detailsEl.appendChild(el("div", "emdb-details-empty", "Hover or select an entry.")); return; }
+    var version = currentVersion(it);
+    var pin = versionState(it, version);
+    var title = el("div", "emdb-d-title", esc(it.name));
+    if (it.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
+    if ((it.versions || []).length) title.appendChild(versionSelect(it, version));
+    detailsEl.appendChild(title);
+    detailsEl.appendChild(el("div", "emdb-d-sub",
+      esc([it.technique, it.size, it.shape].filter(Boolean).join("  ·  "))));
+    if (it.description) detailsEl.appendChild(el("p", "emdb-d-desc", esc(it.description)));
+    var pairs = [["Detector", it.detector], ["Microscope", it.microscope], ["Voltage", it.voltage],
+      ["Tags", (it.tags || []).join(", ")], ["Authors", (it.authors || []).join(", ")],
+      ["License", it.license], ["DOI", it.doi],
+      ["Versions", (it.versions || []).map(function (v) { return v.version; }).join(", ")],
+      ["md5", it.kind === "weights" ? String(pin.checksum || "").replace(/^md5:/, "") : ""],
+      ["Model", it.model_class], ["Framework", it.model_framework],
+      ["quantem", it.model_quantem]];
+    var meta = el("div", "emdb-d-meta");
+    pairs.forEach(function (kv) {
+      if (!kv[1]) return;
+      var row = el("div", "emdb-kv");
+      row.appendChild(el("span", "emdb-k", kv[0]));
+      row.appendChild(el("span", "emdb-v", esc(kv[1])));
+      meta.appendChild(row);
+    });
+    detailsEl.appendChild(meta);
+    detailsEl.appendChild(el("div", "emdb-load-label", "Load"));
+    var call = version ? '().download(version="' + version + '")' : "().download()";
+    var snippet = it.kind === "weights"
+      ? "import torch\nfrom emdatabase import data\n\npath = data." + it.name
+        + call + "\ncheckpoint = torch.load(path, weights_only=True)"
+      : toSnake(it.name) + " = emdatabase.data." + it.name + "()";
+    detailsEl.appendChild(copyRow(snippet, snippet));
+    if (pin.url) {
+      var wrap = el("div", "emdb-dl-link");
+      var a = document.createElement("a");
+      a.href = pin.url; a.target = "_blank"; a.rel = "noopener";
+      a.className = "emdb-dl-anchor"; a.textContent = "⤓ Download " + pin.file;
+      wrap.appendChild(a);
+      detailsEl.appendChild(wrap);
+    }
+  }
+
+  drawHeader(); drawTabs(); drawList();
+})();
+
+</script>
+</body></html>

@@ -1,0 +1,468 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            :root {
+                color-scheme: light dark;
+            }
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+                margin: 0; 
+                padding: 20px; 
+                background: transparent; 
+                color: inherit; 
+            }
+            table { 
+                border-collapse: collapse; 
+                width: 100%; 
+                border: 1px solid light-dark(#ddd, #444); 
+            }
+            th, td { 
+                border: 1px solid light-dark(#ddd, #444); 
+                padding: 12px 8px; 
+                text-align: left; 
+            }
+            th { 
+                background-color: light-dark(#f5f5f5, #2d2d2d); 
+                font-weight: 600; 
+                position: relative; 
+            }
+            tr:nth-child(even) { 
+                background-color: light-dark(#f9f9f9, #252525); 
+            }
+            tr:hover { 
+                background-color: light-dark(#f0f0f0, #333); 
+            }
+            a { 
+                color: light-dark(#2980b9, #3091d1); 
+                text-decoration: none; 
+            }
+            a:hover { text-decoration: underline; }
+            .tabs { 
+                margin: 15px 0; 
+                border-bottom: 1px solid light-dark(#ddd, #444); 
+            }
+            .tab-button { 
+                padding: 10px 16px; 
+                margin-right: 4px; 
+                cursor: pointer; 
+                border: none; 
+                background: transparent; 
+                color: inherit; 
+                font-size: 14px; 
+                border-bottom: 3px solid transparent; 
+            }
+            .tab-button:hover { 
+                background: light-dark(#f5f5f5, #2d2d2d); 
+            }
+            .tab-button.active { 
+                border-bottom-color: light-dark(#2980b9, #3091d1); 
+                font-weight: 600; 
+            }
+            .filter-dropdown { position: relative; display: inline-block; }
+            .filter-button { 
+                cursor: pointer; 
+                padding: 4px 8px; 
+                background: light-dark(#f5f5f5, #2d2d2d); 
+                border: 1px solid light-dark(#ddd, #444); 
+                color: inherit; 
+                border-radius: 3px; 
+                margin-left: 8px; 
+                font-size: 12px; 
+            }
+            .filter-button:hover { 
+                background: light-dark(#e8e8e8, #333); 
+            }
+            .filter-content { 
+                display: none; 
+                position: absolute; 
+                background: light-dark(white, #1e1e1e); 
+                border: 1px solid light-dark(#ddd, #444); 
+                padding: 10px; 
+                z-index: 1000; 
+                min-width: 250px; 
+                max-height: 300px; 
+                overflow-y: auto; 
+                box-shadow: 0 4px 6px light-dark(rgba(0,0,0,0.1), rgba(0,0,0,0.5)); 
+                border-radius: 4px; 
+            }
+            .filter-dropdown.active .filter-content { display: block; }
+            .filter-checkbox { display: block; margin: 5px 0; cursor: pointer; }
+            .manufacturer-group { margin: 10px 0; padding-left: 10px; }
+            .manufacturer-label { font-weight: 600; margin: 8px 0 4px 0; }
+            .detector-checkbox { display: block; margin: 3px 0; padding-left: 20px; }
+            th:nth-child(5), td:nth-child(5) { min-width: 200px; }
+            h1 { 
+                border-bottom: 1px solid light-dark(#ddd, #444); 
+                padding-bottom: 10px; 
+            }
+        </style>
+    </head>
+    <body>
+        <h1>EM Datasets</h1>
+
+        <div class="tabs" id="techTabs">
+            <!-- Tabs will be injected here -->
+        </div>
+
+        <table id="datasetsTable">
+            <thead>
+                <tr>
+                    <th>Technique</th>
+                    <th>Dataset</th>
+                    <th>Description</th>
+                    <th>
+                        Tags
+                        <div class="filter-dropdown" id="tagsFilter">
+                            <span class="filter-button">▼</span>
+                            <div class="filter-content" id="tagsContent"></div>
+                        </div>
+                    </th>
+                    <th>
+                        Detector
+                        <div class="filter-dropdown" id="detectorFilter">
+                            <span class="filter-button">▼</span>
+                            <div class="filter-content" id="detectorContent"></div>
+                        </div>
+                    </th>
+                    <th>File</th>
+                    <th>License</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr data-tags="Orientation Mapping, Nanocrystals" data-technique="4D-STEM" data-detector="CeleritasXS" data-manufacturer="Direct Electron">
+                <td>4D-STEM</td>
+                <td><strong>AlNanocrystals</strong></td>
+                <td>A 4D STEM dataset of Al nanocrystals on a carbon support.</td>
+                <td>Orientation Mapping, Nanocrystals</td>
+                <td>Direct Electron - CeleritasXS</td>
+                <td><a href="https://zenodo.org/records/15490547/files">AlNanocrystalsSmaller.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Amorphous, FEM, Angular Correlations, Thin Film" data-technique="4D-STEM" data-detector="CeleritasXS" data-manufacturer="Direct Electron">
+                <td>4D-STEM</td>
+                <td><strong>AmorphousFilm4nm4DSTEM</strong></td>
+                <td>A 4D-STEM dataset of a 4 nm amorphous thin film acquired with a 2.5 mrad probe on a Direct Electron CeleritasXS at 49000 fps. 256 x 256 probe positions (the central quarter of a 1024 x 1024 scan) of 128 x 128 pixel diffraction patterns. Both real and reciprocal space are calibrated - 0.12325 nm per scan step and 0.12453 1/nm per detector pixel, centred on the direct beam. Suitable for fluctuation electron microscopy and angular correlation analysis. Gain- and dark-corrected intensities were divided by 2 and rounded to uint16; multiply by 2 to recover ADU (the detector records 300 ADU per electron).</td>
+                <td>Amorphous, FEM, Angular Correlations, Thin Film</td>
+                <td>Direct Electron - CeleritasXS</td>
+                <td><a href="https://zenodo.org/records/21632101/files">AmorphousFilm4nm4DSTEM.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Orientation Mapping, Nanocrystals" data-technique="4D-STEM" data-detector="CeleritasXS" data-manufacturer="Direct Electron">
+                <td>4D-STEM</td>
+                <td><strong>BilayerWS2</strong></td>
+                <td>small 4-D STEM dataset of a bilayer WS2. Each Diffraction pattern is only 8x8 pixels so the dataset is quite small although for simple non iterative ptychography 8x8 pixels should be sufficient.</td>
+                <td>Orientation Mapping, Nanocrystals</td>
+                <td>Direct Electron - CeleritasXS</td>
+                <td><a href="https://zenodo.org/records/15490547/files">smallPtychography.hspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Strain Mapping" data-technique="4D-STEM" data-detector="Merlin" data-manufacturer="Quantum Detectors">
+                <td>4D-STEM</td>
+                <td><strong>FeAlStripes</strong></td>
+                <td>A 4D STEM dataset with FeAl stripes exhibiting magnetic stripes. The dataset can be used to study the correlation between structural and magnetic properties.</td>
+                <td>Strain Mapping</td>
+                <td>Quantum Detectors - Merlin</td>
+                <td><a href="https://zenodo.org/records/15490547/files">FeAl_stripes.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Nanolaminate, Nanodiffraction, Layered, Orientation Mapping, Strain" data-technique="4D-STEM" data-detector="CeleritasXS" data-manufacturer="Direct Electron">
+                <td>4D-STEM</td>
+                <td><strong>LayeredCuNb4DSTEM</strong></td>
+                <td>A 4D-STEM dataset of a layered Cu/Nb nanolaminate, acquired with a nearly parallel 1.58 mrad probe on a Direct Electron CeleritasXS. 128 x 128 probe positions (the central quarter of a 512 x 512 raster scan) of 256 x 256 pixel diffraction patterns, each the sum of 32 camera frames at 25000 fps. Reciprocal space is calibrated at 0.0078768 1/Angstrom per pixel and centred on the direct beam; the detector half-width is 1.008 1/Angstrom (25.3 mrad at 200 kV). The real-space scan step was not recorded by the scan controller, so the navigation axes are in pixels. Gain- and dark-corrected intensities were divided by 2 and rounded to uint16; multiply by 2 to recover ADU.</td>
+                <td>Nanolaminate, Nanodiffraction, Layered, Orientation Mapping, Strain</td>
+                <td>Direct Electron - CeleritasXS</td>
+                <td><a href="https://zenodo.org/records/21632101/files">LayeredCuNb4DSTEM.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Virtual Imaging, Orientation Mapping, Nanocrystals" data-technique="4D-STEM" data-detector="Stingray" data-manufacturer="Allied Vision">
+                <td>4D-STEM</td>
+                <td><strong>MgONanoCrystals</strong></td>
+                <td>A 4D STEM dataset of various MgO nanocrystals</td>
+                <td>Virtual Imaging, Orientation Mapping, Nanocrystals</td>
+                <td>Allied Vision - Stingray</td>
+                <td><a href="https://zenodo.org/records/15490547/files">mgo_nano.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Amorphous, Metallic Glass, Crystallization, In-situ, Time Series, Large Dataset, Tutorial" data-technique="4D-STEM" data-detector="CeleritasXS" data-manufacturer="Direct Electron">
+                <td>4D-STEM</td>
+                <td><strong>PdCuSiCrystallization</strong></td>
+                <td>A time resolved 4D-STEM series following the crystallization of a PdCuSi metallic glass, acquired on a Direct Electron CeleritasXS at 40000 fps with a 25 microsecond dwell time. 400 sequential scans of 47 x 39 probe positions (a 23.5 x 19.5 nm region cropped from a 256 x 256 scan) of 128 x 128 pixel diffraction patterns. Both real and reciprocal space are calibrated - 0.5 nm per scan step and 0.11 1/nm per detector pixel, centred on the direct beam. Successive scans are 1.6384 s apart and span 655.36 s of elapsed time, although the time axis is stored with a nm unit label. 24 GB of uint16 data uncompressed, chunked one time step at a time - the dataset used in the pyxem large data and lazy processing demo.</td>
+                <td>Amorphous, Metallic Glass, Crystallization, In-situ, Time Series, Large Dataset, Tutorial</td>
+                <td>Direct Electron - CeleritasXS</td>
+                <td><a href="https://zenodo.org/records/15490547/files">PdCuSiCrystalization-zip.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Amorphous, FEM, Angular Correlations" data-technique="4D-STEM" data-detector="DE-16" data-manufacturer="Direct Electron">
+                <td>4D-STEM</td>
+                <td><strong>PdNiPGlass</strong></td>
+                <td>A 4D STEM dataset of PdNiP metallic glass thin film.</td>
+                <td>Amorphous, FEM, Angular Correlations</td>
+                <td>Direct Electron - DE-16</td>
+                <td><a href="https://zenodo.org/records/15490547/files">PdNiP.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Orientation Mapping, Grain Boundaries, Twins, Precession" data-technique="4D-STEM" data-detector="Merlin" data-manufacturer="Quantum Detectors">
+                <td>4D-STEM</td>
+                <td><strong>SPEDAg</strong></td>
+                <td>A 4D STEM dataset of polycrystalline Ag including twins and grain boundaries.</td>
+                <td>Orientation Mapping, Grain Boundaries, Twins, Precession</td>
+                <td>Quantum Detectors - Merlin</td>
+                <td><a href="https://zenodo.org/records/15490547/files">SPED-Ag.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Strain Mapping" data-technique="4D-STEM" data-detector="DE-16" data-manufacturer="Direct Electron">
+                <td>4D-STEM</td>
+                <td><strong>ZrNbPrecipitate</strong></td>
+                <td>A 4D STEM dataset of ZrNb precipitate in ZrNb alloy.</td>
+                <td>Strain Mapping</td>
+                <td>Direct Electron - DE-16</td>
+                <td><a href="https://zenodo.org/records/15490547/files">ZrNbPercipitate.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Cryo-EM, Single Particle, Counted, Movie, Dose Fractionation" data-technique="Cryo-EM" data-detector="Apollo" data-manufacturer="Direct Electron">
+                <td>Cryo-EM</td>
+                <td><strong>ApoferritinApollo15eps</strong></td>
+                <td>A single cryo-EM movie of apoferritin from one stage position, collected at a 15 e-/pix/s dose rate on a Direct Electron Apollo. 76 unaligned, dark-subtracted counted super-resolution frames of 8192 x 8192 pixels at 0.2995 Angstrom per pixel, totalling 56.96 e-/Angstrom^2 (0.7495 e-/Angstrom^2 per frame). The super-resolution gain reference needed for frame correction is embedded in the file at metadata.Acquisition_instrument.TEM.Detector.gain_reference. Repackaged from EMPIAR-11254; see Peng et al., J Struct Biol X 7 (2022) 100080.</td>
+                <td>Cryo-EM, Single Particle, Counted, Movie, Dose Fractionation</td>
+                <td>Direct Electron - Apollo</td>
+                <td><a href="https://zenodo.org/records/21632101/files">ApoferritinApollo15eps.zspy</a></td>
+                <td>CC0-1.0</td>
+            </tr>
+                <tr data-tags="Strain, Cross Correlation, High Resolution Patterns, Deformation" data-technique="EBSD" data-detector="DE-Meridian" data-manufacturer="Direct Electron">
+                <td>EBSD</td>
+                <td><strong>HREBSDStrainPatterns</strong></td>
+                <td>High-resolution EBSD patterns collected on a Direct Electron DE-Meridian, centred on a deformed region suitable for cross-correlation strain analysis. 32 x 32 probe positions at a 25 nm step, each pattern the sum of 256 counted, dark- and gain-corrected frames, binned 2 x 2 from 2048 x 2048 to 1024 x 1024 pixels. The pattern-plane geometry (detector distance, pattern centre, sample tilt) and the accelerating voltage were not recorded with the raw data, so the pattern axes are in detector pixels.</td>
+                <td>Strain, Cross Correlation, High Resolution Patterns, Deformation</td>
+                <td>Direct Electron - DE-Meridian</td>
+                <td><a href="https://zenodo.org/records/21632101/files">HREBSDStrainPatterns.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Large Dataset" data-technique="EBSD" data-detector="UF-1100" data-manufacturer="NORDIF">
+                <td>EBSD</td>
+                <td><strong>NiEBSDLarge</strong></td>
+                <td>4125 EBSD patterns in a (55, 75) navigation shape of (60, 60) pixels from nickel, acquired on a NORDIF UF-1100 detector</td>
+                <td>Large Dataset</td>
+                <td>NORDIF - UF-1100</td>
+                <td><a href="https://raw.githubusercontent.com/pyxem/kikuchipy-data/bcab8f7a4ffdb86a97f14e2327a4813d3156a85e/nickel_ebsd_large/">patterns_v2.h5</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="Spectrum Image, Elemental Mapping, Core Loss, Overlapping Edges, Tutorial" data-technique="EELS" data-detector="GIF Quantum ER" data-manufacturer="Gatan">
+                <td>EELS</td>
+                <td><strong>CuZnEELSMapping</strong></td>
+                <td>An EELS spectrum image of copper and zinc oxide deposited on carbon nanotubes, used by the eXSpy elemental mapping tutorial. 40 x 50 probe positions at 0.9214 nm with 162 energy channels covering 700-1988 eV at 8 eV dispersion, which resolves the Cu-L2,3 (~931 eV) and Zn-L2,3 (~1020 eV) edges. The Zn:Cu ratio is 3:1 and roughly 80 wt% of the sample is carbon, so the edges sit on a large plasmon background - a good test case for model-based background removal and overlapping-edge quantification. The simultaneously acquired survey image is available as CuZnHAADF. Note - the Sample.description field in the file reads "Ta2O5 25% TiO2 CSIRO 400C", which is stale metadata carried over from an unrelated acquisition.</td>
+                <td>Spectrum Image, Elemental Mapping, Core Loss, Overlapping Edges, Tutorial</td>
+                <td>Gatan - GIF Quantum ER</td>
+                <td><a href="https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets">CuZn_EELS_mapping_tutorial.hspy</a></td>
+                <td>Unspecified</td>
+            </tr>
+                <tr data-tags="Line Scan, Core Loss, Fine Structure, Perovskite, Oxygen Vacancies, Beam Damage, DualEELS, Tutorial" data-technique="EELS" data-detector="Quantum ER" data-manufacturer="Gatan">
+                <td>EELS</td>
+                <td><strong>LSMOLineScan</strong></td>
+                <td>A core-loss EELS line scan through a La(0.7)Sr(0.3)MnO3 thin film in which part of the film was deliberately given a very long electron beam exposure, inducing oxygen vacancies. Used by the eXSpy fine structure tutorial - the O-K and Mn-L2,3 fine structure changes measurably between the damaged and undamaged regions. 40 probe positions at 3.219 nm with 586 energy channels covering 428.5-721 eV at 0.5 eV dispersion. Acquired on a JEOL ARM200cF with a Gatan Quantum ER in DualEELS mode at 80 kV, 27.42 mrad convergence and 33.19 mrad collection angle. The matching low-loss spectrum is LSMOLineScanLowLoss.</td>
+                <td>Line Scan, Core Loss, Fine Structure, Perovskite, Oxygen Vacancies, Beam Damage, DualEELS, Tutorial</td>
+                <td>Gatan - Quantum ER</td>
+                <td><a href="https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets">LSMO_linescan.hspy</a></td>
+                <td>Unspecified</td>
+            </tr>
+                <tr data-tags="Line Scan, Low Loss, Zero Loss Peak, Perovskite, DualEELS, Thickness, Tutorial" data-technique="EELS" data-detector="Quantum ER" data-manufacturer="Gatan">
+                <td>EELS</td>
+                <td><strong>LSMOLineScanLowLoss</strong></td>
+                <td>The low-loss half of the DualEELS pair for LSMOLineScan - a La(0.7)Sr(0.3)MnO3 thin film line scan through a beam-damaged, oxygen-deficient region. 40 probe positions at 3.219 nm with 1024 energy channels covering -50 to 461.5 eV at 0.5 eV dispersion, containing the zero-loss peak and plasmon region. Use it with the core-loss spectrum for relative thickness mapping and Fourier-ratio deconvolution before fine structure analysis. Acquired on a JEOL ARM200cF with a Gatan Quantum ER at 80 kV.</td>
+                <td>Line Scan, Low Loss, Zero Loss Peak, Perovskite, DualEELS, Thickness, Tutorial</td>
+                <td>Gatan - Quantum ER</td>
+                <td><a href="https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets">LSMO_linescan_low_loss.hspy</a></td>
+                <td>Unspecified</td>
+            </tr>
+                <tr data-tags="Line Scan, Core Loss, Perovskite, Interface, DualEELS, Quantification, Tutorial" data-technique="EELS" data-detector="Quantum ER" data-manufacturer="Gatan">
+                <td>EELS</td>
+                <td><strong>LSMOSTOLineScan</strong></td>
+                <td>A core-loss EELS line scan across a La(0.7)Sr(0.3)MnO3 thin film grown on SrTiO3, used by the eXSpy perovskite oxide analysis tutorial. 10 probe positions at 3.152 nm with 512 energy channels covering 395-906 eV at 1 eV dispersion, which contains the Ti-L2,3, O-K, Mn-L2,3 and La-M4,5 edges - so a single line scan crosses the interface and shows the Ti signal give way to La and Mn. Acquired on a JEOL ARM200cF with a Gatan Quantum ER in DualEELS mode at 200 kV, 27.1 mrad convergence and 33.1 mrad collection angle. The matching low-loss spectrum needed for thickness correction and Fourier-ratio deconvolution is LSMOSTOLineScanLowLoss. Binned from the original acquisition to keep the file small.</td>
+                <td>Line Scan, Core Loss, Perovskite, Interface, DualEELS, Quantification, Tutorial</td>
+                <td>Gatan - Quantum ER</td>
+                <td><a href="https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets">LSMO_STO_linescan.hspy</a></td>
+                <td>Unspecified</td>
+            </tr>
+                <tr data-tags="Line Scan, Low Loss, Zero Loss Peak, Perovskite, DualEELS, Thickness, Tutorial" data-technique="EELS" data-detector="Quantum ER" data-manufacturer="Gatan">
+                <td>EELS</td>
+                <td><strong>LSMOSTOLineScanLowLoss</strong></td>
+                <td>The low-loss half of the DualEELS pair for LSMOSTOLineScan - a La(0.7)Sr(0.3)MnO3 on SrTiO3 thin film line scan. 10 probe positions at 3.152 nm with 512 energy channels covering -50 to 461 eV at 1 eV dispersion, so it contains the zero-loss peak and the plasmon region. Use it with the core-loss spectrum for relative thickness mapping and Fourier-ratio deconvolution. Acquired on a JEOL ARM200cF with a Gatan Quantum ER at 200 kV; the low-loss dwell time is 9.44e-05 s against 0.4999 s for the core loss.</td>
+                <td>Line Scan, Low Loss, Zero Loss Peak, Perovskite, DualEELS, Thickness, Tutorial</td>
+                <td>Gatan - Quantum ER</td>
+                <td><a href="https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets">LSMO_STO_linescan_low_loss.hspy</a></td>
+                <td>Unspecified</td>
+            </tr>
+                <tr data-tags="In-situ, Electrochemistry, Liquid Cell, Time Series, Growth" data-technique="In-situ TEM" data-detector="DE-Artemis" data-manufacturer="Direct Electron">
+                <td>In-situ TEM</td>
+                <td><strong>InSituElectrochemGrowth</strong></td>
+                <td>An in-situ electrochemistry TEM movie showing growth in a liquid cell, recorded at 300 kV on a Direct Electron DE-Artemis in hardware counting mode. 245 frames of 4096 x 4096 pixels - every 4th frame of a 977 frame movie - with a calibrated 0.45448 nm pixel size and a 0.26208 s interval between saved frames (1.86 x 1.86 micron field of view, 64 s of elapsed time).</td>
+                <td>In-situ, Electrochemistry, Liquid Cell, Time Series, Growth</td>
+                <td>Direct Electron - DE-Artemis</td>
+                <td><a href="https://zenodo.org/records/21632101/files">InSituElectrochemGrowth.zspy</a></td>
+                <td>CC-BY-4.0</td>
+            </tr>
+                <tr data-tags="HAADF, Survey Image, Tutorial" data-technique="STEM" data-detector="Unknown" data-manufacturer="Gatan">
+                <td>STEM</td>
+                <td><strong>CuZnHAADF</strong></td>
+                <td>The HAADF survey image acquired simultaneously with the CuZnEELSMapping spectrum image - copper and zinc oxide on carbon nanotubes. 40 x 50 pixels at 0.9214 nm, uint16, on a JEOL ARM200F at 200 kV and 600000x. Pairs with CuZnEELSMapping for correlating elemental maps against the survey. Note - the Sample.description field in the file reads "Ta2O5 25% TiO2 CSIRO 400C", which is stale metadata carried over from an unrelated acquisition.</td>
+                <td>HAADF, Survey Image, Tutorial</td>
+                <td>Gatan - Unknown</td>
+                <td><a href="https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets">CuZn_HAADF.hspy</a></td>
+                <td>Unspecified</td>
+            </tr>
+            </tbody>
+        </table>
+        <script>
+            const techniqueTags = {"4D-STEM": ["Amorphous", "Angular Correlations", "Crystallization", "FEM", "Grain Boundaries", "In-situ", "Large Dataset", "Layered", "Metallic Glass", "Nanocrystals", "Nanodiffraction", "Nanolaminate", "Orientation Mapping", "Precession", "Strain", "Strain Mapping", "Thin Film", "Time Series", "Tutorial", "Twins", "Virtual Imaging"], "Cryo-EM": ["Counted", "Cryo-EM", "Dose Fractionation", "Movie", "Single Particle"], "EELS": ["Beam Damage", "Core Loss", "DualEELS", "Elemental Mapping", "Fine Structure", "Interface", "Line Scan", "Low Loss", "Overlapping Edges", "Oxygen Vacancies", "Perovskite", "Quantification", "Spectrum Image", "Thickness", "Tutorial", "Zero Loss Peak"], "STEM": ["HAADF", "Survey Image", "Tutorial"], "EBSD": ["Cross Correlation", "Deformation", "High Resolution Patterns", "Large Dataset", "Strain"], "In-situ TEM": ["Electrochemistry", "Growth", "In-situ", "Liquid Cell", "Time Series"]};
+            const techniqueDetectors = {"4D-STEM": {"Direct Electron": ["CeleritasXS", "DE-16"], "Quantum Detectors": ["Merlin"], "Allied Vision": ["Stingray"]}, "Cryo-EM": {"Direct Electron": ["Apollo"]}, "EELS": {"Gatan": ["GIF Quantum ER", "Quantum ER"]}, "STEM": {"Gatan": ["Unknown"]}, "EBSD": {"Direct Electron": ["DE-Meridian"], "NORDIF": ["UF-1100"]}, "In-situ TEM": {"Direct Electron": ["DE-Artemis"]}};
+            const allTags = ["Amorphous", "Angular Correlations", "Beam Damage", "Core Loss", "Counted", "Cross Correlation", "Cryo-EM", "Crystallization", "Deformation", "Dose Fractionation", "DualEELS", "Electrochemistry", "Elemental Mapping", "FEM", "Fine Structure", "Grain Boundaries", "Growth", "HAADF", "High Resolution Patterns", "In-situ", "Interface", "Large Dataset", "Layered", "Line Scan", "Liquid Cell", "Low Loss", "Metallic Glass", "Movie", "Nanocrystals", "Nanodiffraction", "Nanolaminate", "Orientation Mapping", "Overlapping Edges", "Oxygen Vacancies", "Perovskite", "Precession", "Quantification", "Single Particle", "Spectrum Image", "Strain", "Strain Mapping", "Survey Image", "Thickness", "Thin Film", "Time Series", "Tutorial", "Twins", "Virtual Imaging", "Zero Loss Peak"];
+            const allDetectors = {"Direct Electron": ["Apollo", "CeleritasXS", "DE-16", "DE-Artemis", "DE-Meridian"], "Quantum Detectors": ["Merlin"], "Allied Vision": ["Stingray"], "Gatan": ["GIF Quantum ER", "Quantum ER", "Unknown"], "NORDIF": ["UF-1100"]};
+            let currentTechnique = 'All';
+
+            function createTabs() {
+                const tabs = document.getElementById('techTabs');
+                const allButton = document.createElement('button');
+                allButton.textContent = 'All';
+                allButton.className = 'tab-button active';
+                allButton.onclick = () => filterTechnique('All');
+                tabs.appendChild(allButton);
+
+                Object.keys(techniqueTags).sort().forEach(tech => {
+                    const btn = document.createElement('button');
+                    btn.textContent = tech;
+                    btn.className = 'tab-button';
+                    btn.onclick = () => filterTechnique(tech);
+                    tabs.appendChild(btn);
+                });
+            }
+
+            function renderFilterCheckboxes(containerId, items) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+                items.forEach(item => {
+                    const label = document.createElement('label');
+                    label.className = 'filter-checkbox';
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.value = item;
+                    input.onchange = filterTable;
+                    label.appendChild(input);
+                    label.appendChild(document.createTextNode(' ' + item));
+                    container.appendChild(label);
+                });
+            }
+
+            function renderDetectorCheckboxes(detectors) {
+                const container = document.getElementById('detectorContent');
+                container.innerHTML = '';
+
+                Object.keys(detectors).sort().forEach(manufacturer => {
+                    const group = document.createElement('div');
+                    group.className = 'manufacturer-group';
+
+                    const mfrLabel = document.createElement('label');
+                    mfrLabel.className = 'manufacturer-label filter-checkbox';
+                    const mfrInput = document.createElement('input');
+                    mfrInput.type = 'checkbox';
+                    mfrInput.value = manufacturer;
+                    mfrInput.dataset.type = 'manufacturer';
+                    mfrInput.onchange = (e) => {
+                        const detectorInputs = group.querySelectorAll('input[data-manufacturer="' + manufacturer + '"]');
+                        detectorInputs.forEach(input => input.checked = e.target.checked);
+                        filterTable();
+                    };
+                    mfrLabel.appendChild(mfrInput);
+                    mfrLabel.appendChild(document.createTextNode(' ' + manufacturer));
+                    group.appendChild(mfrLabel);
+
+                    detectors[manufacturer].forEach(detector => {
+                        const label = document.createElement('label');
+                        label.className = 'detector-checkbox';
+                        const input = document.createElement('input');
+                        input.type = 'checkbox';
+                        input.value = detector;
+                        input.dataset.manufacturer = manufacturer;
+                        input.onchange = filterTable;
+                        label.appendChild(input);
+                        label.appendChild(document.createTextNode(' ' + detector));
+                        group.appendChild(label);
+                    });
+
+                    container.appendChild(group);
+                });
+            }
+
+            function updateFilters(technique) {
+                const tags = technique === 'All' ? allTags : (techniqueTags[technique] || []);
+                const detectors = technique === 'All' ? allDetectors : (techniqueDetectors[technique] || {});
+                renderFilterCheckboxes('tagsContent', tags);
+                renderDetectorCheckboxes(detectors);
+            }
+
+            function setActiveTab(name) {
+                const buttons = document.querySelectorAll('.tab-button');
+                buttons.forEach(b => {
+                    b.classList.toggle('active', b.textContent === name);
+                });
+            }
+
+            function filterTechnique(technique) {
+                currentTechnique = technique;
+                setActiveTab(technique);
+                updateFilters(technique);
+                filterTable();
+            }
+
+            function filterTable() {
+                const selectedTags = Array.from(document.querySelectorAll('#tagsContent input:checked')).map(cb => cb.value);
+                const selectedDetectors = Array.from(document.querySelectorAll('#detectorContent input:checked:not([data-type="manufacturer"])')).map(cb => cb.value);
+                const rows = document.querySelectorAll('#datasetsTable tbody tr');
+
+                rows.forEach(row => {
+                    const rowTechnique = row.dataset.technique;
+                    if (currentTechnique !== 'All' && rowTechnique !== currentTechnique) {
+                        row.style.display = 'none';
+                        return;
+                    }
+
+                    const rowTags = row.dataset.tags ? row.dataset.tags.split(', ').filter(t => t) : [];
+                    const rowDetector = row.dataset.detector;
+
+                    const tagsMatch = selectedTags.length === 0 || selectedTags.every(tag => rowTags.includes(tag));
+                    const detectorMatch = selectedDetectors.length === 0 || selectedDetectors.includes(rowDetector);
+
+                    row.style.display = (tagsMatch && detectorMatch) ? '' : 'none';
+                });
+            }
+
+            // Toggle dropdown visibility
+            document.querySelectorAll('.filter-dropdown .filter-button').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const dropdown = btn.parentElement;
+                    document.querySelectorAll('.filter-dropdown').forEach(d => {
+                        if (d !== dropdown) d.classList.remove('active');
+                    });
+                    dropdown.classList.toggle('active');
+                };
+            });
+
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.filter-dropdown').forEach(d => d.classList.remove('active'));
+            });
+
+            // Prevent dropdown from closing when clicking inside
+            document.querySelectorAll('.filter-content').forEach(content => {
+                content.onclick = (e) => e.stopPropagation();
+            });
+
+            // Initialize UI
+            createTabs();
+            updateFilters('All');
+        </script>
+    </body>
+    </html>
+    

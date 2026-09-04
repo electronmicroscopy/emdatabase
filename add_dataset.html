@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add Dataset &amp;middot; EM-Database</title>
+<style>
+/* browser.css - emdatabase.browse()
+ *
+ * Themed after SpyDE (Catppuccin Mocha), dark by design like the app itself.
+ * The palette lives on both the widget root and the (body-level) toast root so
+ * the pinned toasts are themed even though they render outside .emdb.
+ */
+.emdb, .emdb-toast-root {
+  --emdb-base: #1e1e2e;
+  --emdb-mantle: #181825;
+  --emdb-crust: #11111b;
+  --emdb-surface0: #313244;
+  --emdb-surface1: #45475a;
+  --emdb-surface2: #585b70;
+  --emdb-overlay: #2a2a3c;
+  --emdb-text: #cdd6f4;
+  --emdb-subtext: #a6adc8;
+  --emdb-muted: #7f849c;
+  --emdb-blue: #89b4fa;
+  --emdb-mauve: #cba6f7;
+  --emdb-green: #a6e3a1;
+  --emdb-red: #f38ba8;
+  --emdb-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --emdb-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+.emdb {
+  font-family: var(--emdb-font);
+  font-size: 13px;
+  color: var(--emdb-text);
+  background: var(--emdb-base);
+  border: 1px solid var(--emdb-surface0);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 75%;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* Header ------------------------------------------------------------- */
+.emdb-header {
+  padding: 12px 14px 10px;
+  background: linear-gradient(#1c1c2b, var(--emdb-mantle));
+  border-bottom: 1px solid var(--emdb-surface0);
+}
+.emdb-header-top { display: flex; align-items: center; justify-content: space-between; }
+.emdb-brand { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+.emdb-diamond {
+  background: linear-gradient(135deg, var(--emdb-blue), var(--emdb-mauve));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  margin-right: 4px;
+}
+.emdb-count { font-size: 11.5px; color: var(--emdb-subtext); }
+.emdb-search {
+  margin-top: 10px; width: 100%; box-sizing: border-box;
+  background: var(--emdb-crust); color: var(--emdb-text);
+  border: 1px solid var(--emdb-surface0); border-radius: 7px;
+  padding: 6px 10px; font-size: 12.5px; font-family: var(--emdb-font); outline: none;
+}
+.emdb-search::placeholder { color: var(--emdb-muted); }
+.emdb-search:focus { border-color: var(--emdb-blue); }
+
+/* Tabs --------------------------------------------------------------- */
+.emdb-tabs {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  padding: 8px 12px; background: var(--emdb-mantle);
+  border-bottom: 1px solid var(--emdb-surface0);
+}
+.emdb-tab {
+  cursor: pointer; font-family: var(--emdb-font); font-size: 11.5px; font-weight: 600;
+  color: var(--emdb-subtext); background: transparent;
+  border: 1px solid transparent; border-radius: 999px; padding: 3px 11px;
+}
+.emdb-tab:hover { color: var(--emdb-text); background: var(--emdb-overlay); }
+.emdb-tab.active {
+  color: var(--emdb-blue); background: rgba(137, 180, 250, 0.14);
+  border-color: rgba(137, 180, 250, 0.4);
+}
+
+/* Body: list + details ---------------------------------------------- */
+.emdb-body { display: flex; height: 440px; }
+/* List is only as wide as its content (the longest row); the details panel,
+   with the description, takes all the remaining width. */
+.emdb-list {
+  flex: 0 1 auto; width: max-content; max-width: 62%; min-width: 560px;
+  overflow-y: auto; border-right: 1px solid var(--emdb-surface0);
+}
+.emdb-details { flex: 1 1 0; overflow-y: auto; padding: 14px 18px; background: var(--emdb-mantle); }
+
+/* Scrollbars (both columns) */
+.emdb-list, .emdb-details { scrollbar-width: thin; scrollbar-color: var(--emdb-surface1) transparent; }
+.emdb-list::-webkit-scrollbar, .emdb-details::-webkit-scrollbar { width: 10px; height: 10px; }
+.emdb-list::-webkit-scrollbar-track, .emdb-details::-webkit-scrollbar-track { background: transparent; }
+.emdb-list::-webkit-scrollbar-thumb, .emdb-details::-webkit-scrollbar-thumb {
+  background: var(--emdb-surface1); border-radius: 6px;
+  border: 3px solid transparent; background-clip: padding-box;
+}
+.emdb-list::-webkit-scrollbar-thumb:hover, .emdb-details::-webkit-scrollbar-thumb:hover {
+  background: var(--emdb-surface2); border-width: 2px;
+}
+
+.emdb-group-head {
+  position: sticky; top: 0; z-index: 1;
+  padding: 6px 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--emdb-muted);
+  background: var(--emdb-base); border-bottom: 1px solid var(--emdb-surface0);
+}
+.emdb-empty, .emdb-details-empty { padding: 18px 14px; color: var(--emdb-muted); font-size: 12px; }
+
+.emdb-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 14px; cursor: pointer;
+  border-bottom: 1px solid rgba(49, 50, 68, 0.5);
+}
+.emdb-row:hover { background: var(--emdb-overlay); }
+.emdb-row.selected { background: rgba(137, 180, 250, 0.1); box-shadow: inset 2px 0 0 var(--emdb-blue); }
+.emdb-glyph { flex: 0 0 auto; width: 12px; text-align: center; font-size: 10px; }
+.emdb-glyph.on { color: var(--emdb-green); }
+.emdb-glyph.off { color: var(--emdb-muted); }
+.emdb-glyph.shared { color: var(--emdb-blue); }
+.emdb-name { font-weight: 600; white-space: nowrap; }
+.emdb-meta { flex: 1; color: var(--emdb-subtext); font-size: 11px; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emdb-actions { flex: 0 0 auto; min-width: 78px; text-align: right; }
+.emdb-check { color: var(--emdb-green); font-weight: 700; }
+.emdb-spinner { color: var(--emdb-blue); font-size: 11px; }
+
+.emdb-dl {
+  cursor: pointer; font-family: var(--emdb-font); font-size: 11.5px; font-weight: 600;
+  color: var(--emdb-crust); background: var(--emdb-blue); border: 0;
+  border-radius: 6px; padding: 4px 12px;
+}
+.emdb-dl:hover { filter: brightness(1.08); }
+.emdb-dl:active { transform: translateY(1px); }
+
+/* Details panel content */
+.emdb-d-title { font-size: 15px; font-weight: 700; }
+.emdb-d-sub { margin-top: 2px; font-size: 11px; color: var(--emdb-subtext); }
+.emdb-d-status { margin: 10px 0 12px; display: flex; align-items: center; gap: 10px; }
+.emdb-kind {
+  margin-left: 8px; vertical-align: middle; padding: 1px 7px; border-radius: 999px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--emdb-mauve); border: 1px solid var(--emdb-surface1);
+}
+.emdb-version {
+  margin-left: 8px; vertical-align: middle; padding: 1px 6px; border-radius: 6px;
+  font-family: var(--emdb-mono); font-size: 10.5px; font-weight: 600;
+  color: var(--emdb-subtext); background: var(--emdb-surface0);
+  border: 1px solid var(--emdb-surface1); cursor: pointer;
+}
+.emdb-version:hover { color: var(--emdb-text); }
+.emdb-d-badge { font-size: 11.5px; color: var(--emdb-subtext); }
+.emdb-d-badge.on { color: var(--emdb-green); font-weight: 600; }
+.emdb-d-badge.shared { color: var(--emdb-blue); font-weight: 600; }
+.emdb-delete {
+  cursor: pointer; font-family: var(--emdb-font); font-size: 11px; font-weight: 600;
+  color: var(--emdb-red); background: transparent;
+  border: 1px solid var(--emdb-surface1); border-radius: 6px; padding: 3px 10px;
+}
+.emdb-delete:hover { border-color: var(--emdb-red); background: rgba(243, 139, 168, 0.1); }
+.emdb-d-desc { margin: 0 0 12px; font-size: 12px; line-height: 1.5; color: var(--emdb-text); }
+.emdb-d-meta {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 5px 20px;
+}
+.emdb-kv { display: flex; gap: 8px; font-size: 11.5px; }
+.emdb-k { flex: 0 0 82px; color: var(--emdb-muted); }
+.emdb-v { flex: 1; color: var(--emdb-text); word-break: break-word; }
+
+/* Load block: copy snippet / path */
+.emdb-load-label {
+  margin: 14px 0 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--emdb-muted);
+}
+.emdb-copy {
+  display: flex; align-items: stretch; gap: 6px; margin-bottom: 6px;
+}
+.emdb-code {
+  flex: 1; min-width: 0; font-family: var(--emdb-mono); font-size: 11.5px;
+  color: var(--emdb-text); background: var(--emdb-crust);
+  border: 1px solid var(--emdb-surface0); border-radius: 6px; padding: 7px 9px;
+  white-space: pre-wrap; word-break: break-word;   /* wrap, never scroll */
+}
+.emdb-copy.path .emdb-code { color: var(--emdb-subtext); }
+.emdb-copy-btn {
+  flex: 0 0 auto; cursor: pointer; font-family: var(--emdb-font);
+  font-size: 11px; font-weight: 600; color: var(--emdb-blue);
+  background: transparent; border: 1px solid var(--emdb-surface1);
+  border-radius: 6px; padding: 0 10px;
+}
+.emdb-copy-btn:hover { border-color: var(--emdb-blue); background: rgba(137, 180, 250, 0.1); }
+.emdb-copy-btn.copied { color: var(--emdb-green); border-color: var(--emdb-green); }
+
+/* Single-dataset card (display(dataset)) --------------------------- */
+.emdb-card-host { max-width: 75%; }
+.emdb-card { padding: 18px 20px; }
+/* Two columns: a wide description (+ load) on the left, metadata on the right,
+   so the description gets the space and nothing sprawls edge to edge. */
+.emdb-card-cols {
+  display: grid; grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 28px; align-items: start; margin-top: 4px;
+}
+.emdb-card-col-main { min-width: 0; }
+.emdb-card .emdb-d-desc { max-width: none; }           /* fill the main column */
+.emdb-card-col-side .emdb-d-meta { grid-template-columns: 1fr; }
+.emdb-inline-toast {
+  margin: 2px 0 12px; display: flex; flex-direction: column; gap: 6px;
+  background: var(--emdb-mantle); border: 1px solid var(--emdb-surface0);
+  border-radius: 8px; padding: 8px 10px;
+}
+.emdb-inline-toast.cancelling { opacity: 0.65; }
+.emdb-inline-toast.error { border-color: var(--emdb-red); }
+
+/* Toasts: pinned to the bottom-right of the viewport ----------------- */
+.emdb-toast-root {
+  position: fixed; right: 16px; bottom: 16px; z-index: 99999;
+  display: flex; flex-direction: column; gap: 10px; width: 300px;
+  font-family: var(--emdb-font);
+}
+.emdb-toast {
+  background: var(--emdb-base); border: 1px solid var(--emdb-surface0);
+  border-radius: 9px; padding: 10px 12px; color: var(--emdb-text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  display: flex; flex-direction: column; gap: 7px;
+}
+.emdb-toast.error { border-color: var(--emdb-red); }
+.emdb-toast.cancelling { opacity: 0.65; }
+.emdb-x:disabled { opacity: 0.5; cursor: default; }
+.emdb-toast-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.emdb-toast-title { font-size: 12.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emdb-x {
+  flex: 0 0 auto; cursor: pointer; line-height: 1;
+  background: transparent; color: var(--emdb-subtext);
+  border: 1px solid var(--emdb-surface1); border-radius: 5px;
+  padding: 4px 9px; font-size: 13px;
+}
+.emdb-x:hover { color: var(--emdb-red); border-color: var(--emdb-red); background: rgba(243, 139, 168, 0.12); }
+.emdb-toast-err { font-size: 11px; color: var(--emdb-red); word-break: break-word; }
+.emdb-track { height: 6px; border-radius: 3px; background: var(--emdb-surface0); overflow: hidden; }
+.emdb-fill {
+  height: 100%; border-radius: 3px; transition: width 200ms linear;
+  background: linear-gradient(90deg, var(--emdb-blue), var(--emdb-mauve));
+}
+.emdb-fill.indet { animation: emdb-slide 1.2s ease-in-out infinite; }
+.emdb-bytes { font-size: 10.5px; color: var(--emdb-subtext); }
+
+@keyframes emdb-slide {
+  0% { margin-left: 0%; }
+  50% { margin-left: 68%; }
+  100% { margin-left: 0%; }
+}
+
+
+:root {
+  --emdb-base: #1e1e2e; --emdb-mantle: #181825; --emdb-crust: #11111b;
+  --emdb-surface0: #313244; --emdb-surface1: #45475a; --emdb-surface2: #585b70;
+  --emdb-overlay: #2a2a3c; --emdb-text: #cdd6f4; --emdb-subtext: #a6adc8;
+  --emdb-muted: #7f849c; --emdb-blue: #89b4fa; --emdb-mauve: #cba6f7;
+  --emdb-green: #a6e3a1; --emdb-red: #f38ba8; --emdb-yellow: #f9e2af;
+  --emdb-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --emdb-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--emdb-base); color: var(--emdb-text);
+  font-family: var(--emdb-font); font-size: 16px; line-height: 1.55; min-height: 100vh;
+}
+a { color: var(--emdb-blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Top navigation ----------------------------------------------------- */
+.app-nav {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 10px 22px; background: linear-gradient(#1c1c2b, var(--emdb-mantle));
+  border-bottom: 1px solid var(--emdb-surface0); box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+}
+.app-brand {
+  font-size: 16px; font-weight: 800; letter-spacing: 0.2px; margin-right: auto;
+  display: flex; align-items: center; gap: 8px; color: var(--emdb-text);
+}
+.app-brand:hover { text-decoration: none; }
+.app-brand .diamond {
+  background: linear-gradient(135deg, var(--emdb-blue), var(--emdb-mauve));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.app-navlink {
+  font-size: 14px; font-weight: 600; color: var(--emdb-subtext);
+  padding: 7px 15px; border-radius: 999px; border: 1px solid transparent;
+}
+.app-navlink:hover { color: var(--emdb-text); background: var(--emdb-overlay); text-decoration: none; }
+.app-navlink.active {
+  color: var(--emdb-blue); background: rgba(137, 180, 250, 0.14);
+  border-color: rgba(137, 180, 250, 0.4);
+}
+
+.app-main { max-width: 100%; margin: 0; padding: 20px 40px 60px; }
+
+/* Hero --------------------------------------------------------------- */
+.app-hero { text-align: center; padding: 30px 0 14px; }
+.app-hero h1 {
+  margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1;
+  background: linear-gradient(135deg, #89b4fa, #cba6f7);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.app-hero p { margin: 12px auto 0; max-width: 720px; color: var(--emdb-subtext); font-size: 16px; }
+.app-hero code {
+  font-family: var(--emdb-mono); background: var(--emdb-crust);
+  border: 1px solid var(--emdb-surface0); border-radius: 5px; padding: 1px 6px; color: var(--emdb-text);
+}
+
+
+.form-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 430px); gap: 26px; align-items: start; }
+@media (max-width: 900px) { .form-wrap { grid-template-columns: 1fr; } .yaml-side { position: static; } }
+.ds-form { display: flex; flex-direction: column; gap: 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--emdb-muted); }
+.field .req { color: var(--emdb-red); }
+.field-hint { font-size: 11px; color: var(--emdb-subtext); }
+.field input, .field textarea, .field select {
+  width: 100%; box-sizing: border-box;
+  background: var(--emdb-crust); color: var(--emdb-text);
+  border: 1px solid var(--emdb-surface0); border-radius: 7px; padding: 8px 10px;
+  font-size: 13px; font-family: var(--emdb-font); outline: none;
+}
+.field textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--emdb-blue); }
+.field input.invalid, .field textarea.invalid, .field select.invalid { border-color: var(--emdb-red); }
+.field-err { font-size: 11px; color: var(--emdb-red); min-height: 13px; }
+.section-title {
+  font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--emdb-subtext); margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--emdb-surface0);
+}
+#authors { display: flex; flex-direction: column; gap: 12px; }
+.author-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+  background: var(--emdb-mantle); border: 1px solid var(--emdb-surface0); border-radius: 9px; padding: 12px;
+}
+@media (max-width: 620px) { .author-row { grid-template-columns: 1fr; } }
+.btn-ghost {
+  align-self: flex-start; cursor: pointer; font-weight: 600; font-size: 12px;
+  background: var(--emdb-surface0); color: var(--emdb-text);
+  border: 1px solid var(--emdb-surface1); border-radius: 7px; padding: 6px 12px;
+}
+.btn-ghost:hover { border-color: var(--emdb-blue); color: var(--emdb-blue); }
+
+.yaml-side { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 12px; }
+.yaml-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--emdb-muted);
+}
+.yaml-pre {
+  margin: 0; background: var(--emdb-crust); border: 1px solid var(--emdb-surface0);
+  border-radius: 10px; padding: 14px; max-height: 440px; overflow: auto;
+  font-family: var(--emdb-mono); font-size: 12px; color: var(--emdb-text); white-space: pre;
+}
+.submit-row { display: flex; flex-direction: column; gap: 10px; }
+.btn-primary {
+  cursor: pointer; font-weight: 700; font-size: 14px; text-align: center;
+  color: var(--emdb-crust); background: linear-gradient(135deg, var(--emdb-blue), var(--emdb-mauve));
+  border: 0; border-radius: 9px; padding: 12px 16px;
+}
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.3); }
+.btn-primary:not(:disabled):hover { filter: brightness(1.06); }
+.btn-secondary {
+  text-align: center; font-size: 12px; font-weight: 600; color: var(--emdb-subtext);
+  border: 1px solid var(--emdb-surface1); border-radius: 8px; padding: 9px 14px;
+}
+.btn-secondary:hover { color: var(--emdb-text); border-color: var(--emdb-blue); text-decoration: none; }
+.copy-mini {
+  cursor: pointer; font-size: 11px; font-weight: 600; color: var(--emdb-blue);
+  background: transparent; border: 1px solid var(--emdb-surface1); border-radius: 6px; padding: 2px 9px;
+}
+.copy-mini:hover { border-color: var(--emdb-blue); background: rgba(137, 180, 250, 0.1); }
+.copy-mini.copied { color: var(--emdb-green); border-color: var(--emdb-green); }
+.form-note { font-size: 11.5px; color: var(--emdb-subtext); line-height: 1.55; }
+.form-note code { font-family: var(--emdb-mono); color: var(--emdb-text); }
+
+</style>
+</head>
+<body>
+<nav class="app-nav"><a class="app-brand" href="index.html">EM-Database</a><a class="app-navlink" href="examples/index.html">Examples</a><a class="app-navlink" href="reference/index.html">API</a><a class="app-navlink" href="all_data.html">All Data</a><a class="app-navlink" href="weights.html">Model Weights</a><a class="app-navlink active" href="add_dataset.html">Add Dataset</a></nav>
+<main class="app-main"><div class="app-hero" style="padding:24px 0 6px"><h1 style="font-size:32px">Add a Dataset</h1><p>Fill in the metadata; the YAML builds live on the right. &ldquo;Open a Pull Request&rdquo; sends you to GitHub with the new file pre-filled &mdash; commit it to a branch there and GitHub opens the PR.</p><p>From a terminal, <code>python -m emdatabase.new_dataset &lt;url&gt;</code> fills in the checksum and size for you; see <a href="contributing.html">Contributing a Dataset</a>.</p></div><div class="form-wrap"><form id="ds-form" class="ds-form" autocomplete="off"><div class="grid2"><div class="field" style="grid-column:1/-1"><label for="f-name">Dataset Name <span class="req">*</span></label><div class="field-hint">Short CamelCase identifier - becomes the YAML key and file name.</div><input id="f-name" type="text" placeholder="MgONanoCrystals"><div class="field-err" id="err-f-name"></div></div><div class="field" style="grid-column:1/-1"><label for="f-description">Description <span class="req">*</span></label><div class="field-hint">Technique, sample, size, and anything notable.</div><textarea id="f-description" placeholder="A 4D-STEM dataset of ..."></textarea><div class="field-err" id="err-f-description"></div></div><div class="field"><label for="f-source">Source URL <span class="req">*</span></label><div class="field-hint">Direct download base (no file name).</div><input id="f-source" type="text" placeholder="https://zenodo.org/records/15490547/files"><div class="field-err" id="err-f-source"></div></div><div class="field" style="grid-column:1/-1"><label for="f-url">Download URL</label><div class="field-hint">Only when the download link is not &lt;source&gt;/&lt;file&gt; - a Google Drive uc?export=download&amp;id= link, or anything else with a query string. File stays the name the file is saved under.</div><input id="f-url" type="text" placeholder="https://drive.google.com/uc?export=download&amp;id=&lt;id&gt;"><div class="field-err" id="err-f-url"></div></div><div class="field"><label for="f-checksum">Checksum</label><div class="field-hint">md5:&lt;32 hex chars&gt;</div><input id="f-checksum" type="text" placeholder="md5:df9376d5c020a23f0f7f51cfe79f303f"><div class="field-err" id="err-f-checksum"></div></div><div class="field"><label for="f-file">File <span class="req">*</span></label><div class="field-hint">The file name at that source.</div><input id="f-file" type="text" placeholder="smallPtychography.hspy"><div class="field-err" id="err-f-file"></div></div><div class="field"><label for="f-size_bytes">Size (bytes)</label><div class="field-hint">The file&#39;s Content-Length, in bytes.</div><input id="f-size_bytes" type="text" placeholder="1104287335"><div class="field-err" id="err-f-size_bytes"></div></div><div class="field"><label for="f-detector_manufacturer">Detector Manufacturer</label><input id="f-detector_manufacturer" type="text" list="f-detector_manufacturer-list" placeholder="Direct Electron"><datalist id="f-detector_manufacturer-list"><option value="Allied Vision"><option value="Dectris"><option value="Direct Electron"><option value="Gatan"><option value="NORDIF"><option value="Quantum Detectors"><option value="Thermo Fisher Scientific"><option value="TVIPS"></datalist><div class="field-err" id="err-f-detector_manufacturer"></div></div><div class="field"><label for="f-detector">Detector</label><input id="f-detector" type="text" placeholder="CeleritasXS"><div class="field-err" id="err-f-detector"></div></div><div class="field"><label for="f-microscope_vendor">Microscope Vendor</label><input id="f-microscope_vendor" type="text" list="f-microscope_vendor-list" placeholder="Thermo Fisher Scientific"><datalist id="f-microscope_vendor-list"><option value="Hitachi"><option value="JEOL"><option value="Thermo Fisher Scientific"><option value="Zeiss"></datalist><div class="field-err" id="err-f-microscope_vendor"></div></div><div class="field"><label for="f-microscope_model">Microscope Model</label><input id="f-microscope_model" type="text" placeholder="Gen 1 Titan"><div class="field-err" id="err-f-microscope_model"></div></div><div class="field"><label for="f-camera_length">Camera Length</label><input id="f-camera_length" type="text" placeholder="e.g. 100 mm"><div class="field-err" id="err-f-camera_length"></div></div><div class="field"><label for="f-voltage">Voltage</label><div class="field-hint">e.g. 200 kV</div><input id="f-voltage" type="text" placeholder="200 kV"><div class="field-err" id="err-f-voltage"></div></div><div class="field"><label for="f-license">License</label><input id="f-license" type="text" placeholder="CC-BY-4.0"><div class="field-err" id="err-f-license"></div></div><div class="field"><label for="f-technique">Technique</label><select id="f-technique"><option value="">&mdash; select &mdash;</option><option value="4D-STEM">4D-STEM</option><option value="EELS">EELS</option><option value="EDS">EDS</option><option value="EBSD">EBSD</option><option value="STEM">STEM</option><option value="In-situ TEM">In-situ TEM</option><option value="Cryo-EM">Cryo-EM</option><option value="Other">Other</option></select><div class="field-err" id="err-f-technique"></div></div><div class="field"><label for="f-doi">DOI</label><input id="f-doi" type="text" placeholder="10.5281/zenodo.15490547"><div class="field-err" id="err-f-doi"></div></div><div class="field" style="grid-column:1/-1"><label for="f-tags">Tags</label><div class="field-hint">Comma-separated.</div><input id="f-tags" type="text" placeholder="Orientation Mapping, Nanocrystals"><div class="field-err" id="err-f-tags"></div></div></div><div class="section-title">Authors</div><div id="authors"><div class="author-row"><div class="field"><label>Name</label><input class="a-name" type="text" placeholder="Jane Doe"><div class="field-err a-name-err"></div></div><div class="field"><label>Affiliation <span class="req">*</span></label><input class="a-aff" type="text" placeholder="University of ..."><div class="field-err a-aff-err"></div></div><div class="field"><label>ORCID</label><input class="a-orcid" type="text" placeholder="0000-0000-0000-0000"><div class="field-err a-orcid-err"></div></div></div></div><button type="button" id="add-author" class="btn-ghost">+ Add author</button><div class="section-title">Entry</div><div class="grid2"><div class="field"><label for="f-kind">Kind</label><div class="field-hint">What the entry hands out.</div><select id="f-kind"><option value="dataset" selected>dataset</option><option value="weights">weights</option></select><div class="field-err" id="err-f-kind"></div></div></div><div id="model-group" hidden><div class="section-title">Model</div><div class="field-hint" style="margin-bottom:10px">Model weights only - a dataset entry with a model block is rejected. The class and framework are required.</div><div class="grid2"><div class="field" style="grid-column:1/-1"><label for="f-model_class">Model Class <span class="req">*</span></label><div class="field-hint">Dotted import path of the class the checkpoint loads into.</div><input id="f-model_class" type="text" placeholder="quantem.core.ml.CNN2d"><div class="field-err" id="err-f-model_class"></div></div><div class="field"><label for="f-model_framework">Framework <span class="req">*</span></label><input id="f-model_framework" type="text" placeholder="torch"><div class="field-err" id="err-f-model_framework"></div></div><div class="field"><label for="f-model_quantem">quantem Versions</label><div class="field-hint">The versions the checkpoint loads under.</div><input id="f-model_quantem" type="text" placeholder="&gt;=0.2,&lt;0.3"><div class="field-err" id="err-f-model_quantem"></div></div><div class="field"><label for="f-version_date">Version Date</label><div class="field-hint">YYMMDD of the first dated version; today if blank.</div><input id="f-version_date" type="text" placeholder="260902"><div class="field-err" id="err-f-version_date"></div></div></div></div></form><aside class="yaml-side"><div class="yaml-head"><span>Generated YAML</span><button type="button" id="copy-yaml" class="copy-mini">Copy</button></div><pre id="yaml-preview" class="yaml-pre"><code></code></pre><div class="submit-row"><button type="button" id="submit-pr" class="btn-primary" disabled>Open a Pull Request on GitHub &#8599;</button><a id="submit-issue" class="btn-secondary" target="_blank" rel="noopener" href="https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml">Submit as an issue instead</a></div><p class="form-note">Requires a GitHub account. The button opens GitHub&rsquo;s &ldquo;create new file&rdquo; page pre-filled at <code>emdatabase/index/&lt;Name&gt;.yaml</code>; if you cannot push to the repo, GitHub forks it for you and lets you propose the change. Fields marked <span class="req">*</span> are required.</p></aside></div></main>
+<script>
+
+// Build one entry's YAML from a plain object of field values. Pure - the form
+// and the DOM stay with the caller - so the test suite can run it under node.
+// Key order matches new_dataset.FIELD_ORDER, so the web form, the issue form
+// and the CLI all write the same file.
+
+// The YAML key and the file name. An underscore survives, because a name may
+// carry one - `AmorphousFilm4nm_4DSTEM`.
+function emdbEntryName(value) {
+  return String(value == null ? "" : value).replace(/[^A-Za-z0-9_]+/g, "");
+}
+
+// Today as YYMMDD, the label a new weights version is filed under.
+function emdbVersionDate() {
+  var d = new Date();
+  function two(n) { return ("0" + n).slice(-2); }
+  return two(d.getFullYear() % 100) + two(d.getMonth() + 1) + two(d.getDate());
+}
+
+// Emit a YAML scalar: plain when safe, double-quoted (with escapes) otherwise.
+function emdbYamlStr(v) {
+  v = String(v);
+  if (v === "") return '""';
+  if (/\n/.test(v)) {
+    return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n").replace(/\t/g, "\\t") + '"';
+  }
+  var risky = /^\s|\s$/.test(v)
+    || /^[-?:,\[\]{}#&*!|>'"%@`]/.test(v)
+    || /:(\s|$)/.test(v)
+    || /\s#/.test(v)
+    || /^(true|false|null|yes|no|on|off|~)$/i.test(v)
+    || /^[-+]?(\d[\d_]*\.?\d*([eE][-+]?\d+)?)$/.test(v);
+  if (risky) return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  return v;
+}
+
+function emdbBuildYaml(fields) {
+  function get(key) {
+    var v = fields[key];
+    return v == null ? "" : String(v).trim();
+  }
+  var name = emdbEntryName(get("name")) || "DatasetName";
+  var lines = ["# $schema: ./json-schema.json", name + ":"];
+  function add(key, value) {
+    if (value) lines.push("  " + key + ": " + emdbYamlStr(value));
+  }
+  // A weights entry writes these inside `latest` and its dated version instead.
+  var weights = get("kind") === "weights";
+  var bytes = get("size_bytes").replace(/[^0-9]/g, "");
+  add("description", get("description"));
+  add("source", get("source"));
+  if (!weights) {
+    add("url", get("url"));
+    add("checksum", get("checksum"));
+  }
+  add("file", get("file"));
+  if (bytes && !weights) lines.push("  size_bytes: " + bytes);
+  add("detector_manufacturer", get("detector_manufacturer"));
+  add("detector", get("detector"));
+  add("microscope_vendor", get("microscope_vendor"));
+  add("microscope_model", get("microscope_model"));
+  add("camera_length", get("camera_length"));
+  add("voltage", get("voltage"));
+  add("license", get("license"));
+  add("technique", get("technique"));
+  add("doi", get("doi"));
+  var tags = (fields.tags || []).map(function (t) { return String(t).trim(); }).filter(Boolean);
+  if (tags.length) {
+    lines.push("  tags:");
+    tags.forEach(function (t) { lines.push("    - " + emdbYamlStr(t)); });
+  }
+  var authors = (fields.authors || []).filter(function (a) { return a && a.name; });
+  if (authors.length) {
+    lines.push("  authors:");
+    authors.forEach(function (a) {
+      lines.push("    " + emdbYamlStr(a.name) + ":");
+      lines.push("      affiliation: " + emdbYamlStr(a.aff || ""));
+      if (a.orcid) lines.push("      orcid: " + emdbYamlStr(a.orcid));
+    });
+  }
+  // `kind` is always written, `dataset` included; only a weights entry may
+  // carry a model block, a `latest` link and dated versions.
+  lines.push("  kind: " + (weights ? "weights" : "dataset"));
+  if (weights) {
+    var model = [
+      ["class", get("model_class")],
+      ["framework", get("model_framework")],
+      ["quantem", get("model_quantem")]
+    ].filter(function (pair) { return pair[1]; });
+    if (model.length) {
+      lines.push("  model:");
+      model.forEach(function (pair) {
+        lines.push("    " + pair[0] + ": " + emdbYamlStr(pair[1]));
+      });
+    }
+    var pin = [
+      ["url", get("url") || (get("source") + "/" + get("file"))],
+      ["checksum", get("checksum")]
+    ].filter(function (pair) { return pair[1]; });
+    if (bytes) pin.push(["size_bytes", bytes]);
+    lines.push("  latest:");
+    pin.forEach(function (pair) {
+      lines.push("    " + pair[0] + ": " + (pair[0] === "size_bytes" ? pair[1]
+        : emdbYamlStr(pair[1])));
+    });
+    lines.push("  versions:");
+    lines.push('    "' + (get("version_date") || emdbVersionDate()) + '":');
+    pin.forEach(function (pair) {
+      lines.push("      " + pair[0] + ": " + (pair[0] === "size_bytes" ? pair[1]
+        : emdbYamlStr(pair[1])));
+    });
+  }
+  return lines.join("\n") + "\n";
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { emdbBuildYaml: emdbBuildYaml, emdbEntryName: emdbEntryName };
+}
+
+(function () {
+  var REPO = "electronmicroscopy/emdatabase", BRANCH = "main";
+  var form = document.getElementById("ds-form");
+  var preview = document.querySelector("#yaml-preview code");
+  var submitPr = document.getElementById("submit-pr");
+  var copyBtn = document.getElementById("copy-yaml");
+  var addAuthor = document.getElementById("add-author");
+  var authorsBox = document.getElementById("authors");
+  var modelGroup = document.getElementById("model-group");
+
+  var SCALARS = [
+    "name", "description", "source", "url", "checksum", "file", "size_bytes",
+    "detector_manufacturer", "detector", "microscope_vendor", "microscope_model",
+    "camera_length", "voltage", "license", "technique", "doi",
+    "kind", "version_date", "model_class", "model_framework", "model_quantem"
+  ];
+
+  function val(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
+
+  function authors() {
+    var out = [];
+    form.querySelectorAll(".author-row").forEach(function (r) {
+      var name = r.querySelector(".a-name").value.trim();
+      if (name) {
+        out.push({
+          name: name,
+          aff: r.querySelector(".a-aff").value.trim(),
+          orcid: r.querySelector(".a-orcid").value.trim()
+        });
+      }
+    });
+    return out;
+  }
+
+  function collect() {
+    var fields = {};
+    SCALARS.forEach(function (key) { fields[key] = val("f-" + key); });
+    fields.tags = val("f-tags").split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+    fields.authors = authors();
+    return fields;
+  }
+
+  function setError(id, msg) {
+    var e = document.getElementById("err-" + id);
+    if (e) e.textContent = msg || "";
+    var field = document.getElementById(id);
+    if (field) field.classList.toggle("invalid", !!msg);
+  }
+
+  function requireField(id) {
+    var ok = !!val(id);
+    setError(id, ok ? "" : "Required");
+    return ok;
+  }
+
+  function validate() {
+    var ok = true;
+    if (!emdbEntryName(val("f-name"))) { setError("f-name", "Required"); ok = false; }
+    else setError("f-name", "");
+    if (!requireField("f-description")) ok = false;
+    var src = val("f-source");
+    if (!src) { setError("f-source", "Required"); ok = false; }
+    else if (!/^https?:\/\/\S+$/i.test(src)) { setError("f-source", "Must be an http(s) URL"); ok = false; }
+    else setError("f-source", "");
+    var url = val("f-url");
+    if (url && !/^https?:\/\/\S+$/i.test(url)) { setError("f-url", "Must be an http(s) URL"); ok = false; }
+    else setError("f-url", "");
+    if (!requireField("f-file")) ok = false;
+    var cs = val("f-checksum");
+    if (cs && !/^md5:[0-9a-fA-F]{32}$/.test(cs)) { setError("f-checksum", "Must match md5:<32 hex>"); ok = false; }
+    else setError("f-checksum", "");
+    var volt = val("f-voltage");
+    if (volt && !/^[0-9]+\s?kV$/.test(volt)) { setError("f-voltage", "e.g. 200 kV"); ok = false; }
+    else setError("f-voltage", "");
+    var vdate = val("f-version_date");
+    if (vdate && !/^\d{6}$/.test(vdate)) { setError("f-version_date", "YYMMDD, or blank for today"); ok = false; }
+    else setError("f-version_date", "");
+    if (val("f-kind") === "weights") {
+      if (!requireField("f-model_class")) ok = false;
+      if (!requireField("f-model_framework")) ok = false;
+    } else {
+      setError("f-model_class", "");
+      setError("f-model_framework", "");
+    }
+    form.querySelectorAll(".author-row").forEach(function (r) {
+      var n = r.querySelector(".a-name"), a = r.querySelector(".a-aff"), o = r.querySelector(".a-orcid");
+      var ae = r.querySelector(".a-aff-err"), oe = r.querySelector(".a-orcid-err");
+      if (n.value.trim() && !a.value.trim()) { if (ae) ae.textContent = "Affiliation required"; a.classList.add("invalid"); ok = false; }
+      else { if (ae) ae.textContent = ""; a.classList.remove("invalid"); }
+      if (o.value.trim() && !/^\d{4}-\d{4}-\d{4}-\d{4}$/.test(o.value.trim())) { if (oe) oe.textContent = "0000-0000-0000-0000"; o.classList.add("invalid"); ok = false; }
+      else { if (oe) oe.textContent = ""; o.classList.remove("invalid"); }
+    });
+    return ok;
+  }
+
+  function refresh() {
+    modelGroup.hidden = val("f-kind") !== "weights";
+    preview.textContent = emdbBuildYaml(collect());
+    submitPr.disabled = !validate();
+  }
+
+  function copyText(text, btn) {
+    var done = function () {
+      var old = btn.textContent; btn.textContent = "Copied!"; btn.classList.add("copied");
+      setTimeout(function () { btn.textContent = old; btn.classList.remove("copied"); }, 1100);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
+    } else { fallbackCopy(text, done); }
+  }
+  function fallbackCopy(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) {}
+    ta.remove();
+  }
+
+  form.addEventListener("input", refresh);
+  form.addEventListener("change", refresh);
+
+  addAuthor.addEventListener("click", function () {
+    var tmp = document.createElement("div");
+    tmp.innerHTML = authorsBox.querySelector(".author-row").outerHTML;
+    var row = tmp.firstChild;
+    row.querySelectorAll("input").forEach(function (i) { i.value = ""; i.classList.remove("invalid"); });
+    row.querySelectorAll(".field-err").forEach(function (e) { e.textContent = ""; });
+    authorsBox.appendChild(row);
+    refresh();
+  });
+
+  copyBtn.addEventListener("click", function () { copyText(emdbBuildYaml(collect()), copyBtn); });
+
+  submitPr.addEventListener("click", function () {
+    if (!validate()) { refresh(); return; }
+    var name = emdbEntryName(val("f-name")) || "Dataset";
+    var url = "https://github.com/" + REPO + "/new/" + BRANCH
+      + "?filename=" + encodeURIComponent("emdatabase/index/" + name + ".yaml")
+      + "&value=" + encodeURIComponent(emdbBuildYaml(collect()));
+    window.open(url, "_blank", "noopener");
+  });
+
+  refresh();
+})();
+
+</script>
+</body></html>

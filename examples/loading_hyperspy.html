@@ -1,0 +1,499 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" data-theme="dark">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Loading Data with HyperSpy &#8212; emdatabase 0.5.0.dev0 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "dark";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "dark";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=cb8930eaaf36d9849b67" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=cb8930eaaf36d9849b67" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=fd6457a4" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=60a4c9d5" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=cb8930eaaf36d9849b67"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=cb8930eaaf36d9849b67" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=cb8930eaaf36d9849b67" />
+
+    <script src="../_static/documentation_options.js?v=be1c004d"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'examples/loading_hyperspy';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Loading Data into the quantem Package" href="loading_quantem.html" />
+    <link rel="prev" title="Examples" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="dark">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<nav class="app-nav">
+  <a class="app-brand" href="../index.html">EM-Database</a>
+  <a class="app-navlink active" href="index.html">Examples</a>
+  <a class="app-navlink" href="../reference/index.html">API</a>
+  <a class="app-navlink" href="../all_data.html">All Data</a>
+  <a class="app-navlink" href="../add_dataset.html">Add Dataset</a>
+</nav>
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../reference/index.html">
+    API
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../all_data.html">
+    All Data
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../weights.html">
+    Model Weights
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../add_dataset.html">
+    Add Dataset
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../contributing.html">
+    Contributing
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/electronmicroscopy/emdatabase" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Examples</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Loading Data with HyperSpy</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <div class="sphx-glr-download-link-note admonition note">
+<p class="admonition-title">Note</p>
+<p><a class="reference internal" href="#sphx-glr-download-examples-loading-hyperspy-py"><span class="std std-ref">Go to the end</span></a>
+to download the full example code.</p>
+</div>
+<section class="sphx-glr-example-title" id="loading-data-with-hyperspy">
+<span id="sphx-glr-examples-loading-hyperspy-py"></span><h1>Loading Data with HyperSpy<a class="headerlink" href="#loading-data-with-hyperspy" title="Link to this heading">#</a></h1>
+<p>This example demonstrates how to load and visualize data using the HyperSpy library.</p>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">hyperspy.api</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">hs</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">emdatabase.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">BilayerWS2</span>
+
+<span class="c1"># Load a dataset using HyperSpy</span>
+<span class="n">dataset</span> <span class="o">=</span> <span class="n">BilayerWS2</span><span class="p">()</span>
+<span class="n">data_path</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">download</span><span class="p">()</span>  <span class="c1"># Download the dataset if not already available</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">hs</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">data_path</span><span class="p">)</span>
+<span class="n">data</span>
+</pre></div>
+</div>
+<div class="sphx-glr-script-out highlight-none notranslate"><div class="highlight"><pre><span></span>smallPtychography.hspy:   0%|          | 0.00/12.5M [00:00&lt;?, ?B/s]
+smallPtychography.hspy:   0%|          | 41.0k/12.5M [00:00&lt;00:42, 291kB/s]
+smallPtychography.hspy:   1%|          | 115k/12.5M [00:00&lt;00:25, 491kB/s]
+smallPtychography.hspy:   1%|▏         | 172k/12.5M [00:00&lt;00:24, 504kB/s]
+smallPtychography.hspy:   2%|▏         | 229k/12.5M [00:00&lt;00:24, 511kB/s]
+smallPtychography.hspy:   2%|▏         | 311k/12.5M [00:00&lt;00:20, 593kB/s]
+smallPtychography.hspy:   3%|▎         | 377k/12.5M [00:00&lt;00:20, 594kB/s]
+smallPtychography.hspy:   4%|▎         | 438k/12.5M [00:00&lt;00:20, 582kB/s]
+smallPtychography.hspy:   4%|▍         | 500k/12.5M [00:00&lt;00:20, 575kB/s]
+smallPtychography.hspy:   5%|▍         | 569k/12.5M [00:01&lt;00:20, 594kB/s]
+smallPtychography.hspy:   5%|▌         | 635k/12.5M [00:01&lt;00:19, 594kB/s]
+smallPtychography.hspy:   6%|▌         | 750k/12.5M [00:01&lt;00:16, 725kB/s]
+smallPtychography.hspy:   7%|▋         | 864k/12.5M [00:01&lt;00:14, 828kB/s]
+smallPtychography.hspy:   8%|▊         | 979k/12.5M [00:01&lt;00:13, 864kB/s]
+smallPtychography.hspy:   9%|▉         | 1.11M/12.5M [00:01&lt;00:11, 959kB/s]
+smallPtychography.hspy:  10%|▉         | 1.21M/12.5M [00:01&lt;00:12, 939kB/s]
+smallPtychography.hspy:  10%|█         | 1.30M/12.5M [00:01&lt;00:12, 912kB/s]
+smallPtychography.hspy:  11%|█         | 1.40M/12.5M [00:01&lt;00:12, 894kB/s]
+smallPtychography.hspy:  12%|█▏        | 1.49M/12.5M [00:02&lt;00:12, 871kB/s]
+smallPtychography.hspy:  13%|█▎        | 1.58M/12.5M [00:02&lt;00:12, 856kB/s]
+smallPtychography.hspy:  13%|█▎        | 1.66M/12.5M [00:02&lt;00:13, 833kB/s]
+smallPtychography.hspy:  14%|█▍        | 1.75M/12.5M [00:02&lt;00:13, 816kB/s]
+smallPtychography.hspy:  15%|█▍        | 1.85M/12.5M [00:02&lt;00:12, 839kB/s]
+smallPtychography.hspy:  15%|█▌        | 1.93M/12.5M [00:02&lt;00:12, 821kB/s]
+smallPtychography.hspy:  16%|█▌        | 2.03M/12.5M [00:02&lt;00:12, 832kB/s]
+smallPtychography.hspy:  17%|█▋        | 2.13M/12.5M [00:02&lt;00:12, 849kB/s]
+smallPtychography.hspy:  18%|█▊        | 2.24M/12.5M [00:02&lt;00:11, 905kB/s]
+smallPtychography.hspy:  19%|█▊        | 2.33M/12.5M [00:03&lt;00:11, 889kB/s]
+smallPtychography.hspy:  20%|█▉        | 2.45M/12.5M [00:03&lt;00:10, 945kB/s]
+smallPtychography.hspy:  20%|██        | 2.55M/12.5M [00:03&lt;00:10, 904kB/s]
+smallPtychography.hspy:  22%|██▏       | 2.76M/12.5M [00:03&lt;00:08, 1.20MB/s]
+smallPtychography.hspy:  23%|██▎       | 2.88M/12.5M [00:03&lt;00:08, 1.16MB/s]
+smallPtychography.hspy:  24%|██▍       | 3.00M/12.5M [00:03&lt;00:08, 1.11MB/s]
+smallPtychography.hspy:  25%|██▍       | 3.12M/12.5M [00:03&lt;00:08, 1.09MB/s]
+smallPtychography.hspy:  26%|██▌       | 3.23M/12.5M [00:03&lt;00:08, 1.06MB/s]
+smallPtychography.hspy:  27%|██▋       | 3.34M/12.5M [00:03&lt;00:08, 1.05MB/s]
+smallPtychography.hspy:  28%|██▊       | 3.44M/12.5M [00:04&lt;00:08, 1.02MB/s]
+smallPtychography.hspy:  28%|██▊       | 3.55M/12.5M [00:04&lt;00:08, 995kB/s]
+smallPtychography.hspy:  29%|██▉       | 3.65M/12.5M [00:04&lt;00:11, 751kB/s]
+smallPtychography.hspy:  30%|██▉       | 3.74M/12.5M [00:04&lt;00:11, 770kB/s]
+smallPtychography.hspy:  31%|███       | 3.84M/12.5M [00:04&lt;00:10, 801kB/s]
+smallPtychography.hspy:  31%|███▏      | 3.93M/12.5M [00:04&lt;00:10, 795kB/s]
+smallPtychography.hspy:  32%|███▏      | 4.06M/12.5M [00:04&lt;00:09, 894kB/s]
+smallPtychography.hspy:  34%|███▍      | 4.24M/12.5M [00:04&lt;00:07, 1.10MB/s]
+smallPtychography.hspy:  35%|███▌      | 4.40M/12.5M [00:05&lt;00:06, 1.21MB/s]
+smallPtychography.hspy:  36%|███▌      | 4.53M/12.5M [00:05&lt;00:06, 1.19MB/s]
+smallPtychography.hspy:  37%|███▋      | 4.65M/12.5M [00:05&lt;00:06, 1.17MB/s]
+smallPtychography.hspy:  38%|███▊      | 4.77M/12.5M [00:05&lt;00:06, 1.14MB/s]
+smallPtychography.hspy:  39%|███▉      | 4.89M/12.5M [00:05&lt;00:06, 1.12MB/s]
+smallPtychography.hspy:  40%|████      | 5.00M/12.5M [00:05&lt;00:06, 1.10MB/s]
+smallPtychography.hspy:  41%|████      | 5.15M/12.5M [00:05&lt;00:06, 1.17MB/s]
+smallPtychography.hspy:  42%|████▏     | 5.27M/12.5M [00:05&lt;00:06, 1.14MB/s]
+smallPtychography.hspy:  43%|████▎     | 5.38M/12.5M [00:05&lt;00:06, 1.11MB/s]
+smallPtychography.hspy:  44%|████▍     | 5.50M/12.5M [00:06&lt;00:06, 1.09MB/s]
+smallPtychography.hspy:  45%|████▍     | 5.61M/12.5M [00:06&lt;00:06, 1.06MB/s]
+smallPtychography.hspy:  46%|████▌     | 5.72M/12.5M [00:06&lt;00:06, 1.04MB/s]
+smallPtychography.hspy:  47%|████▋     | 5.82M/12.5M [00:06&lt;00:06, 1.02MB/s]
+smallPtychography.hspy:  47%|████▋     | 5.93M/12.5M [00:06&lt;00:06, 990kB/s]
+smallPtychography.hspy:  48%|████▊     | 6.03M/12.5M [00:06&lt;00:06, 972kB/s]
+smallPtychography.hspy:  49%|████▉     | 6.16M/12.5M [00:06&lt;00:06, 1.05MB/s]
+smallPtychography.hspy:  50%|█████     | 6.27M/12.5M [00:06&lt;00:06, 1.02MB/s]
+smallPtychography.hspy:  51%|█████     | 6.37M/12.5M [00:06&lt;00:06, 992kB/s]
+smallPtychography.hspy:  52%|█████▏    | 6.48M/12.5M [00:07&lt;00:06, 973kB/s]
+smallPtychography.hspy:  53%|█████▎    | 6.59M/12.5M [00:07&lt;00:05, 993kB/s]
+smallPtychography.hspy:  54%|█████▎    | 6.71M/12.5M [00:07&lt;00:05, 1.01MB/s]
+smallPtychography.hspy:  54%|█████▍    | 6.81M/12.5M [00:07&lt;00:05, 962kB/s]
+smallPtychography.hspy:  55%|█████▌    | 6.91M/12.5M [00:07&lt;00:05, 939kB/s]
+smallPtychography.hspy:  56%|█████▋    | 7.03M/12.5M [00:07&lt;00:05, 991kB/s]
+smallPtychography.hspy:  57%|█████▋    | 7.13M/12.5M [00:07&lt;00:05, 973kB/s]
+smallPtychography.hspy:  58%|█████▊    | 7.23M/12.5M [00:07&lt;00:05, 948kB/s]
+smallPtychography.hspy:  59%|█████▉    | 7.34M/12.5M [00:07&lt;00:05, 965kB/s]
+smallPtychography.hspy:  60%|██████    | 7.52M/12.5M [00:08&lt;00:04, 1.17MB/s]
+smallPtychography.hspy:  61%|██████    | 7.65M/12.5M [00:08&lt;00:04, 1.17MB/s]
+smallPtychography.hspy:  62%|██████▏   | 7.78M/12.5M [00:08&lt;00:04, 1.18MB/s]
+smallPtychography.hspy:  63%|██████▎   | 7.90M/12.5M [00:08&lt;00:04, 1.15MB/s]
+smallPtychography.hspy:  64%|██████▍   | 8.02M/12.5M [00:08&lt;00:03, 1.13MB/s]
+smallPtychography.hspy:  65%|██████▌   | 8.13M/12.5M [00:08&lt;00:03, 1.10MB/s]
+smallPtychography.hspy:  66%|██████▌   | 8.25M/12.5M [00:08&lt;00:03, 1.07MB/s]
+smallPtychography.hspy:  67%|██████▋   | 8.42M/12.5M [00:08&lt;00:03, 1.23MB/s]
+smallPtychography.hspy:  68%|██████▊   | 8.55M/12.5M [00:08&lt;00:03, 1.21MB/s]
+smallPtychography.hspy:  69%|██████▉   | 8.67M/12.5M [00:09&lt;00:04, 899kB/s]
+smallPtychography.hspy:  70%|███████   | 8.77M/12.5M [00:09&lt;00:04, 905kB/s]
+smallPtychography.hspy:  71%|███████   | 8.88M/12.5M [00:09&lt;00:03, 911kB/s]
+smallPtychography.hspy:  72%|███████▏  | 8.97M/12.5M [00:09&lt;00:03, 904kB/s]
+smallPtychography.hspy:  73%|███████▎  | 9.07M/12.5M [00:09&lt;00:03, 890kB/s]
+smallPtychography.hspy:  73%|███████▎  | 9.16M/12.5M [00:09&lt;00:03, 880kB/s]
+smallPtychography.hspy:  74%|███████▍  | 9.25M/12.5M [00:09&lt;00:03, 861kB/s]
+smallPtychography.hspy:  75%|███████▍  | 9.35M/12.5M [00:09&lt;00:03, 870kB/s]
+smallPtychography.hspy:  76%|███████▌  | 9.47M/12.5M [00:10&lt;00:03, 917kB/s]
+smallPtychography.hspy:  77%|███████▋  | 9.61M/12.5M [00:10&lt;00:02, 1.04MB/s]
+smallPtychography.hspy:  78%|███████▊  | 9.78M/12.5M [00:10&lt;00:02, 1.17MB/s]
+smallPtychography.hspy:  79%|███████▉  | 9.90M/12.5M [00:10&lt;00:02, 1.14MB/s]
+smallPtychography.hspy:  80%|████████  | 10.0M/12.5M [00:10&lt;00:02, 1.12MB/s]
+smallPtychography.hspy:  81%|████████  | 10.1M/12.5M [00:10&lt;00:02, 1.10MB/s]
+smallPtychography.hspy:  82%|████████▏ | 10.3M/12.5M [00:10&lt;00:02, 1.09MB/s]
+smallPtychography.hspy:  83%|████████▎ | 10.4M/12.5M [00:10&lt;00:02, 1.06MB/s]
+smallPtychography.hspy:  84%|████████▍ | 10.5M/12.5M [00:10&lt;00:02, 1.01MB/s]
+smallPtychography.hspy:  85%|████████▍ | 10.6M/12.5M [00:11&lt;00:01, 982kB/s]
+smallPtychography.hspy:  86%|████████▌ | 10.7M/12.5M [00:11&lt;00:01, 1.05MB/s]
+smallPtychography.hspy:  87%|████████▋ | 10.8M/12.5M [00:11&lt;00:01, 1.02MB/s]
+smallPtychography.hspy:  88%|████████▊ | 11.0M/12.5M [00:11&lt;00:01, 1.08MB/s]
+smallPtychography.hspy:  89%|████████▊ | 11.1M/12.5M [00:11&lt;00:01, 1.06MB/s]
+smallPtychography.hspy:  90%|████████▉ | 11.2M/12.5M [00:11&lt;00:01, 1.15MB/s]
+smallPtychography.hspy:  91%|█████████ | 11.3M/12.5M [00:11&lt;00:01, 1.13MB/s]
+smallPtychography.hspy:  92%|█████████▏| 11.5M/12.5M [00:11&lt;00:00, 1.10MB/s]
+smallPtychography.hspy:  93%|█████████▎| 11.6M/12.5M [00:11&lt;00:00, 1.07MB/s]
+smallPtychography.hspy:  94%|█████████▍| 11.8M/12.5M [00:12&lt;00:00, 1.28MB/s]
+smallPtychography.hspy:  95%|█████████▌| 11.9M/12.5M [00:12&lt;00:00, 1.25MB/s]
+smallPtychography.hspy:  96%|█████████▋| 12.1M/12.5M [00:12&lt;00:00, 1.32MB/s]
+smallPtychography.hspy:  98%|█████████▊| 12.2M/12.5M [00:12&lt;00:00, 1.29MB/s]
+smallPtychography.hspy:  99%|█████████▊| 12.3M/12.5M [00:12&lt;00:00, 1.26MB/s]
+smallPtychography.hspy: 100%|█████████▉| 12.4M/12.5M [00:12&lt;00:00, 1.22MB/s]
+smallPtychography.hspy:   0%|          | 0.00/12.5M [00:00&lt;?, ?B/s]
+smallPtychography.hspy: 100%|██████████| 12.5M/12.5M [00:00&lt;00:00, 50.0GB/s]
+WARNING | Hyperspy | This file contains a signal provided by the pyxem Python package that is not currently installed. The signal will be loaded into a generic HyperSpy signal. Consider installing pyxem to load this dataset into its original signal class. (hyperspy.io:949)
+WARNING | Hyperspy | `signal_type='electron_diffraction'` not understood. See `hs.print_known_signal_types()` for a list of installed signal types or https://github.com/hyperspy/hyperspy-extensions-list for the list of all hyperspy extensions providing signals. (hyperspy.io:893)
+
+&lt;Signal2D, title: , dimensions: (246, 246|8, 8)&gt;
+</pre></div>
+</div>
+<p>Display the dataset</p>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+</pre></div>
+</div>
+<ul class="sphx-glr-horizontal">
+<li><img src="../_images/sphx_glr_loading_hyperspy_001.png" srcset="../_images/sphx_glr_loading_hyperspy_001.png" alt="smallPtychography Navigator" class = "sphx-glr-multi-img"/></li>
+<li><img src="../_images/sphx_glr_loading_hyperspy_002.png" srcset="../_images/sphx_glr_loading_hyperspy_002.png" alt="smallPtychography Signal" class = "sphx-glr-multi-img"/></li>
+</ul>
+<div class="sphx-glr-script-out highlight-none notranslate"><div class="highlight"><pre><span></span>WARNING | Hyperspy | Numba is not installed, falling back to non-accelerated implementation. (hyperspy.decorators:256)
+WARNING | Hyperspy | Numba is not installed, falling back to non-accelerated implementation. (hyperspy.decorators:256)
+WARNING | Hyperspy | Numba is not installed, falling back to non-accelerated implementation. (hyperspy.decorators:256)
+WARNING | Hyperspy | Numba is not installed, falling back to non-accelerated implementation. (hyperspy.decorators:256)
+WARNING | Hyperspy | Numba is not installed, falling back to non-accelerated implementation. (hyperspy.decorators:256)
+WARNING | Hyperspy | Numba is not installed, falling back to non-accelerated implementation. (hyperspy.decorators:256)
+WARNING | Hyperspy | Numba is not installed, falling back to non-accelerated implementation. (hyperspy.decorators:256)
+WARNING | Hyperspy | `signal_type='electron_diffraction'` not understood. See `hs.print_known_signal_types()` for a list of installed signal types or https://github.com/hyperspy/hyperspy-extensions-list for the list of all hyperspy extensions providing signals. (hyperspy.io:893)
+WARNING | Hyperspy | `signal_type='electron_diffraction'` not understood. See `hs.print_known_signal_types()` for a list of installed signal types or https://github.com/hyperspy/hyperspy-extensions-list for the list of all hyperspy extensions providing signals. (hyperspy.io:893)
+</pre></div>
+</div>
+<p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (0 minutes 14.332 seconds)</p>
+<div class="sphx-glr-footer sphx-glr-footer-example docutils container" id="sphx-glr-download-examples-loading-hyperspy-py">
+<div class="sphx-glr-download sphx-glr-download-jupyter docutils container">
+<p><a class="reference download internal" download="" href="../_downloads/a5c0070c21ff75e8da19938997a5b923/loading_hyperspy.ipynb"><code class="xref download docutils literal notranslate"><span class="pre">Download</span> <span class="pre">Jupyter</span> <span class="pre">notebook:</span> <span class="pre">loading_hyperspy.ipynb</span></code></a></p>
+</div>
+<div class="sphx-glr-download sphx-glr-download-python docutils container">
+<p><a class="reference download internal" download="" href="../_downloads/c63cc50fd22c6a81d82623b7078c30b7/loading_hyperspy.py"><code class="xref download docutils literal notranslate"><span class="pre">Download</span> <span class="pre">Python</span> <span class="pre">source</span> <span class="pre">code:</span> <span class="pre">loading_hyperspy.py</span></code></a></p>
+</div>
+<div class="sphx-glr-download sphx-glr-download-zip docutils container">
+<p><a class="reference download internal" download="" href="../_downloads/b5d77d010c31a9f62daf5b6d7bf2ced7/loading_hyperspy.zip"><code class="xref download docutils literal notranslate"><span class="pre">Download</span> <span class="pre">zipped:</span> <span class="pre">loading_hyperspy.zip</span></code></a></p>
+</div>
+</div>
+<p class="sphx-glr-signature"><a class="reference external" href="https://sphinx-gallery.github.io">Gallery generated by Sphinx-Gallery</a></p>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=cb8930eaaf36d9849b67"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=cb8930eaaf36d9849b67"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Carter Francis.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+</div>
+
+  </footer>
+  </body>
+</html>

@@ -1,0 +1,459 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" data-theme="dark">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Contributing a Dataset &#8212; emdatabase 0.5.0.dev0 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "dark";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "dark";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=cb8930eaaf36d9849b67" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=cb8930eaaf36d9849b67" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery.css?v=fd6457a4" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=60a4c9d5" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=cb8930eaaf36d9849b67"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=cb8930eaaf36d9849b67" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=cb8930eaaf36d9849b67" />
+
+    <script src="_static/documentation_options.js?v=be1c004d"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'contributing';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Add Dataset" href="add_dataset.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="dark">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<nav class="app-nav">
+  <a class="app-brand" href="index.html">EM-Database</a>
+  <a class="app-navlink" href="examples/index.html">Examples</a>
+  <a class="app-navlink" href="reference/index.html">API</a>
+  <a class="app-navlink" href="all_data.html">All Data</a>
+  <a class="app-navlink" href="add_dataset.html">Add Dataset</a>
+</nav>
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="reference/index.html">
+    API
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="all_data.html">
+    All Data
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="weights.html">
+    Model Weights
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="add_dataset.html">
+    Add Dataset
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    Contributing
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/electronmicroscopy/emdatabase" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Contributing a Dataset</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="contributing-a-dataset">
+<h1>Contributing a Dataset<a class="headerlink" href="#contributing-a-dataset" title="Link to this heading">#</a></h1>
+<p>A dataset is one YAML file in <code class="docutils literal notranslate"><span class="pre">emdatabase/index/</span></code>, validated against
+<code class="docutils literal notranslate"><span class="pre">emdatabase/index/json-schema.json</span></code>. Adding one means adding that file.</p>
+<section id="three-routes">
+<h2>Three routes<a class="headerlink" href="#three-routes" title="Link to this heading">#</a></h2>
+<p>Fill in the <a class="reference external" href="https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml">new-dataset issue form</a>
+and an action turns it into the YAML file and opens a pull request for you. Or
+run the CLI below, which writes the file locally and leaves the pull request to
+you. Both end in the same place, and both run the same validator. The
+<a class="reference internal" href="add_dataset.html"><span class="doc">Add Dataset</span></a> form and the issue form carry every field the
+schema has, including model weights and a <code class="docutils literal notranslate"><span class="pre">url</span></code> for a download link that is
+not <code class="docutils literal notranslate"><span class="pre">source/file</span></code>.</p>
+</section>
+<section id="using-the-cli">
+<h2>Using the CLI<a class="headerlink" href="#using-the-cli" title="Link to this heading">#</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>emdatabase.new_dataset<span class="w"> </span>https://zenodo.org/records/15490547/files/PdNiP.zspy
+</pre></div>
+</div>
+<p>It splits the URL into <code class="docutils literal notranslate"><span class="pre">source</span></code> and <code class="docutils literal notranslate"><span class="pre">file</span></code>, asks the server for the file’s
+size, streams the file to a temporary location to compute its md5 (deleted
+afterwards unless you pass <code class="docutils literal notranslate"><span class="pre">--keep</span></code>), then prompts for the description,
+technique, licence, detector, microscope, voltage, camera length, DOI, tags and
+authors. Anything left blank is omitted. It writes
+<code class="docutils literal notranslate"><span class="pre">emdatabase/index/&lt;Name&gt;.yaml</span></code> and refuses to overwrite an existing file
+unless you pass <code class="docutils literal notranslate"><span class="pre">--force</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--checksum</span> <span class="pre">md5:...</span></code> skips the download, <code class="docutils literal notranslate"><span class="pre">--name</span></code> sets the entry name, and
+<code class="docutils literal notranslate"><span class="pre">--out</span></code> writes somewhere other than the installed package. <code class="docutils literal notranslate"><span class="pre">--yes</span></code> takes
+the defaults and asks nothing, in which case <code class="docutils literal notranslate"><span class="pre">--description</span></code> is required.</p>
+</section>
+<section id="by-hand">
+<h2>By hand<a class="headerlink" href="#by-hand" title="Link to this heading">#</a></h2>
+<p>Copy <code class="docutils literal notranslate"><span class="pre">emdatabase/index/TEMPLATE.yaml</span></code>, which carries every field with a note
+on its format and whether it is required, and fill it in. Then check it:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>emdatabase.new_dataset<span class="w"> </span>--validate<span class="w"> </span>emdatabase/index/MyDataset.yaml
+</pre></div>
+</div>
+<p>That prints one line per problem and exits non-zero, or prints <code class="docutils literal notranslate"><span class="pre">valid</span></code>.
+<code class="xref py py-func docutils literal notranslate"><span class="pre">emdatabase.metadata.validate_file()</span></code> is the same check from Python.</p>
+</section>
+<section id="contributing-model-weights">
+<h2>Contributing model weights<a class="headerlink" href="#contributing-model-weights" title="Link to this heading">#</a></h2>
+<p>A trained model is an entry like any other, with <code class="docutils literal notranslate"><span class="pre">kind:</span> <span class="pre">weights</span></code> and a
+<code class="docutils literal notranslate"><span class="pre">model:</span></code> block. One entry per model, named without a version
+(<code class="docutils literal notranslate"><span class="pre">TutorialUNet</span></code>): the entry is a family holding every state the weights have
+been published in, not a single file.</p>
+<p>Save one <code class="docutils literal notranslate"><span class="pre">.pt</span></code> per model, holding plain primitives and tensors only:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">torch</span><span class="o">.</span><span class="n">save</span><span class="p">({</span><span class="s2">"state_dict"</span><span class="p">:</span> <span class="n">model</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span> <span class="s2">"config"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"hidden"</span><span class="p">:</span> <span class="mi">256</span><span class="p">}},</span> <span class="n">path</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>It has to load with <code class="docutils literal notranslate"><span class="pre">torch.load(path,</span> <span class="pre">weights_only=True)</span></code> or it is not
+accepted - a pickled <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> executes arbitrary code on load and is tied
+to the class’s import path. <code class="docutils literal notranslate"><span class="pre">config</span></code> carries the architecture arguments the
+class needs to be rebuilt.</p>
+<p>The entry declares <code class="docutils literal notranslate"><span class="pre">model.class</span></code> (the dotted import path),
+<code class="docutils literal notranslate"><span class="pre">model.framework</span></code>, <code class="docutils literal notranslate"><span class="pre">model.quantem</span></code> (the versions the checkpoint loads
+under) and <code class="docutils literal notranslate"><span class="pre">license</span></code>. Set the licence from the model’s own terms: a model
+trained on a dataset does not inherit that dataset’s licence.</p>
+<p>Point the tooling at the link the weights are published at:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>emdatabase.new_dataset<span class="w"> </span>--kind<span class="w"> </span>weights<span class="w"> </span>&lt;url&gt;
+</pre></div>
+</div>
+<p>It asks for the rest and writes two things from that one link: <code class="docutils literal notranslate"><span class="pre">latest</span></code>,
+which follows the link wherever it leads, and <code class="docutils literal notranslate"><span class="pre">versions</span></code>, holding one dated
+snapshot pinned to the md5 the link serves now. <code class="docutils literal notranslate"><span class="pre">--version-date</span> <span class="pre">YYMMDD</span></code> files
+that snapshot under a date other than today; the <a class="reference internal" href="add_dataset.html"><span class="doc">Add Dataset</span></a> form and the issue form ask for the same date, and take today
+when it is left blank.</p>
+<p>Retraining a model means re-uploading the file to the same link, or publishing
+a new version of the Zenodo record. Nothing in the entry needs editing by hand:
+the weekly job below sees the new md5, or the new record, and opens a pull
+request adding the new dated version.</p>
+<p><code class="docutils literal notranslate"><span class="pre">download()</span></code> returns whatever the <code class="docutils literal notranslate"><span class="pre">latest</span></code> link serves now. It warns with a
+<code class="docutils literal notranslate"><span class="pre">StaleIndexWarning</span></code> when that md5 is not the one in the index, which happens
+whenever the link has moved on since the installed release.
+<code class="docutils literal notranslate"><span class="pre">download(version=&quot;260902&quot;)</span></code> returns the dated snapshot instead, pinned to its
+checksum and failing on a mismatch the way a dataset does.</p>
+<p><code class="docutils literal notranslate"><span class="pre">download()</span></code> also reads the family’s index file from the <code class="docutils literal notranslate"><span class="pre">main</span></code> branch,
+which the weekly job keeps current, and warns when newer weights are published
+there than the installed release knows about; <code class="docutils literal notranslate"><span class="pre">download(refresh=True)</span></code>
+fetches them, pinned to that entry’s checksum. The <code class="docutils literal notranslate"><span class="pre">check_updates</span></code> config key
+turns the check off.</p>
+</section>
+<section id="what-ci-checks">
+<h2>What CI checks<a class="headerlink" href="#what-ci-checks" title="Link to this heading">#</a></h2>
+<p>Every pull request runs the test suite, which validates each YAML file in
+<code class="docutils literal notranslate"><span class="pre">index/</span></code> (the template included) against the schema, and checks the vendor
+names in <code class="docutils literal notranslate"><span class="pre">vendors.yaml</span></code>: a name close to one already on the list fails as a
+misspelling, while a genuinely new one warns and asks for it to be added.</p>
+<p><code class="docutils literal notranslate"><span class="pre">check_sources.yml</span></code> runs weekly and asks each source server whether the file
+is still there and still the size the entry claims.</p>
+<p><code class="docutils literal notranslate"><span class="pre">check_weights.yml</span></code> runs weekly as well, and what it does depends on where
+the family is hosted.</p>
+<p>For a link that moves in place, such as Google Drive, it downloads the
+<code class="docutils literal notranslate"><span class="pre">latest</span></code> link and compares the md5 with the index. An unchanged file is
+archived on the first run that finds it unarchived, so a newly contributed
+entry stops depending on the contributor’s link. A changed file becomes a new
+dated version, added in a pull request together with the new <code class="docutils literal notranslate"><span class="pre">latest</span></code>
+checksum. The archive is the <code class="docutils literal notranslate"><span class="pre">weights-archive</span></code> release on this repository; a
+file over 500 MB goes to the workflow run as an artifact instead, and a
+maintainer uploads it to the release by hand. A link that answers with
+<code class="docutils literal notranslate"><span class="pre">text/html</span></code> - a Google Drive virus-scan page rather than the file - is
+reported and nothing is archived.</p>
+<p>For a Zenodo record file, nothing is downloaded and nothing is copied to
+GitHub. The job asks the Zenodo API for the newest record of the concept the
+current record belongs to. If that is still the record the entry points at, the
+run reports it unchanged, and reports an error if the API’s md5 is not the one
+in the index. If a newer record has been published, the job adds a dated
+version - dated by the new record’s publication date - pointing at the file in
+that record, and moves <code class="docutils literal notranslate"><span class="pre">latest</span></code> to it. The file it looks for in the new
+record is the one whose name matches the current link; if the name has changed
+and the record holds more than one file, the run fails rather than guess.</p>
+</section>
+<section id="hosting">
+<h2>Hosting<a class="headerlink" href="#hosting" title="Link to this heading">#</a></h2>
+<p>Zenodo is preferred: it gives a DOI, a stable URL and a record that is not
+going to be rewritten. A GitHub URL is acceptable if it is pinned to a commit
+SHA. A URL on a moving branch is not, because the file behind it can change
+without the checksum changing with it.</p>
+<p>A weights entry’s <code class="docutils literal notranslate"><span class="pre">latest</span></code> is the one exception: it is meant to move, because
+it follows the model’s published link, and every state that link has served is
+kept as a dated version pinned to its own checksum. A dataset, and a weights
+entry’s dated versions, stay pinned.</p>
+<p>For weights on Zenodo, give the current record’s file link,
+<code class="docutils literal notranslate"><span class="pre">https://zenodo.org/records/&lt;id&gt;/files/&lt;name&gt;</span></code>. A concept DOI has no static
+file URL, so the link names one record; the weekly job follows that record’s
+concept through the API and, when a new record is published, adds a dated
+version pointing at it and moves <code class="docutils literal notranslate"><span class="pre">latest</span></code> there. Nothing is copied to GitHub:
+a Zenodo record’s files are immutable, so the record is already the archive.
+GitHub archival is only for links that move in place, Google Drive among them.</p>
+<p>Google Drive works for a small file, as a
+<code class="docutils literal notranslate"><span class="pre">https://drive.google.com/uc?export=download&amp;id=&lt;id&gt;</span></code> link written to the
+entry’s <code class="docutils literal notranslate"><span class="pre">url</span></code>; above about 100 MB Drive answers with a virus-scan page
+instead of the file, and the entry will not download. The CLI recognises a link
+like that and fills in <code class="docutils literal notranslate"><span class="pre">url</span></code>, <code class="docutils literal notranslate"><span class="pre">source</span></code> and <code class="docutils literal notranslate"><span class="pre">file</span></code> itself.</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=cb8930eaaf36d9849b67"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=cb8930eaaf36d9849b67"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Carter Francis.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+</div>
+
+  </footer>
+  </body>
+</html>

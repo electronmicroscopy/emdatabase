@@ -1,0 +1,12 @@
+﻿emdatabase
+==========
+
+.. automodule:: emdatabase
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      browse
+   
