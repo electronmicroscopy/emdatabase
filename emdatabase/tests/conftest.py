@@ -5,6 +5,9 @@ every ``EMDATABASE_*`` environment variable cleared and the first-run notice
 already marked shown, so the developer's real configuration never affects a test
 and a test never writes to the real one.
 
+:func:`two_techniques` installs a dataset declaring more than one technique,
+which the shipped index has none of.
+
 :func:`http_server` is the other shared piece: a real server on localhost, so
 the tests that fetch a file exercise the HEAD request and the redirect rather
 than a monkeypatched download. Nothing here touches the network.
@@ -32,6 +35,39 @@ def _isolate_config(tmp_path, monkeypatch):
     config.refresh()
     yield
     config.refresh()
+
+
+TWO_TECHNIQUE_SPEC = {
+    "description": "An in-situ 4D-STEM dataset of something.",
+    "source": "https://zenodo.org/records/0000000/files",
+    "file": "TwoTechniques.zspy",
+    "technique": ["4D-STEM", "In-situ TEM"],
+}
+
+
+@pytest.fixture
+def two_techniques(monkeypatch):
+    """Install a dataset declaring two techniques into ``emdatabase.data``.
+
+    Nothing in the shipped index is more than one technique yet, and the point
+    of the feature is what happens when one is.
+    """
+    import emdatabase.data as data
+    from emdatabase.downloadable_dataset import DownloadableDataset
+    from emdatabase.metadata import DatasetMetadata
+
+    name = "TwoTechniques"
+    cls = type(
+        name,
+        (DownloadableDataset,),
+        {
+            "_spec": TWO_TECHNIQUE_SPEC,
+            "_metadata": DatasetMetadata.from_spec(TWO_TECHNIQUE_SPEC),
+        },
+    )
+    monkeypatch.setattr(data, name, cls, raising=False)
+    monkeypatch.setattr(data, "__all__", [*data.__all__, name])
+    return name
 
 
 class _Handler(http.server.SimpleHTTPRequestHandler):

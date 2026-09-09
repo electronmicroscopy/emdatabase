@@ -307,7 +307,7 @@ class DatasetMetadata:
     camera_length: str | None = None
     voltage: str | None = None
     license: str | None = None
-    technique: str | None = None
+    technique: tuple[str, ...] = ()
     doi: str | None = None
     tags: tuple[str, ...] = ()
     authors: Mapping[str, Author] = field(default_factory=dict)
@@ -342,6 +342,10 @@ class DatasetMetadata:
         values = dict(spec)
         size_bytes = values.get("size_bytes")
         values["size_bytes"] = None if size_bytes is None else int(size_bytes)
+        technique = values.get("technique") or ()
+        values["technique"] = (
+            (str(technique),) if isinstance(technique, str) else tuple(str(t) for t in technique)
+        )
         values["tags"] = tuple(str(t) for t in values.get("tags") or ())
         values["authors"] = {
             str(name): Author.from_spec(str(name), entry or {}, origin)
@@ -368,12 +372,12 @@ class DatasetMetadata:
     def __repr__(self) -> str:
         """One line naming the file, what it is and how big: enough to tell two
         records apart in a list without printing a paragraph of description."""
-        headline = " · ".join(p for p in (self.file, self.technique, self.size) if p)
+        headline = " · ".join(p for p in (self.file, ", ".join(self.technique), self.size) if p)
         return f"<{type(self).__name__} {headline}>"
 
     def __str__(self) -> str:
         """The whole record, wrapped, with the empty fields left out."""
-        headline = " · ".join(p for p in (self.file, self.technique, self.size) if p)
+        headline = " · ".join(p for p in (self.file, ", ".join(self.technique), self.size) if p)
         head = [headline]
         if self.description:
             head.append(textwrap.fill(self.description, width=_STR_WIDTH))

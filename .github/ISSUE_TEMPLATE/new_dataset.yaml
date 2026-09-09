@@ -130,20 +130,20 @@ body:
       placeholder: ex. CC-BY-4.0
     validations:
       required: true
-  - type: dropdown
+  - type: checkboxes
     id: technique
     attributes:
       label: Technique
-      description: Select the technique used to acquire the dataset.
+      description: Tick every technique the dataset was acquired with. It is listed under each of them.
       options:
-        - 4D-STEM
-        - EELS
-        - EDS
-        - EBSD
-        - STEM
-        - In-situ TEM
-        - Cryo-EM
-        - Other
+        - label: 4D-STEM
+        - label: EELS
+        - label: EDS
+        - label: EBSD
+        - label: STEM
+        - label: In-situ TEM
+        - label: Cryo-EM
+        - label: Other
   - type: input
     id: doi
     attributes:

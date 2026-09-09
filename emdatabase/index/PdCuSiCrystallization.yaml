@@ -18,7 +18,8 @@ PdCuSiCrystallization:
   voltage: 200 kV
   license: CC-BY-4.0
   doi: 10.5281/zenodo.15490547
-  technique: 4D-STEM
+  technique:
+    - 4D-STEM
   tags:
     - Amorphous
     - Metallic Glass

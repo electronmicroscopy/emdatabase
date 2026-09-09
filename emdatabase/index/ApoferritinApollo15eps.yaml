@@ -14,7 +14,8 @@ ApoferritinApollo15eps:
   detector_manufacturer: Direct Electron
   detector: Apollo
   license: CC0-1.0
-  technique: Cryo-EM
+  technique:
+    - Cryo-EM
   doi: 10.5281/zenodo.21632101
   tags:
     - Cryo-EM

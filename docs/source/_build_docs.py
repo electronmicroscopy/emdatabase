@@ -9,7 +9,12 @@ from emdatabase.metadata import NON_DATASET_FILES, load_vendors
 
 
 def parse_datasets(yaml_dir):
-    """Parse all YAML files and organize by technique."""
+    """Parse all YAML files and organize by technique.
+
+    An entry may declare several techniques, in which case it is listed under
+    each of them; ``techniques`` on the record is all of them, so the table can
+    still draw it as one row.
+    """
     datasets_by_technique = defaultdict(list)
 
     for yaml_file in sorted(Path(yaml_dir).glob("*.yaml")):
@@ -21,19 +26,22 @@ def parse_datasets(yaml_dir):
         for name, info in data.items():
             if info.get("kind") == "weights":
                 continue  # the Model Weights page, not this one
-            technique = info.get("technique", "Unknown")
-            datasets_by_technique[technique].append(
-                {
-                    "name": name,
-                    "description": info.get("description", ""),
-                    "tags": info.get("tags", []),
-                    "source": info.get("source", ""),
-                    "file": info.get("file", ""),
-                    "license": info.get("license", ""),
-                    "detector": info.get("detector", "Unknown"),
-                    "detector_manufacturer": info.get("detector_manufacturer", "Unknown"),
-                }
-            )
+            techniques = info.get("technique") or ["Unknown"]
+            if isinstance(techniques, str):
+                techniques = [techniques]
+            record = {
+                "name": name,
+                "techniques": list(techniques),
+                "description": info.get("description", ""),
+                "tags": info.get("tags", []),
+                "source": info.get("source", ""),
+                "file": info.get("file", ""),
+                "license": info.get("license", ""),
+                "detector": info.get("detector", "Unknown"),
+                "detector_manufacturer": info.get("detector_manufacturer", "Unknown"),
+            }
+            for technique in techniques:
+                datasets_by_technique[technique].append(record)
 
     return dict(datasets_by_technique)
 
@@ -208,14 +216,21 @@ def generate_html_table(datasets_by_technique):
             <tbody>
     """
 
+    # A dataset declaring several techniques is under each of their keys, so it
+    # gets one row carrying all of them and the tabs filter on membership.
+    written = set()
     for technique in sorted(datasets_by_technique.keys()):
         for dataset in datasets_by_technique[technique]:
+            if dataset["name"] in written:
+                continue
+            written.add(dataset["name"])
             tags_str = ", ".join(dataset["tags"])
+            techniques_str = ", ".join(dataset["techniques"])
             manufacturer = dataset.get("detector_manufacturer", "Unknown")
             detector = dataset.get("detector", "Unknown")
             detector_full = f"{manufacturer} - {detector}"
-            html += f"""            <tr data-tags="{tags_str}" data-technique="{technique}" data-detector="{detector}" data-manufacturer="{manufacturer}">
-                <td>{technique}</td>
+            html += f"""            <tr data-tags="{tags_str}" data-technique="{techniques_str}" data-detector="{detector}" data-manufacturer="{manufacturer}">
+                <td>{techniques_str}</td>
                 <td><strong>{dataset["name"]}</strong></td>
                 <td>{dataset["description"]}</td>
                 <td>{tags_str}</td>
@@ -334,8 +349,8 @@ def generate_html_table(datasets_by_technique):
                 const rows = document.querySelectorAll('#datasetsTable tbody tr');
 
                 rows.forEach(row => {{
-                    const rowTechnique = row.dataset.technique;
-                    if (currentTechnique !== 'All' && rowTechnique !== currentTechnique) {{
+                    const rowTechniques = row.dataset.technique ? row.dataset.technique.split(', ') : [];
+                    if (currentTechnique !== 'All' && !rowTechniques.includes(currentTechnique)) {{
                         row.style.display = 'none';
                         return;
                     }}
@@ -480,12 +495,18 @@ _DOCS_BROWSER_JS = r"""
   function drawList() {
     listEl.innerHTML = "";
     var shown = 0;
+    // A dataset with several techniques is in several groups, so the All view
+    // lists it under the first one and skips it after that.
+    var drawn = {};
     (DATA.groups || []).forEach(function (g) {
       if (state.tab !== "All" && g.technique !== state.tab) return;
-      var items = g.items.filter(matchesSearch);
+      var items = g.items.filter(matchesSearch).filter(function (it) { return !drawn[it.name]; });
       if (!items.length) return;
       if (state.tab === "All") listEl.appendChild(el("div", "emdb-group-head", esc(g.technique)));
-      items.forEach(function (it) { listEl.appendChild(drawRow(it)); shown++; });
+      items.forEach(function (it) {
+        if (state.tab === "All") drawn[it.name] = true;
+        listEl.appendChild(drawRow(it)); shown++;
+      });
     });
     if (!shown) listEl.appendChild(
       el("div", "emdb-empty", "No " + WHAT.toLowerCase() + " match."));
@@ -557,7 +578,8 @@ _DOCS_BROWSER_JS = r"""
     if ((it.versions || []).length) title.appendChild(versionSelect(it, version));
     detailsEl.appendChild(title);
     detailsEl.appendChild(el("div", "emdb-d-sub",
-      esc([it.technique, it.size, it.shape].filter(Boolean).join("  ·  "))));
+      esc([(it.technique || []).join(", "), it.size, it.shape]
+        .filter(Boolean).join("  ·  "))));
     if (it.description) detailsEl.appendChild(el("p", "emdb-d-desc", esc(it.description)));
     var pairs = [["Detector", it.detector], ["Microscope", it.microscope], ["Voltage", it.voltage],
       ["Tags", (it.tags || []).join(", ")], ["Authors", (it.authors || []).join(", ")],
@@ -718,6 +740,9 @@ _FORM_CSS = """
 .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--emdb-blue); }
 .field input.invalid, .field textarea.invalid, .field select.invalid { border-color: var(--emdb-red); }
 .field-err { font-size: 11px; color: var(--emdb-red); min-height: 13px; }
+.check-group { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 4px 0; }
+.check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.check input { width: auto; }
 .section-title {
   font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--emdb-subtext); margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--emdb-surface0);
@@ -1025,6 +1050,34 @@ def _select_field(fid, label, options, hint="", default=""):
     )
 
 
+def _checkbox_field(fid, label, options, hint="", full=False):
+    """A group of checkboxes - a field a dataset may have more than one of."""
+    hn = '<div class="field-hint">' + _esc(hint) + "</div>" if hint else ""
+    style = ' style="grid-column:1/-1"' if full else ""
+    boxes = "".join(
+        '<label class="check"><input type="checkbox" value="'
+        + _esc(o)
+        + '">'
+        + _esc(o)
+        + "</label>"
+        for o in options
+    )
+    return (
+        '<div class="field"'
+        + style
+        + "><label>"
+        + _esc(label)
+        + "</label>"
+        + hn
+        + '<div class="check-group" id="'
+        + fid
+        + '">'
+        + boxes
+        + "</div>"
+        '<div class="field-err" id="err-' + fid + '"></div></div>'
+    )
+
+
 def _datalist_field(fid, label, options, placeholder="", hint=""):
     """A free-text field with suggestions - the open-string vendor lists."""
     hn = '<div class="field-hint">' + _esc(hint) + "</div>" if hint else ""
@@ -1135,7 +1188,13 @@ def generate_add_dataset_html() -> str:
         + _text_field("f-camera_length", "Camera Length", placeholder="e.g. 100 mm")
         + _text_field("f-voltage", "Voltage", placeholder="200 kV", hint="e.g. 200 kV")
         + _text_field("f-license", "License", placeholder="CC-BY-4.0")
-        + _select_field("f-technique", "Technique", _TECHNIQUES)
+        + _checkbox_field(
+            "f-technique",
+            "Technique",
+            _TECHNIQUES,
+            hint="Tick every one the dataset is; it is listed under each.",
+            full=True,
+        )
         + _text_field("f-doi", "DOI", placeholder="10.5281/zenodo.15490547")
         + _text_field(
             "f-tags",
@@ -1309,13 +1368,15 @@ function emdbBuildYaml(fields) {
   add("camera_length", get("camera_length"));
   add("voltage", get("voltage"));
   add("license", get("license"));
-  add("technique", get("technique"));
-  add("doi", get("doi"));
-  var tags = (fields.tags || []).map(function (t) { return String(t).trim(); }).filter(Boolean);
-  if (tags.length) {
-    lines.push("  tags:");
-    tags.forEach(function (t) { lines.push("    - " + emdbYamlStr(t)); });
+  function list(key, values) {
+    values = (values || []).map(function (v) { return String(v).trim(); }).filter(Boolean);
+    if (!values.length) return;
+    lines.push("  " + key + ":");
+    values.forEach(function (v) { lines.push("    - " + emdbYamlStr(v)); });
   }
+  list("technique", fields.technique);
+  add("doi", get("doi"));
+  list("tags", fields.tags);
   var authors = (fields.authors || []).filter(function (a) { return a && a.name; });
   if (authors.length) {
     lines.push("  authors:");
@@ -1380,7 +1441,7 @@ _ADD_DATASET_JS = r"""
   var SCALARS = [
     "name", "description", "source", "url", "checksum", "file", "size_bytes",
     "detector_manufacturer", "detector", "microscope_vendor", "microscope_model",
-    "camera_length", "voltage", "license", "technique", "doi",
+    "camera_length", "voltage", "license", "doi",
     "kind", "version_date", "model_class", "model_framework", "model_quantem"
   ];
 
@@ -1404,6 +1465,10 @@ _ADD_DATASET_JS = r"""
   function collect() {
     var fields = {};
     SCALARS.forEach(function (key) { fields[key] = val("f-" + key); });
+    fields.technique = Array.prototype.map.call(
+      document.querySelectorAll("#f-technique input:checked"),
+      function (box) { return box.value; }
+    );
     fields.tags = val("f-tags").split(",").map(function (t) { return t.trim(); }).filter(Boolean);
     fields.authors = authors();
     return fields;

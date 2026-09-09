@@ -15,7 +15,8 @@ CuZnHAADF:
   microscope_model: ARM200F
   voltage: 200 kV
   license: Unspecified
-  technique: STEM
+  technique:
+    - STEM
   tags:
     - HAADF
     - Survey Image

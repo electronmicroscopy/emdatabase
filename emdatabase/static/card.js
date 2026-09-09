@@ -145,7 +145,8 @@ function render({ model, el: root }) {
     if (it.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
     if ((it.versions || []).length) title.appendChild(versionSelect(it));
     card.appendChild(title);
-    const sub = [it.technique, it.size, it.shape].filter(Boolean).join("  ·  ");
+    const sub = [(it.technique || []).join(", "), it.size, it.shape]
+      .filter(Boolean).join("  ·  ");
     card.appendChild(el("div", "emdb-d-sub", esc(sub)));
 
     const status = el("div", "emdb-d-status");

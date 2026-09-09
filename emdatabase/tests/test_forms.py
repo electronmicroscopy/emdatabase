@@ -4,6 +4,9 @@ Both build the same file the CLI does, so both are checked the same way - the
 document they produce goes through :func:`~emdatabase.metadata.validate_document`
 and its keys are compared against ``new_dataset.FIELD_ORDER``.
 
+The docs site's datasets table is built from the same YAML by the same module,
+so its tab grouping is checked here too.
+
 The docs form builds its YAML in the browser, so the check runs the generator
 function itself under ``node``; the tests skip when node is not installed. The
 issue-form script lives in ``.github/scripts`` rather than in the package and is
@@ -104,7 +107,7 @@ DATASET_FIELDS: dict[str, Any] = {
     "camera_length": "100 mm",
     "voltage": "200 kV",
     "license": "CC-BY-4.0",
-    "technique": "4D-STEM",
+    "technique": ["4D-STEM"],
     "doi": "10.5281/zenodo.15490547",
     "tags": ["Nanocrystals", "Orientation Mapping"],
     "authors": [
@@ -166,6 +169,15 @@ def test_form_dataset_with_an_opaque_url_validates(run_form):
     # `kind` is always written out, `dataset` included.
     assert entry["kind"] == "dataset"
     assert "model" not in entry
+
+
+def test_form_writes_every_technique_as_a_list(run_form):
+    _, one = _entry(run_form(DATASET_FIELDS))
+    assert one["technique"] == ["4D-STEM"]
+    fields = dict(DATASET_FIELDS, technique=["In-situ TEM", "4D-STEM"])
+    document, entry = _entry(run_form(fields))
+    assert validate_document(document) == []
+    assert entry["technique"] == ["In-situ TEM", "4D-STEM"]
 
 
 def test_form_weights_validates_and_carries_the_model(run_form):
@@ -240,11 +252,45 @@ def test_form_has_a_field_for_every_schema_property(build_docs):
         assert f'class="{cls}"' in html, cls
 
 
+# -- the docs datasets table -------------------------------------------------
+
+
+def test_docs_table_lists_a_two_technique_dataset_under_each(build_docs, tmp_path):
+    """One row, both tabs: the tabs filter on the row's whole technique list."""
+    (tmp_path / "TwoTechniques.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "TwoTechniques": {
+                    "description": "An in-situ 4D-STEM dataset.",
+                    "source": "https://zenodo.org/records/0000000/files",
+                    "file": "TwoTechniques.zspy",
+                    "technique": ["4D-STEM", "In-situ TEM"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    by_technique = build_docs.parse_datasets(tmp_path)
+    assert sorted(by_technique) == ["4D-STEM", "In-situ TEM"]
+    assert [d["name"] for d in by_technique["4D-STEM"]] == ["TwoTechniques"]
+    assert [d["name"] for d in by_technique["In-situ TEM"]] == ["TwoTechniques"]
+
+    html = build_docs.generate_html_table(by_technique)
+    assert html.count("<strong>TwoTechniques</strong>") == 1
+    assert 'data-technique="4D-STEM, In-situ TEM"' in html
+
+
 # -- the issue form ----------------------------------------------------------
 
 
 def _issue_body(**answers):
     return "".join(f"### {label}\n\n{value}\n\n" for label, value in answers.items())
+
+
+def _ticked(*chosen):
+    """A checkboxes answer as GitHub writes it - a task list, ticked or not."""
+    options = ("4D-STEM", "EELS", "EDS", "EBSD", "STEM", "In-situ TEM", "Cryo-EM", "Other")
+    return "\n".join(f"- [{'x' if o in chosen else ' '}] {o}" for o in options)
 
 
 @pytest.fixture
@@ -286,7 +332,7 @@ def test_issue_weights_entry_validates(parse):
             "Camera Length": "_No response_",
             "Accelerating Voltage": "_No response_",
             "Dataset License": "MIT",
-            "Technique": "Other",
+            "Technique": _ticked("Other"),
             "DOI": "10.5281/zenodo.15490547",
             "Tags": "Machine Learning, Segmentation",
             "Kind": "weights",
@@ -306,6 +352,7 @@ def test_issue_weights_entry_validates(parse):
     assert entry["file"] == "DemoNet.pt"
     assert entry["doi"] == "10.5281/zenodo.15490547"
     assert entry["tags"] == ["Machine Learning", "Segmentation"]
+    assert entry["technique"] == ["Other"]
     assert entry["authors"]["Jane Doe"]["orcid"] == "0000-0002-1825-0097"
     assert entry["model"] == {
         "class": "quantem.core.ml.CNN2d",
@@ -351,7 +398,7 @@ def test_issue_drive_link_becomes_url_plus_file_name(parse):
             "Camera Length": "100 mm",
             "Accelerating Voltage": "200 kV",
             "Dataset License": "CC-BY-4.0",
-            "Technique": "4D-STEM",
+            "Technique": _ticked("4D-STEM", "In-situ TEM"),
             "Tags": "Nanocrystals",
         }
     )
@@ -359,6 +406,7 @@ def test_issue_drive_link_becomes_url_plus_file_name(parse):
     assert validate_document(document) == []
     entry = document[name]
     _assert_in_field_order(entry)
+    assert entry["technique"] == ["4D-STEM", "In-situ TEM"]
     assert entry["source"] == "https://drive.google.com"
     assert entry["url"] == "https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40Ccd"
     assert entry["file"] == "MgONanoCrystals.zspy"

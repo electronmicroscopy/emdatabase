@@ -29,8 +29,27 @@ def test_catalogue_groups_and_orders_by_technique():
     known = [t for t in techniques if t in catalogue.TECHNIQUE_ORDER]
     expected = [t for t in catalogue.TECHNIQUE_ORDER if t in known]
     assert known == expected
-    # n_total is the sum of the group sizes.
-    assert cat["n_total"] == sum(len(g["items"]) for g in cat["groups"])
+    # n_total counts datasets, and the groups overlap, so it is the number of
+    # distinct names across them.
+    names = {it["name"] for g in cat["groups"] for it in g["items"]}
+    assert cat["n_total"] == len(names)
+
+
+def test_a_dataset_with_two_techniques_is_in_both_groups(two_techniques):
+    cat = catalogue.catalogue()
+    groups = {g["technique"]: [it["name"] for it in g["items"]] for g in cat["groups"]}
+    assert two_techniques in groups["4D-STEM"]
+    assert two_techniques in groups["In-situ TEM"]
+    # The counts are of datasets, so the one in two groups is counted once.
+    assert cat["n_total"] == len(catalogue.datasets())
+
+
+def test_a_dataset_with_two_techniques_carries_both(two_techniques):
+    ds = catalogue.resolve(two_techniques)
+    assert ds is not None
+    row = catalogue.entry(two_techniques, ds)
+    assert row["technique"] == ["4D-STEM", "In-situ TEM"]
+    assert "in-situ tem" in row["search"]
 
 
 def test_catalogue_entry_has_expected_fields():
@@ -55,7 +74,7 @@ def test_catalogue_entry_has_expected_fields():
     ):
         assert key in row
     assert row["name"] == TINY_DATASET
-    assert row["technique"] == "STEM"
+    assert row["technique"] == ["STEM"]
     assert isinstance(row["downloaded"], bool)
     assert row["versions"] == []  # a dataset is one pinned file, not a family
 
@@ -238,7 +257,7 @@ def test_dataset_card_is_populated_and_routes(monkeypatch):
     assert ds is not None
     widget = card(ds)
     assert widget.info["name"] == TINY_DATASET
-    assert widget.info["technique"] == "STEM"
+    assert widget.info["technique"] == ["STEM"]
     calls = []
     monkeypatch.setattr(widget, "_start_download", lambda version=None: calls.append(version))
     widget._command = {"action": "download", "nonce": 1}

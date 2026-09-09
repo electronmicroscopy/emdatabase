@@ -123,6 +123,30 @@ def test_author_without_affiliation_is_an_error():
         )
 
 
+@pytest.mark.parametrize(
+    ("declared", "expected"),
+    [("4D-STEM", ("4D-STEM",)), (["4D-STEM", "EELS"], ("4D-STEM", "EELS")), (None, ())],
+)
+def test_technique_is_always_a_tuple(declared, expected):
+    """A dataset may be several techniques at once; a bare string is one of them."""
+    spec = {"description": "d", "source": "s", "file": "f"}
+    if declared is not None:
+        spec["technique"] = declared
+    assert DatasetMetadata.from_spec(spec).technique == expected
+
+
+@pytest.mark.parametrize("declared", ["4D-STEM", ["4D-STEM"], ["In-situ TEM", "4D-STEM"]])
+def test_schema_accepts_one_technique_or_several(declared):
+    entry = {"description": "d", "source": "https://example.com/f", "file": "f"}
+    assert validate_document({"X": {**entry, "technique": declared}}) == []
+
+
+@pytest.mark.parametrize("declared", [[], ["4D-STEM", "4D-STEM"]])
+def test_schema_rejects_an_empty_or_repeating_technique_list(declared):
+    entry = {"description": "d", "source": "https://example.com/f", "file": "f"}
+    assert validate_document({"X": {**entry, "technique": declared}})
+
+
 def test_tags_and_authors_are_converted():
     metadata = DatasetMetadata.from_spec(
         {
@@ -224,6 +248,11 @@ def test_repr_is_one_short_identifying_line():
     assert len(text) < 100
     assert text == "<DatasetMetadata d.zspy · 4D-STEM · 12.5 MB>"
     assert "A description." not in text
+
+
+def test_repr_lists_every_technique():
+    metadata = _record(technique=["In-situ TEM", "4D-STEM"], size_bytes=12492298)
+    assert repr(metadata) == "<DatasetMetadata d.zspy · In-situ TEM, 4D-STEM · 12.5 MB>"
 
 
 def test_repr_drops_the_parts_it_does_not_have():

@@ -17,7 +17,8 @@ LSMOSTOLineScanLowLoss:
   microscope_model: ARM200cF
   voltage: 200 kV
   license: Unspecified
-  technique: EELS
+  technique:
+    - EELS
   tags:
     - Line Scan
     - Low Loss

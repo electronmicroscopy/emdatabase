@@ -37,8 +37,10 @@ MyDatasetName:
   voltage: 200 kV
   # The licence the data is released under, as an SPDX identifier.
   license: CC-BY-4.0
-  # What the data is, e.g. 4D-STEM, EELS, EBSD, HAADF.
-  technique: 4D-STEM
+  # What the data is, e.g. 4D-STEM, EELS, EBSD, HAADF. One per line; give
+  # every technique the dataset is, and it appears under each of them.
+  technique:
+    - 4D-STEM
   # DOI of the record or the paper, without a `https://doi.org/` prefix.
   doi: 10.5281/zenodo.0000000
   # Free-form keywords, one per line. Searched by `emdatabase.search`.

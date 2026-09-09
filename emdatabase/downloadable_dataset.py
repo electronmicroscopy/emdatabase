@@ -446,7 +446,8 @@ class DownloadableDataset:
     def __repr__(self):
         # __class__ rather than its __name__ nested one set of angle brackets
         # inside another, which a list of results made unreadable.
-        headline = " · ".join(p for p in (self.file, self.metadata.technique, self.size) if p)
+        techniques = ", ".join(self.metadata.technique)
+        headline = " · ".join(p for p in (self.file, techniques, self.size) if p)
         return f"<{type(self).__name__} {headline}>"
 
     def _repr_mimebundle_(self, **kwargs):

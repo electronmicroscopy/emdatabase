@@ -58,6 +58,9 @@ emdatabase.filter(microscope_vendor=["JEOL", "Hitachi"])  # a list means any of
 emdatabase.filter(downloaded=True)                        # what is already here
 ```
 
+`technique`, `tags`, `authors` and `version` are several values per dataset, so they
+test membership: a dataset that is both in-situ and 4D-STEM matches either.
+
 An unknown field raises rather than being ignored, so a typo cannot quietly return
 the whole index.
 
@@ -171,9 +174,13 @@ MyDataset:
   file: MyDataset.zspy
   checksum: md5:<hash>
   size_bytes: 1200000000
-  technique: 4D-STEM
+  technique:
+    - 4D-STEM
   license: CC-BY-4.0
 ```
+
+A dataset may list more than one technique - in-situ 4D-STEM, cryo EELS - and is
+then listed under each of them.
 
 `size_bytes` is the file's `Content-Length` in bytes; the test suite checks it against
 the server on every run. `emdatabase/index/vendors.yaml` lists the microscope

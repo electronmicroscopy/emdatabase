@@ -15,7 +15,8 @@ HREBSDStrainPatterns:
   detector: DE-Meridian
   license: CC-BY-4.0
   doi: 10.5281/zenodo.21632101
-  technique: EBSD
+  technique:
+    - EBSD
   tags:
     - Strain
     - Cross Correlation

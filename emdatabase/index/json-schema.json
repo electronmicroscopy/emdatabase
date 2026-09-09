@@ -52,7 +52,19 @@
           "type": "string"
         },
         "technique": {
-          "type": "string"
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          ]
         },
         "doi": {
           "type": "string"

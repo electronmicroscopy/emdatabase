@@ -8,7 +8,8 @@ NiEBSDLarge:
   size_bytes: 15368325
   detector_manufacturer: NORDIF
   detector: UF-1100
-  technique: EBSD
+  technique:
+    - EBSD
   license: CC-BY-4.0
   tags:
     - Large Dataset

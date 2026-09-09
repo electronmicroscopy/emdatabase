@@ -11,7 +11,8 @@ BilayerWS2:
   microscope_model: Gen 1 Titan
   voltage: 200 kV
   license: CC-BY-4.0
-  technique: 4D-STEM
+  technique:
+    - 4D-STEM
   tags:
     - Orientation Mapping
     - Nanocrystals

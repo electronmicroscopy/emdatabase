@@ -14,7 +14,8 @@ InSituElectrochemGrowth:
   voltage: 300 kV
   license: CC-BY-4.0
   doi: 10.5281/zenodo.21632101
-  technique: In-situ TEM
+  technique:
+    - In-situ TEM
   tags:
     - In-situ
     - Electrochemistry

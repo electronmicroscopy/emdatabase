@@ -166,6 +166,12 @@ def _ask(prompt: str, default: str = "", assume_yes: bool = False) -> str:
     return answer or default
 
 
+def _ask_list(prompt: str, assume_yes: bool) -> list[str]:
+    """A comma-separated answer as a list, with the blanks dropped."""
+    answer = _ask(prompt, assume_yes=assume_yes)
+    return [item.strip() for item in answer.split(",") if item.strip()]
+
+
 def _ask_vendor(prompt: str, known: list[str], assume_yes: bool) -> str:
     """Prompt for a vendor name, re-asking on one that is a likely misspelling."""
     if assume_yes:
@@ -385,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         "checksum": checksum,
         "file": filename,
         "size_bytes": size_bytes,
-        "technique": _ask("technique, e.g. 4D-STEM", assume_yes=args.yes),
+        "technique": _ask_list("techniques, comma separated, e.g. 4D-STEM", args.yes),
         "license": _ask("license, e.g. CC-BY-4.0", assume_yes=args.yes),
         "detector_manufacturer": _ask_vendor(
             "detector manufacturer", vendors["detector_manufacturer"], args.yes
@@ -398,10 +404,9 @@ def main(argv: list[str] | None = None) -> int:
         "voltage": _ask("voltage, e.g. 200 kV", assume_yes=args.yes),
         "camera_length": _ask("camera length, e.g. 100 mm", assume_yes=args.yes),
         "doi": _ask("DOI", assume_yes=args.yes),
-        "tags": [t.strip() for t in _ask("tags, comma separated", assume_yes=args.yes).split(",")],
+        "tags": _ask_list("tags, comma separated", args.yes),
         "authors": _ask_authors(args.yes),
     }
-    entry["tags"] = [t for t in entry["tags"] if t]
     if args.kind == "weights":
         entry["kind"] = "weights"
         model = {

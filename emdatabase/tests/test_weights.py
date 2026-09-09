@@ -51,7 +51,7 @@ ENTRY = {
     "description": "A peak-detection network for 4D-STEM diffraction patterns.",
     "source": "https://zenodo.org/records/0000000/files",
     "file": "DemoNet.pt",
-    "technique": "4D-STEM",
+    "technique": ["4D-STEM"],
     "license": "CC-BY-4.0",
     "kind": "weights",
     "model": MODEL,
@@ -367,7 +367,7 @@ def test_the_catalogue_groups_weights_on_their_own(in_the_index):
     items = {it["name"]: it for it in groups[-1]["items"]}
     assert in_the_index in items
     # The entry's own technique is still 4D-STEM; it is only grouped elsewhere.
-    assert items[in_the_index]["technique"] == "4D-STEM"
+    assert items[in_the_index]["technique"] == ["4D-STEM"]
     assert all(g["technique"] != catalogue.WEIGHTS_GROUP for g in groups[:-1])
 
 

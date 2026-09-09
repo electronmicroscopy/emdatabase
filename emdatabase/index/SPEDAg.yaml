@@ -10,7 +10,8 @@ SPEDAg:
   microscope_vendor: JEOL
   voltage: 200 kV
   license: CC-BY-4.0
-  technique: 4D-STEM
+  technique:
+    - 4D-STEM
   tags:
     - Orientation Mapping
     - Grain Boundaries

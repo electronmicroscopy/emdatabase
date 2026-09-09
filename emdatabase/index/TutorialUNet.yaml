@@ -9,7 +9,8 @@ TutorialUNet:
   source: https://drive.google.com
   file: nn02_unet1_weights.pt
   license: MIT
-  technique: Other
+  technique:
+    - Other
   tags:
     - Machine Learning
     - Segmentation

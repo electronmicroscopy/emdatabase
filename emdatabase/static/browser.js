@@ -200,14 +200,18 @@ function render({ model, el: root }) {
     listEl.innerHTML = "";
     const groups = model.get("groups") || [];
     let shown = 0;
+    // A dataset with several techniques is in several groups, so the All view
+    // lists it under the first one and skips it after that.
+    const drawn = new Set();
     for (const group of groups) {
       if (state.tab !== "All" && group.technique !== state.tab) continue;
-      const items = group.items.filter(matchesSearch);
+      const items = group.items.filter(matchesSearch).filter((it) => !drawn.has(it.name));
       if (!items.length) continue;
       if (state.tab === "All") {
         listEl.appendChild(el("div", "emdb-group-head", esc(group.technique)));
       }
       for (const item of items) {
+        if (state.tab === "All") drawn.add(item.name);
         listEl.appendChild(drawRow(item, active));
         shown += 1;
       }
@@ -291,7 +295,8 @@ function render({ model, el: root }) {
     if (item.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
     if ((item.versions || []).length) title.appendChild(versionSelect(item, version));
     head.appendChild(title);
-    const sub = [item.technique, item.size, item.shape].filter(Boolean).join("  ·  ");
+    const sub = [(item.technique || []).join(", "), item.size, item.shape]
+      .filter(Boolean).join("  ·  ");
     head.appendChild(el("div", "emdb-d-sub", esc(sub)));
     detailsEl.appendChild(head);
 

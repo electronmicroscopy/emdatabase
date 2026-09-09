@@ -91,6 +91,24 @@ def test_filter_accepts_a_list_as_any_of():
     assert jeol and tfs
 
 
+def test_filter_on_technique_tests_membership(two_techniques):
+    found = names(emdatabase.filter(technique="In-situ TEM"))
+    assert two_techniques in found
+    assert two_techniques in names(emdatabase.filter(technique="4D-STEM"))
+    for name in found:
+        ds = catalogue.resolve(name)
+        assert ds is not None
+        assert "In-situ TEM" in ds.metadata.technique
+
+
+def test_filter_on_a_list_of_techniques_is_any_of(two_techniques):
+    stem = set(names(emdatabase.filter(technique="4D-STEM")))
+    eels = set(names(emdatabase.filter(technique="EELS")))
+    either = set(names(emdatabase.filter(technique=["4D-STEM", "EELS"])))
+    assert either == stem | eels
+    assert stem and eels
+
+
 def test_filter_on_tags_tests_membership():
     for ds in emdatabase.filter(tags="Strain"):
         assert "Strain" in ds.metadata.tags

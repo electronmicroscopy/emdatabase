@@ -18,7 +18,8 @@ LayeredCuNb4DSTEM:
   camera_length: 0.6 cm
   license: CC-BY-4.0
   doi: 10.5281/zenodo.21632101
-  technique: 4D-STEM
+  technique:
+    - 4D-STEM
   tags:
     - Nanolaminate
     - Nanodiffraction

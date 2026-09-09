@@ -23,7 +23,8 @@ print(len(emdatabase.list_datasets()), "datasets")
 # microscope, tags, authors and their affiliations - and every whitespace
 # separated term has to appear somewhere, though not in the same field.
 for ds in emdatabase.search("amorphous"):
-    print(f"{type(ds).__name__:24s} {ds.metadata.technique:8s} {ds.size:>9s}")
+    techniques = ", ".join(ds.metadata.technique)
+    print(f"{type(ds).__name__:24s} {techniques:8s} {ds.size:>9s}")
 
 # %%
 # Because terms may land in different fields, a query can combine what an
@@ -33,8 +34,8 @@ for ds in emdatabase.search("jeol eels"):
 
 # %%
 # ``filter`` matches named fields instead. Strings compare exactly but
-# case-insensitively, ``tags``, ``authors`` and ``version`` test membership, and a list
-# means any of its values.
+# case-insensitively, ``technique``, ``tags``, ``authors`` and ``version`` test
+# membership, and a list means any of its values.
 for ds in emdatabase.filter(technique="4D-STEM", tags="Strain"):
     print(ds, "·", ", ".join(ds.metadata.tags))
 

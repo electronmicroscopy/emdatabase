@@ -25,10 +25,12 @@ from emdatabase import catalogue
 from emdatabase.downloadable_dataset import DownloadableDataset
 
 #: Fields :func:`filter` accepts. The first group is the dataset's own metadata;
-#: ``version`` is a weights family's dated versions, so it tests membership
-#: rather than equality. ``downloaded`` and ``location`` describe what is on
-#: this machine instead - ``location`` being the name of the location a copy was
-#: found in, which is ``"personal"`` for your own directory.
+#: ``technique``, ``tags``, ``authors`` and ``version`` are each several values
+#: per dataset - the techniques it counts as, its keywords, who to credit, and a
+#: weights family's dated versions - so they test membership rather than
+#: equality. ``downloaded`` and ``location`` describe what is on this machine
+#: instead - ``location`` being the name of the location a copy was found in,
+#: which is ``"personal"`` for your own directory.
 FILTER_FIELDS = (
     "kind",
     "version",
@@ -98,10 +100,11 @@ def filter(**criteria: Any) -> list[DownloadableDataset]:  # noqa: A001
     """Datasets matching every one of ``criteria``.
 
     Fields are those in :data:`FILTER_FIELDS`. String comparisons are exact but
-    case-insensitive; ``tags``, ``authors`` and ``version`` test membership;
-    passing a list matches any of its values::
+    case-insensitive; ``technique``, ``tags``, ``authors`` and ``version`` test
+    membership; passing a list matches any of its values::
 
         emdatabase.filter(technique="4D-STEM")
+        emdatabase.filter(technique=["4D-STEM", "EELS"])
         emdatabase.filter(technique="4D-STEM", tags="Strain")
         emdatabase.filter(microscope_vendor=["JEOL", "Hitachi"])
         emdatabase.filter(kind="weights")
@@ -145,7 +148,8 @@ def _matches(value: Any, wanted: Any) -> bool:
         return value == wanted
     wanted_values = [wanted] if isinstance(wanted, str) else list(wanted)
     if isinstance(value, (tuple, list, Mapping)):
-        # tags and authors: a dataset matches if it carries any one of them.
+        # technique, tags and authors: a dataset matches if it carries any one
+        # of them.
         have = {str(v).casefold() for v in value}
         return any(str(w).casefold() in have for w in wanted_values)
     if value is None:

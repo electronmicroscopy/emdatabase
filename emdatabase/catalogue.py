@@ -65,8 +65,10 @@ def resolve(name: str) -> DownloadableDataset | None:
     return obj()
 
 
-def _technique(md: DatasetMetadata) -> str:
-    return (md.technique or "Other").strip() or "Other"
+def _techniques(md: DatasetMetadata) -> list[str]:
+    """Every technique the entry declares, or ``["Other"]`` if it declares none."""
+    found = [t.strip() for t in md.technique if t.strip()]
+    return found or ["Other"]
 
 
 def _join(*parts) -> str:
@@ -135,7 +137,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
     row = {
         "name": name,
         "kind": md.kind,
-        "technique": _technique(md),
+        "technique": _techniques(md),
         "size": md.size,
         "downloaded": path is not None,
         "location": _location(path),
@@ -163,7 +165,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
     # every dataset it touches - not just the name.
     searchable = [
         name,
-        row["technique"],
+        " ".join(row["technique"]),
         row["description"],
         row["detector"],
         row["microscope"],
@@ -191,8 +193,10 @@ def _order(technique: str):
         return (1, technique.lower())
 
 
-def _group(row: dict) -> str:
-    return WEIGHTS_GROUP if row["kind"] == "weights" else row["technique"]
+def _groups(row: dict) -> list[str]:
+    """The groups a row belongs to - every technique it declares, or, for a
+    weights family, the one weights heading instead."""
+    return [WEIGHTS_GROUP] if row["kind"] == "weights" else list(row["technique"])
 
 
 def catalogue(kind: str | None = None) -> dict:
@@ -205,6 +209,11 @@ def catalogue(kind: str | None = None) -> dict:
     entry whatever its technique. ``kind`` limits the payload to one kind of
     entry; with no ``kind`` it holds both.
 
+    A dataset declaring several techniques is in each of their groups, so the
+    groups overlap and the counts, which are of datasets, are smaller than the
+    group sizes added up. A view that draws every group at once - an "All" tab -
+    has to drop the repeats itself.
+
     The group key is ``"technique"`` for the weights group too, so a UI can draw
     every group the same way and does not need to know weights exist.
     """
@@ -215,7 +224,8 @@ def catalogue(kind: str | None = None) -> dict:
         items = [it for it in items if it["kind"] == kind]
     by_group: dict[str, list[dict]] = {}
     for it in items:
-        by_group.setdefault(_group(it), []).append(it)
+        for group in _groups(it):
+            by_group.setdefault(group, []).append(it)
     groups = [{"technique": g, "items": by_group[g]} for g in sorted(by_group, key=_order)]
     return {
         "data_dir": str(config.data_dir()),

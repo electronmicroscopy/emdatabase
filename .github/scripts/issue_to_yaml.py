@@ -59,6 +59,18 @@ def clean(value):
     return "" if value == "_No response_" else value
 
 
+def checked(value):
+    """The options ticked in a checkboxes answer, in the order the form lists them.
+
+    GitHub writes a checkboxes field out as a markdown task list - a line
+    ``- [x] 4D-STEM`` per ticked option, ``- [ ]`` per one left alone.
+    """
+    return [
+        match.group(1).strip()
+        for match in re.finditer(r"^\s*-\s*\[[xX]\]\s*(.+)$", value, flags=re.MULTILINE)
+    ]
+
+
 def parse_issue_body(text):
     """The answers, keyed by field label, for everything the form asks.
 
@@ -106,7 +118,7 @@ def build_yaml(data):
         "camera_length": data["Camera Length"],
         "voltage": data["Accelerating Voltage"],
         "license": data["Dataset License"],
-        "technique": data["Technique"],
+        "technique": checked(data["Technique"]),
         "doi": data["DOI"],
         "tags": [t.strip() for t in data["Tags"].split(",") if t.strip()],
     }

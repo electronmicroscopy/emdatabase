@@ -28,8 +28,10 @@ Using the CLI
 It splits the URL into ``source`` and ``file``, asks the server for the file's
 size, streams the file to a temporary location to compute its md5 (deleted
 afterwards unless you pass ``--keep``), then prompts for the description,
-technique, licence, detector, microscope, voltage, camera length, DOI, tags and
-authors. Anything left blank is omitted. It writes
+techniques, licence, detector, microscope, voltage, camera length, DOI, tags
+and authors. Techniques and tags are comma-separated, so a dataset that is both
+in-situ and 4D-STEM is entered as ``In-situ TEM, 4D-STEM`` and is listed under
+each. Anything left blank is omitted. It writes
 ``emdatabase/index/<Name>.yaml`` and refuses to overwrite an existing file
 unless you pass ``--force``.
 

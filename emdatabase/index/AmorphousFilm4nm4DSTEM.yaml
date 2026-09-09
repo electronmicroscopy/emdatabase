@@ -16,7 +16,8 @@ AmorphousFilm4nm4DSTEM:
   detector: CeleritasXS
   license: CC-BY-4.0
   doi: 10.5281/zenodo.21632101
-  technique: 4D-STEM
+  technique:
+    - 4D-STEM
   tags:
     - Amorphous
     - FEM

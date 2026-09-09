@@ -153,7 +153,7 @@ def test_prompts_fill_in_the_optional_fields(server, tmp_path, monkeypatch):
     path = tmp_path / "MyData.yaml"
     assert validate_file(path) == []
     entry = _document(path)["MyData"]
-    assert entry["technique"] == "4D-STEM"
+    assert entry["technique"] == ["4D-STEM"]
     assert entry["voltage"] == "200 kV"
     assert entry["tags"] == ["Amorphous", "Strain"]
     assert entry["authors"] == {
@@ -161,6 +161,31 @@ def test_prompts_fill_in_the_optional_fields(server, tmp_path, monkeypatch):
     }
     assert "camera_length" not in entry
     assert "doi" not in entry
+
+
+def test_the_technique_prompt_takes_a_comma_separated_list(server, tmp_path, monkeypatch):
+    base, _ = server
+    _answers(
+        monkeypatch,
+        "MyData",  # entry name
+        "An in-situ 4D-STEM dataset of something.",  # description
+        "In-situ TEM, 4D-STEM",  # techniques
+        "",  # license
+        "",  # detector manufacturer
+        "",  # detector
+        "",  # microscope vendor
+        "",  # microscope model
+        "",  # voltage
+        "",  # camera length
+        "",  # DOI
+        "",  # tags
+        "",  # no authors
+    )
+    assert main([f"{base}/MyData.zspy", "--out", str(tmp_path)]) == 0
+
+    path = tmp_path / "MyData.yaml"
+    assert validate_file(path) == []
+    assert _document(path)["MyData"]["technique"] == ["In-situ TEM", "4D-STEM"]
 
 
 def _weights_answers(monkeypatch, name="DemoNet"):
