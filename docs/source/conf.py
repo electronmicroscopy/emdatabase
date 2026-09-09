@@ -150,4 +150,7 @@ sphinx_gallery_conf = {
     "reference_url": {
         "deapi": None,
     },
+    # The examples download from Zenodo, which has outages; a failed example
+    # then costs its output, not the whole site.
+    "only_warn_on_example_error": True,
 }

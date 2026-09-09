@@ -35,10 +35,29 @@ jobs:
           key: emdatabase-data-${{ hashFiles('emdatabase/index/*.yaml') }}
           restore-keys: emdatabase-data-
 
+      - name: Fetch the example dataset ahead of the build
+        continue-on-error: true
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from emdatabase.data import BilayerWS2; BilayerWS2().download(background=False)" && break
+            echo "attempt $attempt failed; retrying in 60 s"
+            sleep 60
+          done
+
       - name: Sphinx build
         timeout-minutes: 15
         run: |
-          make html -C docs
+          make html -C docs 2>&1 | tee sphinx.log
+
+      # A failed gallery example only warns (see conf.py), so say so where a
+      # green check is read: an annotation on the run and the job summary.
+      - name: Report failed gallery examples
+        run: |
+          if grep -q "Unexpected failing examples" sphinx.log; then
+            failed=$(sed -n '/Unexpected failing examples/,/^$/p' sphinx.log | sed 's/\x1b\[[0-9;]*m//g')
+            echo "::warning title=Gallery examples failed::$(echo "$failed" | tr '\n' ' ')"
+            { echo "## Gallery examples failed"; echo; echo '```'; echo "$failed"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload the built site
         uses: actions/upload-artifact@v4
