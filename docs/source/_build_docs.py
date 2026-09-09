@@ -5,7 +5,12 @@ from pathlib import Path
 
 import yaml
 
-from emdatabase.metadata import NON_DATASET_FILES, load_vendors
+from emdatabase.metadata import (
+    NON_DATASET_FILES,
+    acquisition_techniques,
+    load_vendors,
+    ml_tasks,
+)
 
 
 def parse_datasets(yaml_dir):
@@ -48,6 +53,8 @@ def parse_datasets(yaml_dir):
 
 def generate_html_table(datasets_by_technique):
     """Generate HTML with filterable table and technique tabs."""
+    from emdatabase import catalogue
+
     all_tags = set()
     all_detectors = {}  # Changed to dict: {manufacturer: [detectors]}
     technique_tags = {}
@@ -75,6 +82,7 @@ def generate_html_table(datasets_by_technique):
 
     all_detectors = {m: sorted(d) for m, d in all_detectors.items()}
 
+    technique_tabs_json = json.dumps(catalogue.ordered_groups(datasets_by_technique))
     technique_tags_json = __import__("json").dumps(technique_tags)
     technique_detectors_json = __import__("json").dumps(technique_detectors)
     all_tags_sorted = sorted(all_tags)
@@ -243,6 +251,7 @@ def generate_html_table(datasets_by_technique):
     html += f"""        </tbody>
         </table>
         <script>
+            const techniqueTabs = {technique_tabs_json};
             const techniqueTags = {technique_tags_json};
             const techniqueDetectors = {technique_detectors_json};
             const allTags = {__import__("json").dumps(all_tags_sorted)};
@@ -257,7 +266,7 @@ def generate_html_table(datasets_by_technique):
                 allButton.onclick = () => filterTechnique('All');
                 tabs.appendChild(allButton);
 
-                Object.keys(techniqueTags).sort().forEach(tech => {{
+                techniqueTabs.forEach(tech => {{
                     const btn = document.createElement('button');
                     btn.textContent = tech;
                     btn.className = 'tab-button';
@@ -411,7 +420,6 @@ _DOCS_BROWSER_JS = r"""
 (function () {
   var root = document.getElementById("root");
   root.classList.add("emdb");
-  var TAB_LABEL = { "In-situ TEM": "In-situ", "Cryo-EM": "Cryo" };
   // What this page is browsing; baked in next to DATA so one script serves the
   // dataset pages and the weights page.
   var WHAT = (typeof LABEL !== "undefined" && LABEL) ? LABEL : "Datasets";
@@ -486,8 +494,7 @@ _DOCS_BROWSER_JS = r"""
     tabsEl.innerHTML = "";
     var tabList = (typeof TABS !== "undefined" && TABS) ? TABS : techniques();
     ["All"].concat(tabList).forEach(function (tab) {
-      var label = tab === "All" ? "All" : (TAB_LABEL[tab] || tab);
-      var b = el("button", "emdb-tab" + (state.tab === tab ? " active" : ""), esc(label));
+      var b = el("button", "emdb-tab" + (state.tab === tab ? " active" : ""), esc(tab));
       b.addEventListener("click", function () { state.tab = tab; drawTabs(); drawList(); });
       tabsEl.appendChild(b);
     });
@@ -740,7 +747,11 @@ _FORM_CSS = """
 .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--emdb-blue); }
 .field input.invalid, .field textarea.invalid, .field select.invalid { border-color: var(--emdb-red); }
 .field-err { font-size: 11px; color: var(--emdb-red); min-height: 13px; }
-.check-group { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 4px 0; }
+.check-group { display: flex; flex-direction: column; gap: 8px; padding: 4px 0; }
+.check-set { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.check-set-label {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--emdb-subtext);
+}
 .check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 .check input { width: auto; }
 .section-title {
@@ -858,10 +869,9 @@ def _app_page(
 def _catalogue_payload(kind: str = "dataset"):
     """``(payload, tabs)`` - the baked catalogue and the ordered tab list.
 
-    Tabs are the canonical techniques (so 4D-STEM / EELS / EDS / EBSD / STEM /
-    In-situ / Cryo always show, even if a technique currently has no dataset),
-    followed by any other technique that happens to be present. For the weights
-    page there is one group, so the tabs are whatever is there.
+    Tabs are every acquisition technique, so one with no dataset in it yet
+    still shows, plus anything else present, in the browser's group order. For
+    the weights page there is one group, so the tabs are whatever is there.
     """
     from emdatabase import catalogue
 
@@ -869,8 +879,7 @@ def _catalogue_payload(kind: str = "dataset"):
     present = [g["technique"] for g in payload.get("groups", [])]
     if kind == "weights":
         return payload, present
-    order = list(catalogue.TECHNIQUE_ORDER)
-    return payload, order + [t for t in present if t not in order]
+    return payload, catalogue.ordered_groups([*acquisition_techniques(), *present])
 
 
 def _browser_script(payload, tabs, label: str = "Datasets") -> str:
@@ -988,7 +997,7 @@ def generate_weights_html() -> str:
 _VENDOR_LISTS = load_vendors()
 _MANUFACTURERS = tuple(_VENDOR_LISTS["detector_manufacturer"])
 _VENDORS = tuple(_VENDOR_LISTS["microscope_vendor"])
-_TECHNIQUES = ("4D-STEM", "EELS", "EDS", "EBSD", "STEM", "In-situ TEM", "Cryo-EM", "Other")
+_TECHNIQUE_GROUPS = (("Acquisition", acquisition_techniques()), ("ML task", ml_tasks()))
 _KINDS = ("dataset", "weights")
 
 # Owner/repo the prefilled "create new file" PR link targets.
@@ -1050,17 +1059,28 @@ def _select_field(fid, label, options, hint="", default=""):
     )
 
 
-def _checkbox_field(fid, label, options, hint="", full=False):
-    """A group of checkboxes - a field a dataset may have more than one of."""
+def _checkbox_field(fid, label, groups, hint="", full=False):
+    """Checkboxes in labelled groups - a field a dataset may have several of.
+
+    ``groups`` is ``(group label, options)`` pairs. They share one container,
+    so the form reads every box with one selector whichever group it is in.
+    """
     hn = '<div class="field-hint">' + _esc(hint) + "</div>" if hint else ""
     style = ' style="grid-column:1/-1"' if full else ""
     boxes = "".join(
-        '<label class="check"><input type="checkbox" value="'
-        + _esc(o)
-        + '">'
-        + _esc(o)
-        + "</label>"
-        for o in options
+        '<div class="check-set"><div class="check-set-label">'
+        + _esc(group)
+        + "</div>"
+        + "".join(
+            '<label class="check"><input type="checkbox" value="'
+            + _esc(o)
+            + '">'
+            + _esc(o)
+            + "</label>"
+            for o in options
+        )
+        + "</div>"
+        for group, options in groups
     )
     return (
         '<div class="field"'
@@ -1191,8 +1211,11 @@ def generate_add_dataset_html() -> str:
         + _checkbox_field(
             "f-technique",
             "Technique",
-            _TECHNIQUES,
-            hint="Tick every one the dataset is; it is listed under each.",
+            _TECHNIQUE_GROUPS,
+            hint=(
+                "Tick how the data was acquired; it is listed under each. A model "
+                "checkpoint also ticks what the model does."
+            ),
             full=True,
         )
         + _text_field("f-doi", "DOI", placeholder="10.5281/zenodo.15490547")

@@ -12,14 +12,11 @@ from __future__ import annotations
 
 import inspect
 import warnings
+from collections.abc import Iterable
 from pathlib import Path
 
 from emdatabase.downloadable_dataset import DownloadableDataset
 from emdatabase.metadata import DatasetMetadata, format_size
-
-# Techniques in the order the browser should show them - the modalities the
-# collection is built around first, then anything else alphabetically.
-TECHNIQUE_ORDER = ("4D-STEM", "EELS", "EDS", "EBSD", "STEM", "In-situ TEM", "Cryo-EM")
 
 # Model weights are grouped under one heading of their own rather than by
 # technique, and it goes after every technique.
@@ -185,12 +182,21 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
 
 
 def _order(technique: str):
+    """Sort key: alphabetical, then ``Other``, then the weights heading."""
     if technique == WEIGHTS_GROUP:
         return (2, "")
-    try:
-        return (0, TECHNIQUE_ORDER.index(technique))
-    except ValueError:
-        return (1, technique.lower())
+    if technique == "Other":
+        return (1, "")
+    return (0, technique.lower())
+
+
+def ordered_groups(names: Iterable[str]) -> list[str]:
+    """``names`` deduplicated, in the order the browser shows them.
+
+    The docs pages draw their own tabs rather than the payload's groups, so
+    they ask for the order here rather than repeating it.
+    """
+    return sorted(set(names), key=_order)
 
 
 def _groups(row: dict) -> list[str]:
@@ -203,9 +209,8 @@ def catalogue(kind: str | None = None) -> dict:
     """The whole browser payload, grouped by technique.
 
     ``{"data_dir", "locations", "groups": [{"technique", "items"}],
-    "n_downloaded", "n_total"}`` - one group per technique in
-    :data:`TECHNIQUE_ORDER`, then any
-    others alphabetically, then :data:`WEIGHTS_GROUP` holding every weights
+    "n_downloaded", "n_total"}`` - one group per technique alphabetically, with
+    ``Other`` after them and then :data:`WEIGHTS_GROUP`, holding every weights
     entry whatever its technique. ``kind`` limits the payload to one kind of
     entry; with no ``kind`` it holds both.
 
@@ -226,7 +231,7 @@ def catalogue(kind: str | None = None) -> dict:
     for it in items:
         for group in _groups(it):
             by_group.setdefault(group, []).append(it)
-    groups = [{"technique": g, "items": by_group[g]} for g in sorted(by_group, key=_order)]
+    groups = [{"technique": g, "items": by_group[g]} for g in ordered_groups(by_group)]
     return {
         "data_dir": str(config.data_dir()),
         "locations": {loc.name: str(loc.path) for loc in config.locations()},

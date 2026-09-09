@@ -180,12 +180,16 @@ MyDataset:
 ```
 
 A dataset may list more than one technique - in-situ 4D-STEM, cryo EELS - and is
-then listed under each of them.
+then listed under each of them. `emdatabase/index/techniques.yaml` is the
+vocabulary they come from: `acquisition` (how the data was taken) and `ml_task`
+(what a model does). A dataset declares acquisition techniques only; a
+`kind: weights` entry declares one of those plus the ML tasks it performs.
 
 `size_bytes` is the file's `Content-Length` in bytes; the test suite checks it against
 the server on every run. `emdatabase/index/vendors.yaml` lists the microscope
 vendors and detector manufacturers already in use - a new one is fine, but a name close
-to one already on the list fails CI as a misspelling.
+to one already on the list fails CI as a misspelling. A technique close to one in
+`techniques.yaml` fails the same way.
 
 Open an issue with the [new dataset template](https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml),
 or run `python -m emdatabase.new_dataset <url>`, which fetches the checksum and size,

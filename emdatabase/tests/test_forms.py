@@ -26,7 +26,13 @@ from typing import Any
 import pytest
 import yaml
 
-from emdatabase.metadata import load_schema, validate_document
+from emdatabase.metadata import (
+    acquisition_techniques,
+    load_schema,
+    ml_tasks,
+    techniques,
+    validate_document,
+)
 from emdatabase.new_dataset import FIELD_ORDER, as_weights_family, build_document
 
 pytest.importorskip("jsonschema")
@@ -120,6 +126,7 @@ WEIGHTS_FIELDS: dict[str, Any] = dict(
     DATASET_FIELDS,
     name="DemoNet",
     description="Trained weights for the peak-finding U-Net.",
+    technique=["4D-STEM", "ML - peak finding"],
     file="DemoNet.pt",
     kind="weights",
     version_date=VERSION_DATE,
@@ -174,10 +181,10 @@ def test_form_dataset_with_an_opaque_url_validates(run_form):
 def test_form_writes_every_technique_as_a_list(run_form):
     _, one = _entry(run_form(DATASET_FIELDS))
     assert one["technique"] == ["4D-STEM"]
-    fields = dict(DATASET_FIELDS, technique=["In-situ TEM", "4D-STEM"])
+    fields = dict(DATASET_FIELDS, technique=["In-situ", "4D-STEM"])
     document, entry = _entry(run_form(fields))
     assert validate_document(document) == []
-    assert entry["technique"] == ["In-situ TEM", "4D-STEM"]
+    assert entry["technique"] == ["In-situ", "4D-STEM"]
 
 
 def test_form_weights_validates_and_carries_the_model(run_form):
@@ -199,7 +206,7 @@ def test_form_takes_today_when_the_version_date_is_blank(run_form):
 
 
 def test_form_drops_the_model_block_for_a_dataset(run_form):
-    fields = dict(WEIGHTS_FIELDS, kind="dataset")
+    fields = dict(WEIGHTS_FIELDS, kind="dataset", technique=["4D-STEM"])
     document, entry = _entry(run_form(fields))
     assert validate_document(document) == []
     assert "model" not in entry
@@ -252,6 +259,23 @@ def test_form_has_a_field_for_every_schema_property(build_docs):
         assert f'class="{cls}"' in html, cls
 
 
+def test_form_renders_the_technique_vocabulary_in_two_groups(build_docs):
+    """The form is the vocabulary, split the way techniques.yaml splits it."""
+    html = build_docs.generate_add_dataset_html()
+    heads = [
+        html.index(f'<div class="check-set-label">{group}</div>')
+        for group in ("Acquisition", "ML task")
+    ]
+    assert heads[0] < heads[1]
+    for start, end, options in (
+        (heads[0], heads[1], acquisition_techniques()),
+        (heads[1], len(html), ml_tasks()),
+    ):
+        where = [html.index(f'<input type="checkbox" value="{name}">') for name in options]
+        assert where == sorted(where)
+        assert start < where[0] and where[-1] < end
+
+
 # -- the docs datasets table -------------------------------------------------
 
 
@@ -264,20 +288,20 @@ def test_docs_table_lists_a_two_technique_dataset_under_each(build_docs, tmp_pat
                     "description": "An in-situ 4D-STEM dataset.",
                     "source": "https://zenodo.org/records/0000000/files",
                     "file": "TwoTechniques.zspy",
-                    "technique": ["4D-STEM", "In-situ TEM"],
+                    "technique": ["4D-STEM", "In-situ"],
                 }
             }
         ),
         encoding="utf-8",
     )
     by_technique = build_docs.parse_datasets(tmp_path)
-    assert sorted(by_technique) == ["4D-STEM", "In-situ TEM"]
+    assert sorted(by_technique) == ["4D-STEM", "In-situ"]
     assert [d["name"] for d in by_technique["4D-STEM"]] == ["TwoTechniques"]
-    assert [d["name"] for d in by_technique["In-situ TEM"]] == ["TwoTechniques"]
+    assert [d["name"] for d in by_technique["In-situ"]] == ["TwoTechniques"]
 
     html = build_docs.generate_html_table(by_technique)
     assert html.count("<strong>TwoTechniques</strong>") == 1
-    assert 'data-technique="4D-STEM, In-situ TEM"' in html
+    assert 'data-technique="4D-STEM, In-situ"' in html
 
 
 # -- the issue form ----------------------------------------------------------
@@ -289,8 +313,7 @@ def _issue_body(**answers):
 
 def _ticked(*chosen):
     """A checkboxes answer as GitHub writes it - a task list, ticked or not."""
-    options = ("4D-STEM", "EELS", "EDS", "EBSD", "STEM", "In-situ TEM", "Cryo-EM", "Other")
-    return "\n".join(f"- [{'x' if o in chosen else ' '}] {o}" for o in options)
+    return "\n".join(f"- [{'x' if o in chosen else ' '}] {o}" for o in techniques())
 
 
 @pytest.fixture
@@ -314,6 +337,13 @@ def test_issue_labels_match_the_fields_the_parser_looks_for(issue_to_yaml):
     assert labels == list(issue_to_yaml.FIELDS)
 
 
+def test_issue_form_offers_the_whole_technique_vocabulary(issue_to_yaml):
+    """The template is static YAML, so nothing but a test keeps it in step."""
+    form = yaml.safe_load(ISSUE_FORM.read_text(encoding="utf-8"))
+    block = next(b for b in form["body"] if b.get("id") == "technique")
+    assert [o["label"] for o in block["attributes"]["options"]] == list(techniques())
+
+
 def test_issue_weights_entry_validates(parse):
     body = _issue_body(
         **{
@@ -332,7 +362,7 @@ def test_issue_weights_entry_validates(parse):
             "Camera Length": "_No response_",
             "Accelerating Voltage": "_No response_",
             "Dataset License": "MIT",
-            "Technique": _ticked("Other"),
+            "Technique": _ticked("STEM", "ML - peak finding"),
             "DOI": "10.5281/zenodo.15490547",
             "Tags": "Machine Learning, Segmentation",
             "Kind": "weights",
@@ -352,7 +382,7 @@ def test_issue_weights_entry_validates(parse):
     assert entry["file"] == "DemoNet.pt"
     assert entry["doi"] == "10.5281/zenodo.15490547"
     assert entry["tags"] == ["Machine Learning", "Segmentation"]
-    assert entry["technique"] == ["Other"]
+    assert entry["technique"] == ["STEM", "ML - peak finding"]
     assert entry["authors"]["Jane Doe"]["orcid"] == "0000-0002-1825-0097"
     assert entry["model"] == {
         "class": "quantem.core.ml.CNN2d",
@@ -370,6 +400,7 @@ def test_issue_takes_today_when_the_version_date_is_blank(parse):
             "--Checksum--": "md5:df9376d5c020a23f0f7f51cfe79f303f",
             "--Description--": "Trained weights for the peak-finding U-Net.",
             "--Dataset License--": "MIT",
+            "Technique": _ticked("STEM", "ML - peak finding"),
             "Kind": "weights",
             "Version Date": "_No response_",
             "Model Class": "quantem.core.ml.CNN2d",
@@ -398,7 +429,7 @@ def test_issue_drive_link_becomes_url_plus_file_name(parse):
             "Camera Length": "100 mm",
             "Accelerating Voltage": "200 kV",
             "Dataset License": "CC-BY-4.0",
-            "Technique": _ticked("4D-STEM", "In-situ TEM"),
+            "Technique": _ticked("4D-STEM", "In-situ"),
             "Tags": "Nanocrystals",
         }
     )
@@ -406,7 +437,7 @@ def test_issue_drive_link_becomes_url_plus_file_name(parse):
     assert validate_document(document) == []
     entry = document[name]
     _assert_in_field_order(entry)
-    assert entry["technique"] == ["4D-STEM", "In-situ TEM"]
+    assert entry["technique"] == ["4D-STEM", "In-situ"]
     assert entry["source"] == "https://drive.google.com"
     assert entry["url"] == "https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40Ccd"
     assert entry["file"] == "MgONanoCrystals.zspy"

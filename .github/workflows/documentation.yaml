@@ -26,6 +26,15 @@ jobs:
         run: |
           pip install -U -e .'[doc]'
 
+      # The gallery examples download BilayerWS2 from Zenodo, which times out
+      # now and then; keep the download between runs, keyed on the index.
+      - name: Cache example downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/emdatabase
+          key: emdatabase-data-${{ hashFiles('emdatabase/index/*.yaml') }}
+          restore-keys: emdatabase-data-
+
       - name: Sphinx build
         timeout-minutes: 15
         run: |

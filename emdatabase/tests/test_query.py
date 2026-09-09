@@ -92,13 +92,13 @@ def test_filter_accepts_a_list_as_any_of():
 
 
 def test_filter_on_technique_tests_membership(two_techniques):
-    found = names(emdatabase.filter(technique="In-situ TEM"))
+    found = names(emdatabase.filter(technique="In-situ"))
     assert two_techniques in found
     assert two_techniques in names(emdatabase.filter(technique="4D-STEM"))
     for name in found:
         ds = catalogue.resolve(name)
         assert ds is not None
-        assert "In-situ TEM" in ds.metadata.technique
+        assert "In-situ" in ds.metadata.technique
 
 
 def test_filter_on_a_list_of_techniques_is_any_of(two_techniques):

@@ -15,7 +15,7 @@ ApoferritinApollo15eps:
   detector: Apollo
   license: CC0-1.0
   technique:
-    - Cryo-EM
+    - Cryo
   doi: 10.5281/zenodo.21632101
   tags:
     - Cryo-EM

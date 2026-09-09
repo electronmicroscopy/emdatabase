@@ -1,0 +1,25 @@
+# The technique vocabulary. `acquisition` is how the data was taken and every
+# entry declares at least one; `ml_task` is what a model does and only a
+# `kind: weights` entry declares one.
+acquisition:
+  - 4D-STEM
+  - Cryo
+  - Diffraction
+  - EBSD
+  - EDS
+  - EELS
+  - In-situ
+  - Lorentz
+  - Simulated
+  - STEM
+  - TEM
+  - Tomography
+  - Other
+ml_task:
+  - ML - atom tracing
+  - ML - classification
+  - ML - denoising
+  - ML - peak finding
+  - ML - phase retrieval
+  - ML - segmentation
+  - ML - other

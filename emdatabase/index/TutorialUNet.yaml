@@ -10,7 +10,8 @@ TutorialUNet:
   file: nn02_unet1_weights.pt
   license: MIT
   technique:
-    - Other
+    - Simulated
+    - ML - segmentation
   tags:
     - Machine Learning
     - Segmentation

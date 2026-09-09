@@ -13,11 +13,12 @@ called on disk.
 
 This module also owns the small amount of shared knowledge about where the
 dataset files live - :func:`dataset_files`, :func:`load_schema`,
-:func:`load_vendors` - so the loader, the stub generator, the docs form and the
-tests all read the same directory the same way, and the one check a candidate
-file has to pass - :func:`validate_document`, :func:`validate_file` - so the
-test suite, the issue-form workflow and ``emdatabase.new_dataset`` accept and
-reject exactly the same files.
+:func:`load_vendors`, :func:`techniques` - so the loader, the stub generator,
+the docs form and the tests all read the same directory and the same technique
+vocabulary the same way, and the one check a candidate file has to pass -
+:func:`validate_document`, :func:`validate_file` - so the test suite, the
+issue-form workflow and ``emdatabase.new_dataset`` accept and reject exactly the
+same files.
 """
 
 from __future__ import annotations
@@ -35,10 +36,11 @@ import yaml
 INDEX_DIR = Path(__file__).parent / "index"
 SCHEMA_PATH = INDEX_DIR / "json-schema.json"
 VENDORS_PATH = INDEX_DIR / "vendors.yaml"
+TECHNIQUES_PATH = INDEX_DIR / "techniques.yaml"
 TEMPLATE_PATH = INDEX_DIR / "TEMPLATE.yaml"
 
 # Files in index/ that are not dataset collections.
-NON_DATASET_FILES = frozenset({VENDORS_PATH.name, TEMPLATE_PATH.name})
+NON_DATASET_FILES = frozenset({VENDORS_PATH.name, TECHNIQUES_PATH.name, TEMPLATE_PATH.name})
 
 REQUIRED_FIELDS = ("description", "source", "file")
 
@@ -66,6 +68,27 @@ def load_vendors() -> dict[str, list[str]]:
     return yaml.safe_load(VENDORS_PATH.read_text(encoding="utf-8"))
 
 
+def load_techniques() -> dict[str, list[str]]:
+    """The technique vocabulary: ``{"acquisition": [...], "ml_task": [...]}``."""
+    return yaml.safe_load(TECHNIQUES_PATH.read_text(encoding="utf-8"))
+
+
+def acquisition_techniques() -> tuple[str, ...]:
+    """How the data was taken - what every entry declares at least one of."""
+    return tuple(load_techniques()["acquisition"])
+
+
+def ml_tasks() -> tuple[str, ...]:
+    """What a model does - what a ``kind: weights`` entry declares as well."""
+    return tuple(load_techniques()["ml_task"])
+
+
+def techniques() -> tuple[str, ...]:
+    """The whole vocabulary, acquisition first, each in the order of the file."""
+    vocabulary = load_techniques()
+    return tuple(vocabulary["acquisition"]) + tuple(vocabulary["ml_task"])
+
+
 def check_vendor(value: str, known: Iterable[str], cutoff: float = 0.8) -> tuple[str, str] | None:
     """``(level, message)`` for a vendor string, or ``None`` if it is known.
 
@@ -78,6 +101,30 @@ def check_vendor(value: str, known: Iterable[str], cutoff: float = 0.8) -> tuple
     Similarity is the check's weak point on short names - ``"JOEL"`` for
     ``"JEOL"`` scores too low to be called a typo and comes back as a warning.
     """
+    return _check_known(value, known, "vendors.yaml", "vendor", cutoff)
+
+
+def check_technique(
+    value: str, known: Iterable[str] | None = None, cutoff: float = 0.8
+) -> tuple[str, str] | None:
+    """``(level, message)`` for a technique string, or ``None`` if it is known.
+
+    The same rule as :func:`check_vendor`: a near-miss of a vocabulary entry is
+    a misspelling and an ``"error"``, and anything else is a ``"warning"``
+    asking for it to be added to ``techniques.yaml``.
+    """
+    return _check_known(
+        value,
+        techniques() if known is None else known,
+        "techniques.yaml",
+        "technique",
+        cutoff,
+    )
+
+
+def _check_known(
+    value: str, known: Iterable[str], source: str, noun: str, cutoff: float
+) -> tuple[str, str] | None:
     known = list(known)
     if not value or value in known:
         return None
@@ -87,11 +134,21 @@ def check_vendor(value: str, known: Iterable[str], cutoff: float = 0.8) -> tuple
     close = difflib.get_close_matches(value, known, n=1, cutoff=cutoff)
     if close:
         return ("error", f"{value!r} looks like a misspelling of {close[0]!r}")
-    return ("warning", f"{value!r} is not in vendors.yaml; add it there if it is a new vendor")
+    return ("warning", f"{value!r} is not in {source}; add it there if it is a new {noun}")
 
 
 def _fold(value: str) -> str:
     return "".join(value.split()).casefold()
+
+
+def _declared_techniques(spec: Mapping[str, Any]) -> list[str]:
+    """The entry's techniques, whether it wrote one string or a list of them."""
+    declared = spec.get("technique") or ()
+    if isinstance(declared, str):
+        return [declared]
+    if isinstance(declared, list):
+        return [str(t) for t in declared]
+    return []  # not something the schema accepts; it is reported there
 
 
 def validate_document(
@@ -100,9 +157,11 @@ def validate_document(
     """Everything wrong with a parsed dataset YAML document, as readable lines.
 
     An empty list means the document is valid. The schema is the first check
-    and the vendor names are the second: a name close to a known one is a
-    misspelling and is listed as a problem, while one that is nothing like any
-    of them is a new vendor and goes out through :mod:`warnings` instead.
+    and the vendor and technique names are the second: a name close to a known
+    one is a misspelling and is listed as a problem, while one that is nothing
+    like any of them is new and goes out through :mod:`warnings` instead. Which
+    kind of technique an entry may declare is a problem either way: a model is
+    the only thing that has an ``ML -`` task, and it has to say which.
 
     Nothing is printed and nothing is raised for a bad document - the caller
     decides whether a problem is a failed test, a comment on an issue or a
@@ -124,6 +183,9 @@ def validate_document(
     ]
 
     vendors = load_vendors()
+    vocabulary = load_techniques()
+    known_techniques = list(vocabulary["acquisition"]) + list(vocabulary["ml_task"])
+    ml_task_names = set(vocabulary["ml_task"])
     for name, spec in document.items():
         if not isinstance(spec, Mapping):
             continue
@@ -150,6 +212,31 @@ def validate_document(
                 problems.append(line)
             else:
                 warnings.warn(line, stacklevel=2)
+
+        declared = _declared_techniques(spec)
+        for value in declared:
+            result = check_technique(value, known_techniques)
+            if result is None:
+                continue
+            level, message = result
+            line = f"{_where(origin)}: {name}: technique: {message}"
+            if level == "error":
+                problems.append(line)
+            else:
+                warnings.warn(line, stacklevel=2)
+        tasks = [t for t in declared if t in ml_task_names]
+        if spec.get("kind") == "weights":
+            if not tasks:
+                problems.append(
+                    f"{_where(origin)}: {name}: technique: a weights entry needs at least one "
+                    "'ML - ' technique saying what the model does"
+                )
+        else:
+            problems += [
+                f"{_where(origin)}: {name}: technique: {task!r} is what a model does, so it "
+                "belongs to a kind: weights entry rather than a dataset"
+                for task in tasks
+            ]
     return problems
 
 

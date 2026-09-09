@@ -16,11 +16,15 @@ from emdatabase.metadata import (
     Author,
     DatasetMetadata,
     WeightsVersion,
+    acquisition_techniques,
     check_vendor,
     dataset_files,
     format_size,
     load_schema,
+    load_techniques,
     load_vendors,
+    ml_tasks,
+    techniques,
     validate_document,
     validate_file,
     versioned_filename,
@@ -32,6 +36,7 @@ DATASET_FILES = dataset_files()
 SCHEMA = load_schema()
 ENTRY_SCHEMA = SCHEMA["patternProperties"]["^.+$"]
 VENDORS = load_vendors()
+TECHNIQUES = techniques()
 
 
 def entries():
@@ -47,7 +52,7 @@ ENTRIES = list(entries())
 
 def test_datasets_are_found():
     assert DATASET_FILES, "no dataset YAML found"
-    assert all(p.name != "vendors.yaml" for p in DATASET_FILES)
+    assert all(p.name not in ("vendors.yaml", "techniques.yaml") for p in DATASET_FILES)
 
 
 @pytest.mark.parametrize("path", DATASET_FILES, ids=lambda p: p.name)
@@ -135,7 +140,7 @@ def test_technique_is_always_a_tuple(declared, expected):
     assert DatasetMetadata.from_spec(spec).technique == expected
 
 
-@pytest.mark.parametrize("declared", ["4D-STEM", ["4D-STEM"], ["In-situ TEM", "4D-STEM"]])
+@pytest.mark.parametrize("declared", ["4D-STEM", ["4D-STEM"], ["In-situ", "4D-STEM"]])
 def test_schema_accepts_one_technique_or_several(declared):
     entry = {"description": "d", "source": "https://example.com/f", "file": "f"}
     assert validate_document({"X": {**entry, "technique": declared}}) == []
@@ -224,6 +229,65 @@ def test_check_vendor_tells_a_typo_from_a_new_vendor():
     assert level("Nion") == "warning"
 
 
+def test_the_vocabulary_is_acquisition_then_ml_task_in_file_order():
+    vocabulary = load_techniques()
+    assert list(vocabulary) == ["acquisition", "ml_task"]
+    assert acquisition_techniques() == tuple(vocabulary["acquisition"])
+    assert ml_tasks() == tuple(vocabulary["ml_task"])
+    assert TECHNIQUES == acquisition_techniques() + ml_tasks()
+    assert TECHNIQUES[:2] == ("4D-STEM", "Cryo")
+    # "Other" ends the acquisition list, and every ML task is prefixed.
+    assert acquisition_techniques()[-1] == "Other"
+    assert all(task.startswith("ML - ") for task in ml_tasks())
+
+
+def test_validate_document_reports_a_misspelled_technique_and_warns_about_a_new_one():
+    entry = {"description": "d", "source": "https://example.com/f", "file": "f"}
+    problems = validate_document({"X": {**entry, "technique": ["4DSTEM"]}})
+    assert problems == [
+        "dataset entry: X: technique: '4DSTEM' looks like a misspelling of '4D-STEM'"
+    ]
+    with pytest.warns(UserWarning, match="Ptychography"):
+        assert validate_document({"X": {**entry, "technique": ["Ptychography"]}}) == []
+
+
+def test_a_weights_entry_needs_an_ml_task_and_a_dataset_may_not_have_one():
+    """The `ML -` half of the vocabulary says what a model does, so only a
+    model declares one - and a model that declares none says nothing."""
+    entry = {"description": "d", "source": "https://example.com/f", "file": "f"}
+    problems = validate_document({"X": {**entry, "kind": "dataset", "technique": ["STEM"]}})
+    assert problems == []
+
+    problems = validate_document(
+        {"X": {**entry, "kind": "dataset", "technique": ["STEM", "ML - denoising"]}}
+    )
+    assert len(problems) == 1
+    assert "'ML - denoising' is what a model does" in problems[0]
+
+    weights = {
+        **entry,
+        "kind": "weights",
+        "model": {"class": "quantem.core.ml.CNN2d", "framework": "torch"},
+        "latest": {"url": "https://example.com/f", "checksum": "md5:" + "a" * 32},
+        "versions": {
+            "260902": {
+                "url": "https://example.com/f",
+                "checksum": "md5:" + "a" * 32,
+                "size_bytes": 1,
+            }
+        },
+    }
+    problems = validate_document({"X": {**weights, "technique": ["STEM"]}})
+    assert len(problems) == 1
+    assert "needs at least one 'ML - ' technique" in problems[0]
+    assert validate_document({"X": {**weights, "technique": ["STEM", "ML - denoising"]}}) == []
+
+
+def test_techniques_yaml_covers_what_the_entries_declare():
+    declared = {t for _, _, spec in ENTRIES for t in spec.get("technique") or ()}
+    assert declared <= set(TECHNIQUES)
+
+
 def test_vendors_yaml_covers_what_the_datasets_declare():
     for field in ("detector_manufacturer", "microscope_vendor"):
         declared = {spec[field] for _, _, spec in ENTRIES if spec.get(field)}
@@ -251,8 +315,8 @@ def test_repr_is_one_short_identifying_line():
 
 
 def test_repr_lists_every_technique():
-    metadata = _record(technique=["In-situ TEM", "4D-STEM"], size_bytes=12492298)
-    assert repr(metadata) == "<DatasetMetadata d.zspy · In-situ TEM, 4D-STEM · 12.5 MB>"
+    metadata = _record(technique=["In-situ", "4D-STEM"], size_bytes=12492298)
+    assert repr(metadata) == "<DatasetMetadata d.zspy · In-situ, 4D-STEM · 12.5 MB>"
 
 
 def test_repr_drops_the_parts_it_does_not_have():
