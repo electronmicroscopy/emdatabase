@@ -1,0 +1,26 @@
+# $schema: ./json-schema.json
+TutorialUNet_instance:
+  description: >-
+    Weights of the instance segmenting model from `neural_networks_02_unet.ipynb`
+    available in the `quantem-tutorials` repository.
+  source: https://drive.google.com
+  file: nn02_unet_instance_i10_weights.pt
+  license: CC-BY-4.0
+  technique:
+    - ML - segmentation
+  authors:
+    Arthur McCray:
+      affiliation: Northwestern University
+  kind: weights
+  model:
+    class: quantem.core.ml.CNN2d
+    framework: torch
+  latest:
+    url: https://drive.google.com/uc?export=download&id=1jHE-XImhTFI9sFVdyvUWfwOXhdsxvPQV
+    size_bytes: 10360820
+    checksum: md5:2b47ff8ce10f20b708ea0177fb243e7b
+  versions:
+    "260910":
+      url: https://drive.google.com/uc?export=download&id=1jHE-XImhTFI9sFVdyvUWfwOXhdsxvPQV
+      size_bytes: 10360820
+      checksum: md5:2b47ff8ce10f20b708ea0177fb243e7b

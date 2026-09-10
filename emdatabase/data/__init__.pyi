@@ -312,6 +312,20 @@ class TutorialUNet(DownloadableDataset):
     """
     ...
 
+class TutorialUNet_instance(DownloadableDataset):
+    """
+    TutorialUNet_instance
+
+    Weights of the instance segmenting model from `neural_networks_02_unet.ipynb` available in the `quantem-tutorials` repository.
+
+    License: CC-BY-4.0
+
+    Model weights hosted at https://drive.google.com; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
 class ZrNbPrecipitate(DownloadableDataset):
     """
     ZrNbPrecipitate
@@ -327,4 +341,4 @@ class ZrNbPrecipitate(DownloadableDataset):
     """
     ...
 
-__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'SPEDAg', 'TutorialUNet', 'ZrNbPrecipitate']
+__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'SPEDAg', 'TutorialUNet', 'TutorialUNet_instance', 'ZrNbPrecipitate']
