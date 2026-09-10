@@ -46,7 +46,7 @@ body:
     id: url
     attributes:
       label: --URL--
-      description: Please provide a URL where the file can be downloaded. A link ending in the file name is split into the directory it is served from and the name; a link that names no file - a Google Drive `uc?export=download&id=` link, or anything else with a query string - is kept whole, and then the file name has to be given below.
+      description: Please provide a URL where the file can be downloaded. A link ending in the file name is split into the directory it is served from and the name; a link that names no file - a Google Drive `uc?export=download&id=` link, or anything else with a query string - is kept whole, and then the file name has to be given below. A Google Drive share link, `file/d/<id>/view` or `open?id=<id>`, works too - it is rewritten to the download link that serves the file.
       placeholder: ex. https://zenodo.org/records/15490547/files/smallPtychography.hspy
     validations:
       required: true
@@ -62,10 +62,10 @@ body:
     id: checksum
     attributes:
       label: --Checksum--
-      description: Please provide the checksum of the dataset file for verification purposes. Include the type of checksum (e.g., md5, sha256) followed by the checksum value.
+      description: The md5 of the file, as `md5:<32 hex chars>`. Optional. Filled in automatically on the pull request by downloading the file; for a very large file, use the Add Dataset form's file picker instead. The size is filled in the same way.
       placeholder: ex. md5:df9376d5c020a23f0f7f51cfe79f303f
     validations:
-      required: true
+      required: false
   - type: textarea
     id: description
     attributes:

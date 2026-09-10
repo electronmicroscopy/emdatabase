@@ -4,6 +4,9 @@ The file the CLI describes is served by the local HTTP server in ``conftest``
 rather than a monkeypatched fetch, so the HEAD request that fills in
 ``size_bytes`` and the redirect that Zenodo and GitHub raw both do are
 exercised for real. Nothing here touches the network.
+
+``fill_download_fields``, which the pull-request workflow runs over an entry a
+form left incomplete, is tested against the same server at the end.
 """
 
 import hashlib
@@ -16,7 +19,10 @@ from emdatabase.metadata import validate_file
 from emdatabase.new_dataset import (
     default_name,
     download_md5,
+    fill_download_fields,
     main,
+    normalize_url,
+    split_url,
     version_date,
     write_document,
 )
@@ -426,6 +432,47 @@ def test_default_name(filename, expected):
     assert default_name(filename) == expected
 
 
+DRIVE_ID = "1jHE-XImhTFI9sFVdyvUWfwOXhdsxvPQV"
+DRIVE_DOWNLOAD = f"https://drive.google.com/uc?export=download&id={DRIVE_ID}"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"https://drive.google.com/file/d/{DRIVE_ID}/view?usp=drive_link",
+        f"https://drive.google.com/file/d/{DRIVE_ID}/view?usp=sharing",
+        f"https://drive.google.com/file/d/{DRIVE_ID}/view",
+        f"https://drive.google.com/file/d/{DRIVE_ID}/edit",
+        f"https://drive.google.com/file/d/{DRIVE_ID}",
+        f"https://drive.google.com/open?id={DRIVE_ID}",
+        f"https://drive.google.com/open?usp=drive_link&id={DRIVE_ID}",
+        DRIVE_DOWNLOAD,
+    ],
+)
+def test_a_drive_share_link_becomes_the_download_link(url):
+    assert normalize_url(url) == DRIVE_DOWNLOAD
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://zenodo.org/records/15490547/files/PdNiP.zspy",
+        "https://example.com/data/file.zspy?download=1",
+        "https://docs.google.com/file/d/abc/view",
+        "not a url",
+        "",
+    ],
+)
+def test_a_link_that_is_not_a_drive_share_link_is_left_alone(url):
+    assert normalize_url(url) == url
+
+
+def test_split_url_normalises_a_drive_share_link():
+    """The CLI and the issue route get the rewrite for free, through split_url."""
+    source, filename, link = split_url(f"https://drive.google.com/file/d/{DRIVE_ID}/view")
+    assert (source, filename, link) == ("https://drive.google.com", "", DRIVE_DOWNLOAD)
+
+
 def test_write_document_writes_the_header_and_makes_the_directory(tmp_path):
     """The CI script reuses this to rewrite a family file."""
     path = tmp_path / "index" / "MyData.yaml"
@@ -521,3 +568,103 @@ def test_write_document_matches_the_hand_written_style(tmp_path):
     assert "'" not in text
     assert f"  source: {url}\n" in text
     assert yaml.safe_load(text) == document
+
+
+# -- filling in a checksum and a size a form left blank -----------------------
+
+
+def _entry(base, **extra):
+    return {
+        "MyData": {
+            "description": "A 4D-STEM dataset of something.",
+            "source": base,
+            "file": "MyData.zspy",
+            **extra,
+        }
+    }
+
+
+def test_fill_download_fields_fills_in_both(server):
+    base, _ = server
+    document = _entry(base)
+    lines = fill_download_fields(document)
+    assert document["MyData"]["checksum"] == f"md5:{MD5}"
+    assert document["MyData"]["size_bytes"] == len(CONTENT)
+    assert len(lines) == 1
+    assert f"md5:{MD5}" in lines[0] and str(len(CONTENT)) in lines[0]
+
+
+def test_fill_download_fields_leaves_what_is_already_there(server):
+    """Only the missing field is written; a checksum given by hand is not second-guessed."""
+    base, _ = server
+    stated = "md5:" + "0" * 32
+    document = _entry(base, checksum=stated)
+    lines = fill_download_fields(document)
+    assert document["MyData"]["checksum"] == stated
+    assert document["MyData"]["size_bytes"] == len(CONTENT)
+    assert "size_bytes" in lines[0] and "checksum" not in lines[0]
+
+
+def test_fill_download_fields_follows_a_url(server):
+    """A link that names no file is followed as it stands, not as source/file."""
+    base, _ = server
+    document = _entry(base, url=f"{base}/uc?export=download&id=MyData.zspy", file="Renamed.zspy")
+    fill_download_fields(document)
+    assert document["MyData"]["checksum"] == f"md5:{MD5}"
+
+
+def test_fill_download_fields_downloads_nothing_for_a_complete_entry(http_server):
+    """Nothing is served here, so a request of any kind would fail the test."""
+    base, _ = http_server
+    document = _entry(base, checksum=f"md5:{MD5}", size_bytes=len(CONTENT))
+    assert fill_download_fields(document) == []
+
+
+def test_fill_download_fields_follows_every_weights_pin(server):
+    """A family carries the two fields per pin, and each pin has its own link."""
+    base, served = server
+    older = b"the weights before the model was retrained" * 8
+    (served / "older.pt").write_bytes(older)
+    document = {
+        "DemoNet": {
+            "description": "A peak-detection network.",
+            "source": base,
+            "file": "DemoNet.pt",
+            "kind": "weights",
+            "latest": {"url": f"{base}/MyData.zspy"},
+            "versions": {
+                "260101": {"url": f"{base}/older.pt"},
+                "260902": {
+                    "url": f"{base}/MyData.zspy",
+                    "checksum": f"md5:{MD5}",
+                    "size_bytes": len(CONTENT),
+                },
+            },
+        }
+    }
+    lines = fill_download_fields(document)
+    entry = document["DemoNet"]
+    assert entry["latest"] == {
+        "url": f"{base}/MyData.zspy",
+        "checksum": f"md5:{MD5}",
+        "size_bytes": len(CONTENT),
+    }
+    assert entry["versions"]["260101"] == {
+        "url": f"{base}/older.pt",
+        "checksum": f"md5:{hashlib.md5(older).hexdigest()}",
+        "size_bytes": len(older),
+    }
+    # The pin that was already complete is not downloaded, and not reported.
+    assert [line.split(":")[0] for line in lines] == ["DemoNet latest", "DemoNet version 260101"]
+    # Nothing is written at the top level, where a family may not carry them.
+    assert not {"checksum", "size_bytes"} & set(entry)
+
+
+def test_fill_download_fields_refuses_a_page(server):
+    """A Drive viewer page, or a 404 dressed up as HTML, is not the file."""
+    base, served = server
+    (served / "scan.html").write_text("<html>virus scan warning</html>", encoding="utf-8")
+    document = _entry(base, file="scan.html")
+    with pytest.raises(ValueError, match="served a page rather than the file"):
+        fill_download_fields(document)
+    assert "checksum" not in document["MyData"]

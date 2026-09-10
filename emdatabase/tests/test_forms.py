@@ -10,11 +10,13 @@ so its tab grouping is checked here too.
 The docs form builds its YAML in the browser, so the check runs the generator
 function itself under ``node``; the tests skip when node is not installed. The
 issue-form script lives in ``.github/scripts`` rather than in the package and is
-loaded from its path. Nothing here touches the network - the one call that would
-(``content_length``) is stubbed out.
+loaded from its path. Nothing here touches the network: the calls that would
+are either stubbed out (``content_length``) or pointed at the local HTTP server
+in ``conftest``.
 """
 
 import datetime
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -33,7 +35,13 @@ from emdatabase.metadata import (
     techniques,
     validate_document,
 )
-from emdatabase.new_dataset import FIELD_ORDER, as_weights_family, build_document
+from emdatabase.new_dataset import (
+    FIELD_ORDER,
+    as_weights_family,
+    build_document,
+    normalize_url,
+    split_url,
+)
 
 pytest.importorskip("jsonschema")
 
@@ -96,13 +104,37 @@ def run_form(build_docs, tmp_path):
     return run
 
 
+@pytest.fixture
+def run_split(build_docs, tmp_path):
+    """Run the form's link splitter under node; return ``(source, file, url)``."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    script = tmp_path / "split_url.js"
+    script.write_text(
+        build_docs.ADD_DATASET_YAML_JS
+        + '\nvar p = emdbSplitUrl(require("fs").readFileSync(0, "utf8"));\n'
+        + "process.stdout.write(JSON.stringify([p.source, p.file, p.url]));\n",
+        encoding="utf-8",
+    )
+
+    def run(url):
+        result = subprocess.run(
+            [node, str(script)], input=url, capture_output=True, text=True, check=True
+        )
+        return tuple(json.loads(result.stdout))
+
+    return run
+
+
 VERSION_DATE = "260902"
+
+DRIVE_LINK = "https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40CcdTSiXGnpG"
 
 DATASET_FIELDS: dict[str, Any] = {
     "name": "MgONanoCrystals",
     "description": "A 4D-STEM dataset of MgO nanocrystals, calibrated in mrad.",
-    "source": "https://drive.google.com",
-    "url": "https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40CcdTSiXGnpG",
+    "link": DRIVE_LINK,
     "checksum": "md5:df9376d5c020a23f0f7f51cfe79f303f",
     "file": "MgONanoCrystals.zspy",
     "size_bytes": "1104287335",
@@ -167,7 +199,8 @@ def test_form_dataset_with_an_opaque_url_validates(run_form):
     document, entry = _entry(text)
     assert validate_document(document) == []
     _assert_in_field_order(entry)
-    assert entry["url"] == DATASET_FIELDS["url"]
+    assert entry["source"] == "https://drive.google.com"
+    assert entry["url"] == DRIVE_LINK
     assert entry["file"] == "MgONanoCrystals.zspy"
     assert entry["size_bytes"] == 1104287335
     assert entry["authors"] == {
@@ -197,7 +230,7 @@ def test_form_weights_validates_and_carries_the_model(run_form):
         "framework": "torch",
         "quantem": ">=0.2,<0.3",
     }
-    _assert_weights_family(entry, WEIGHTS_FIELDS["url"], int(WEIGHTS_FIELDS["size_bytes"]))
+    _assert_weights_family(entry, DRIVE_LINK, int(WEIGHTS_FIELDS["size_bytes"]))
 
 
 def test_form_takes_today_when_the_version_date_is_blank(run_form):
@@ -214,15 +247,73 @@ def test_form_drops_the_model_block_for_a_dataset(run_form):
 
 
 def test_form_omits_the_url_when_the_file_is_at_source_slash_file(run_form):
-    fields = dict(DATASET_FIELDS, source="https://zenodo.org/records/15490547/files", url="")
-    _, entry = _entry(run_form(fields))
+    link = "https://zenodo.org/records/15490547/files/MgONanoCrystals.zspy"
+    _, entry = _entry(run_form(dict(DATASET_FIELDS, link=link, file="")))
     assert "url" not in entry
+    assert entry["source"] == "https://zenodo.org/records/15490547/files"
+    assert entry["file"] == "MgONanoCrystals.zspy"
+
+
+# Every shape of link the form may be handed, run through both implementations.
+LINKS = (
+    "https://drive.google.com/file/d/1jHE-XImhTFI9sFVdyvUWfwOXhdsxvPQV/view?usp=drive_link",
+    "https://drive.google.com/file/d/1jHE-XImhTFI9sFVdyvUWfwOXhdsxvPQV/view",
+    "https://drive.google.com/file/d/1jHE-XImhTFI9sFVdyvUWfwOXhdsxvPQV/edit",
+    "https://drive.google.com/open?id=1jHE-XImhTFI9sFVdyvUWfwOXhdsxvPQV",
+    "https://drive.google.com/open?usp=drive_link&id=1jHE-XImhTFI9sFVdyvUWfwOXhdsxvPQV",
+    DRIVE_LINK,
+    "https://zenodo.org/records/15490547/files/smallPtychography.hspy",
+    "https://zenodo.org/records/15490547/files/smallPtychography.hspy?download=1",
+    "https://github.com/electronmicroscopy/emdatabase/raw/abc1234/data/small.zspy",
+    "https://example.com/downloads/no-extension-here",
+    "https://example.com",
+    "HTTPS://Example.COM/a/b.zspy",
+    "not a url",
+)
+
+
+@pytest.mark.parametrize("url", LINKS)
+def test_form_splits_a_link_the_way_the_cli_does(run_split, url):
+    """One field, two implementations: the JS port has to answer as split_url does."""
+    assert run_split(url) == split_url(url)
+
+
+def test_form_takes_a_drive_share_link(run_form):
+    share = "https://drive.google.com/file/d/1jHE-XImhTFI9sFVdyvUWfwOXhdsxvPQV/view?usp=drive_link"
+    fields = dict(DATASET_FIELDS, link=share, file="example.zspy")
+    document, entry = _entry(run_form(fields))
+    assert validate_document(document) == []
+    assert entry["source"] == "https://drive.google.com"
+    assert entry["url"] == normalize_url(share)
+    assert entry["file"] == "example.zspy"
+
+
+def test_form_offers_a_local_file_picker(build_docs):
+    """The picker fills in name, size and md5; the md5 comes from SparkMD5."""
+    html = build_docs.generate_add_dataset_html()
+    assert 'id="f-localfile" type="file"' in html
+    assert 'id="hint-f-localfile"' in html
+    assert "spark-md5/3.0.2/spark-md5.min.js" in html
+
+
+def _field_html(html, fid):
+    """The one field block for ``fid``: from its label to its error line."""
+    return html[html.index(f'<label for="{fid}"') : html.index(f'id="err-{fid}"')]
+
+
+@pytest.mark.parametrize("fid", ["f-checksum", "f-size_bytes"])
+def test_form_does_not_require_the_checksum_or_the_size(build_docs, fid):
+    """Both are filled in on the pull request, so the form takes them blank."""
+    block = _field_html(build_docs.generate_add_dataset_html(), fid)
+    assert '<span class="req">' not in block
+    assert "Filled in automatically on the pull request" in block
 
 
 def test_form_and_cli_write_the_same_document(run_form):
     """The two routes are only worth having if they end in the same file."""
     _, from_form = _entry(run_form(WEIGHTS_FIELDS))
     entry: dict[str, Any] = {k: WEIGHTS_FIELDS.get(k) for k in FIELD_ORDER}
+    entry["source"], _, entry["url"] = split_url(WEIGHTS_FIELDS["link"])
     entry["size_bytes"] = int(WEIGHTS_FIELDS["size_bytes"])
     entry["authors"] = {
         a["name"]: {"affiliation": a["aff"], "orcid": a["orcid"]}
@@ -237,7 +328,7 @@ def test_form_and_cli_write_the_same_document(run_form):
     from_cli = build_document(WEIGHTS_FIELDS["name"], entry)[WEIGHTS_FIELDS["name"]]
     assert from_form == from_cli
     assert list(from_form) == list(from_cli)
-    _assert_weights_family(from_cli, WEIGHTS_FIELDS["url"], int(WEIGHTS_FIELDS["size_bytes"]))
+    _assert_weights_family(from_cli, DRIVE_LINK, int(WEIGHTS_FIELDS["size_bytes"]))
 
 
 def test_form_keeps_the_underscore_in_an_entry_name(run_form):
@@ -250,9 +341,13 @@ def test_form_has_a_field_for_every_schema_property(build_docs):
     html = build_docs.generate_add_dataset_html()
     properties = load_schema()["patternProperties"]["^.+$"]["properties"]
     for name in properties:
-        if name in ("authors", "model", "latest", "versions"):
+        # One "Download link" field stands for both, and is split the way the CLI
+        # splits it; the form never asks for either on its own.
+        if name in ("authors", "model", "latest", "versions", "source", "url"):
             continue
         assert f'id="f-{name}"' in html, name
+    assert 'id="f-link"' in html
+    assert 'id="f-source"' not in html and 'id="f-url"' not in html
     for name in properties["model"]["properties"]:
         assert f'id="f-model_{name}"' in html, name
     for cls in ("a-name", "a-aff", "a-orcid"):
@@ -447,3 +542,37 @@ def test_issue_drive_link_becomes_url_plus_file_name(parse):
     ]
     assert entry["kind"] == "dataset"
     assert "model" not in entry
+
+
+FILE_BYTES = b"a small 4D-STEM dataset, allegedly" * 100
+FILE_MD5 = f"md5:{hashlib.md5(FILE_BYTES).hexdigest()}"
+
+
+def test_issue_a_blank_checksum_is_filled_in_from_the_file(issue_to_yaml, http_server, tmp_path):
+    """The checksum is optional on the form, so the script downloads the file for it."""
+    base, served = http_server
+    (served / "MyData.zspy").write_bytes(FILE_BYTES)
+    issue = tmp_path / "issue.txt"
+    issue.write_text(
+        _issue_body(
+            **{
+                "--Dataset Name--": "MyData",
+                "--URL--": f"{base}/MyData.zspy",
+                "--Checksum--": "_No response_",
+                "--Description--": "A 4D-STEM dataset of something.",
+                "--Dataset License--": "CC-BY-4.0",
+                "Technique": _ticked("4D-STEM"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "index"
+    issue_to_yaml.write_yaml(issue, out)
+
+    document = yaml.safe_load((out / "MyData.yaml").read_text(encoding="utf-8"))
+    assert validate_document(document) == []
+    entry = document["MyData"]
+    _assert_in_field_order(entry)
+    assert entry["checksum"] == FILE_MD5
+    # The size the HEAD request gave is kept as it is.
+    assert entry["size_bytes"] == len(FILE_BYTES)

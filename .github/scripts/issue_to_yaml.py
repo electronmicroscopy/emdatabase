@@ -6,6 +6,10 @@ keys in the same order as the CLI and the docs form, and it goes through
 ``emdatabase.metadata.validate_document`` before it is written - the same check
 the test suite and ``emdatabase.new_dataset`` run - so a malformed issue fails
 here rather than in the pull request the workflow opens.
+
+The form's checksum is optional, and the size is only what a HEAD request said,
+so ``emdatabase.new_dataset.fill_download_fields`` downloads the file for
+whichever of the two the issue left blank before any of that.
 """
 
 import re
@@ -17,6 +21,8 @@ from emdatabase.new_dataset import (
     as_weights_family,
     build_document,
     content_length,
+    fill_download_fields,
+    normalize_url,
     split_url,
     version_date,
     write_document,
@@ -95,8 +101,10 @@ def build_yaml(data):
         sys.exit("the issue has no dataset name")
     # The form asks for the download link; the YAML wants the directory and the
     # file name separately, and keeps the whole link as `url` only when the file
-    # is not served at `source/file`.
-    url = data["URL"].rstrip("/")
+    # is not served at `source/file`. A Drive share link is rewritten to the
+    # download link before either, so the HEAD request below asks about the file
+    # rather than the viewer page.
+    url = normalize_url(data["URL"].rstrip("/"))
     source, filename, link = split_url(url)
     if not source:
         sys.exit(f"{data['URL']!r} is not a link to a file")
@@ -139,15 +147,24 @@ def build_yaml(data):
     return build_document(name, entry), name
 
 
-if __name__ == "__main__":
-    issue_file, out_dir = sys.argv[1], Path(sys.argv[2])
+def write_yaml(issue_file, out_dir):
+    """Parse one issue body and write the entry it describes into ``out_dir``."""
     document, dataset_name = build_yaml(parse_issue_body(Path(issue_file).read_text()))
-    out_path = out_dir / f"{dataset_name}.yaml"
+    out_path = Path(out_dir) / f"{dataset_name}.yaml"
+    for line in fill_download_fields(document):
+        print(line)
+    # A field the issue left blank is missing from the entry rather than at the
+    # end of it, so the document is rebuilt into the shipped key order.
+    document = {name: build_document(name, entry)[name] for name, entry in document.items()}
     problems = validate_document(document, origin=out_path)
     for problem in problems:
         print(problem)
     if problems:
         sys.exit("fix the issue and reopen it")
 
-    write_document(Path(out_path), document)
+    write_document(out_path, document)
     print(f"wrote {out_path}")
+
+
+if __name__ == "__main__":
+    write_yaml(sys.argv[1], Path(sys.argv[2]))

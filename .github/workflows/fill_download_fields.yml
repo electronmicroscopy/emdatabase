@@ -1,0 +1,92 @@
+name: fill download fields
+
+# The docs form and the issue form both let the checksum and the size be blank,
+# because a contributor cannot be asked to md5 a 100 GB file by hand, while the
+# test suite requires both on every entry. This job downloads whatever a pull
+# request left blank, fills it in and pushes the result back to the branch. A
+# fork's branch cannot be pushed to, so a pull request from one is failed with
+# the values it would have written instead.
+on:
+  pull_request:
+    paths:
+      - emdatabase/index/*.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  fill:
+    name: checksum and size are filled in
+    runs-on: ubuntu-latest
+    # The files are whole datasets, so a slow host can take hours.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.EMDATABASE_PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies and package
+        run: pip install -U -e .'[dev]'
+
+      # The checkout is the head repository, which for a fork carries its own
+      # idea of the base branch, so the base is fetched from this repository.
+      - name: Fetch the base branch
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags https://github.com/${{ github.repository }} \
+            +refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}
+
+      - name: Fill in the checksum and size
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files=$(git diff --name-only origin/${{ github.base_ref }}... -- 'emdatabase/index/*.yaml')
+            if [ -z "$files" ]; then
+              echo "no index file changed" | tee filled.md
+              exit 0
+            fi
+            python .github/scripts/fill_download_fields.py --summary filled.md $files
+          else
+            python .github/scripts/fill_download_fields.py --summary filled.md \
+              --index emdatabase/index
+          fi
+
+      - name: Push the filled-in entries
+        if: >-
+          github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if git diff --quiet -- emdatabase/index; then
+            echo "nothing to fill in"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fill in checksum and size" -- emdatabase/index
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+      - name: Report what a fork has to fill in itself
+        if: >-
+          github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          if git diff --quiet -- emdatabase/index; then
+            echo "nothing to fill in"
+            exit 0
+          fi
+          cat filled.md
+          git diff -- emdatabase/index
+          echo "This pull request comes from a fork, so these fields cannot be pushed to its"
+          echo "branch. Copy the values above into the entry, or fill them in yourself with"
+          echo "the Add Dataset form's file picker, and check the file with:"
+          echo "  python -m emdatabase.new_dataset --validate <file>"
+          exit 1
