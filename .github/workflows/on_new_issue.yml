@@ -1,13 +1,28 @@
 name: on_new_issue
 
+# Turns an issue filed through the "New Dataset" form into an index entry and
+# a pull request. Runs when the form applies the new_dataset label, when a
+# maintainer applies it later, or by hand with the issue number.
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number to turn into a dataset entry
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
 
 jobs:
   create-dataset-yaml:
     runs-on: ubuntu-latest
-    if: contains(github.event.issue.labels.*.name, 'new_dataset')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'new_dataset')
+    timeout-minutes: 120
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -15,32 +30,36 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Install dependencies and package
         run: pip install -U -e .'[dev]'
 
-      - name: Extract issue body
+      - name: Fetch the issue
         env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
-        run: printf '%s' "$ISSUE_BODY" > issue_body.txt
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ github.event.inputs.issue || github.event.issue.number }}
+        run: |
+          echo "ISSUE=$ISSUE" >> "$GITHUB_ENV"
+          gh issue view "$ISSUE" --json title --jq .title > issue_title.txt
+          gh issue view "$ISSUE" --json body --jq .body > issue_body.txt
 
       - name: Parse issue and write YAML
         run: |
           python .github/scripts/issue_to_yaml.py issue_body.txt emdatabase/index/
-
-      - name: Commit new YAML
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b add-dataset-${{ github.run_id }}
-          git add emdatabase/index/*.yaml
-          git commit -m "Add new dataset YAML from issue"
+          python -m emdatabase._create_stubs
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.EMDATABASE_PAT || secrets.GITHUB_TOKEN }}
-          branch: add-dataset-${{ github.run_id }}
-          title: "Add new dataset YAML"
-          body: "This PR adds a new dataset YAML file generated from the issue form."
+          add-paths: |
+            emdatabase/index/*.yaml
+            emdatabase/data/__init__.pyi
+          branch: add-dataset-${{ env.ISSUE }}
+          commit-message: "Add index entry from issue #${{ env.ISSUE }}"
+          title: "Add ${{ github.event.issue.title || 'dataset' }} from issue #${{ env.ISSUE }}"
+          body: |
+            Index entry generated from the New Dataset form.
+
+            Closes #${{ env.ISSUE }}
