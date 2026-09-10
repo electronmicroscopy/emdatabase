@@ -16,7 +16,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  issues: read
+  issues: write
 
 jobs:
   create-dataset-yaml:
@@ -46,8 +46,25 @@ jobs:
 
       - name: Parse issue and write YAML
         run: |
-          python .github/scripts/issue_to_yaml.py issue_body.txt emdatabase/index/
+          set -o pipefail
+          python .github/scripts/issue_to_yaml.py issue_body.txt emdatabase/index/ 2>&1 | tee parse.log
           python -m emdatabase._create_stubs
+
+      - name: Tell the issue what went wrong
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "The entry could not be built from this issue. The last lines of the log:"
+            echo
+            echo '```'
+            tail -n 15 parse.log 2>/dev/null || echo "(no output captured)"
+            echo '```'
+            echo
+            echo "Edit the issue to fix it, then a maintainer can re-apply the \`new_dataset\` label to run again. Full log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > comment.md
+          gh issue comment "$ISSUE" --body-file comment.md
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
