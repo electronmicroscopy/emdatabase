@@ -8,8 +8,6 @@
 
 const MB = 1e6;
 
-const TAB_LABEL = { "In-situ TEM": "In-situ", "Cryo-EM": "Cryo" };
-
 function fmtMB(bytes) {
   const mb = bytes / MB;
   if (mb >= 100) return mb.toFixed(0);
@@ -183,8 +181,7 @@ function render({ model, el: root }) {
     tabsEl.innerHTML = "";
     const tabs = ["All", ...techniques()];
     for (const tab of tabs) {
-      const label = tab === "All" ? "All" : (TAB_LABEL[tab] || tab);
-      const btn = el("button", "emdb-tab" + (state.tab === tab ? " active" : ""), esc(label));
+      const btn = el("button", "emdb-tab" + (state.tab === tab ? " active" : ""), esc(tab));
       btn.addEventListener("click", () => {
         state.tab = tab;
         drawTabs();

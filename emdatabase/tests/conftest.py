@@ -41,7 +41,7 @@ TWO_TECHNIQUE_SPEC = {
     "description": "An in-situ 4D-STEM dataset of something.",
     "source": "https://zenodo.org/records/0000000/files",
     "file": "TwoTechniques.zspy",
-    "technique": ["4D-STEM", "In-situ TEM"],
+    "technique": ["4D-STEM", "In-situ"],
 }
 
 

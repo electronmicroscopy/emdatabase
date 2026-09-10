@@ -103,13 +103,8 @@ def build_datasets_html(app, exception):
     if exception is not None:
         print(f"Build exception: {exception}")
     datasets_path = Path(__file__).parent.parent.parent / "emdatabase" / "index"
-    print(f"Looking for datasets at: {datasets_path.absolute()}")
-    print(f"Path exists: {datasets_path.exists()}")
-    if datasets_path.exists():
-        print(f"Contents: {list(datasets_path.iterdir())}")
     datasets = parse_datasets(datasets_path)
-    print(f"Found {len(datasets)} datasets for documentation.")
-    print(datasets)
+    print(f"Found {len(datasets)} technique groups for documentation.")
     html_output = generate_html_table(datasets)
 
     output_path = Path(app.outdir) / "datasets_db.html"
@@ -155,4 +150,7 @@ sphinx_gallery_conf = {
     "reference_url": {
         "deapi": None,
     },
+    # The examples download from Zenodo, which has outages; a failed example
+    # then costs its output, not the whole site.
+    "only_warn_on_example_error": True,
 }

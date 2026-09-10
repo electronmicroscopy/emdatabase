@@ -25,21 +25,29 @@ def test_catalogue_groups_and_orders_by_technique():
     assert cat["n_total"] > 0
     assert cat["groups"], "expected at least one technique group"
     techniques = [g["technique"] for g in cat["groups"]]
-    # Known techniques appear in the declared order, ahead of any extras.
-    known = [t for t in techniques if t in catalogue.TECHNIQUE_ORDER]
-    expected = [t for t in catalogue.TECHNIQUE_ORDER if t in known]
-    assert known == expected
+    # Alphabetical, case-insensitive, with "Other" and the weights heading last.
+    named = [t for t in techniques if t not in ("Other", catalogue.WEIGHTS_GROUP)]
+    assert named == sorted(named, key=str.lower)
+    assert techniques[len(named) :] == [
+        t for t in ("Other", catalogue.WEIGHTS_GROUP) if t in techniques
+    ]
     # n_total counts datasets, and the groups overlap, so it is the number of
     # distinct names across them.
     names = {it["name"] for g in cat["groups"] for it in g["items"]}
     assert cat["n_total"] == len(names)
 
 
+def test_group_order_is_alphabetical_with_other_and_weights_last():
+    assert catalogue.ordered_groups(
+        [catalogue.WEIGHTS_GROUP, "Other", "STEM", "4D-STEM", "eels"]
+    ) == ["4D-STEM", "eels", "STEM", "Other", catalogue.WEIGHTS_GROUP]
+
+
 def test_a_dataset_with_two_techniques_is_in_both_groups(two_techniques):
     cat = catalogue.catalogue()
     groups = {g["technique"]: [it["name"] for it in g["items"]] for g in cat["groups"]}
     assert two_techniques in groups["4D-STEM"]
-    assert two_techniques in groups["In-situ TEM"]
+    assert two_techniques in groups["In-situ"]
     # The counts are of datasets, so the one in two groups is counted once.
     assert cat["n_total"] == len(catalogue.datasets())
 
@@ -48,8 +56,8 @@ def test_a_dataset_with_two_techniques_carries_both(two_techniques):
     ds = catalogue.resolve(two_techniques)
     assert ds is not None
     row = catalogue.entry(two_techniques, ds)
-    assert row["technique"] == ["4D-STEM", "In-situ TEM"]
-    assert "in-situ tem" in row["search"]
+    assert row["technique"] == ["4D-STEM", "In-situ"]
+    assert "in-situ" in row["search"]
 
 
 def test_catalogue_entry_has_expected_fields():

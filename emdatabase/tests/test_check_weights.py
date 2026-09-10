@@ -73,6 +73,7 @@ def index(tmp_path):
                 "source": "http://127.0.0.1",
                 "file": FILE,
                 "license": "MIT",
+                "technique": ["4D-STEM", "ML - peak finding"],
                 "kind": "weights",
                 "model": {"class": "quantem.core.ml.CNN2d", "framework": "torch"},
                 "latest": latest,

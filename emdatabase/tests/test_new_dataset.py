@@ -169,7 +169,7 @@ def test_the_technique_prompt_takes_a_comma_separated_list(server, tmp_path, mon
         monkeypatch,
         "MyData",  # entry name
         "An in-situ 4D-STEM dataset of something.",  # description
-        "In-situ TEM, 4D-STEM",  # techniques
+        "In-situ, 4D-STEM",  # techniques
         "",  # license
         "",  # detector manufacturer
         "",  # detector
@@ -185,7 +185,7 @@ def test_the_technique_prompt_takes_a_comma_separated_list(server, tmp_path, mon
 
     path = tmp_path / "MyData.yaml"
     assert validate_file(path) == []
-    assert _document(path)["MyData"]["technique"] == ["In-situ TEM", "4D-STEM"]
+    assert _document(path)["MyData"]["technique"] == ["In-situ", "4D-STEM"]
 
 
 def _weights_answers(monkeypatch, name="DemoNet"):
@@ -194,7 +194,7 @@ def _weights_answers(monkeypatch, name="DemoNet"):
         monkeypatch,
         name,  # entry name
         "A peak-detection network for 4D-STEM patterns.",  # description
-        "4D-STEM",  # technique
+        "4D-STEM, ML - peak finding",  # technique
         "CC-BY-4.0",  # license
         "",  # detector manufacturer
         "",  # detector
@@ -276,6 +276,35 @@ def test_a_dataset_entry_says_nothing_about_a_model(server, tmp_path):
     )
     entry = _document(tmp_path / "MyData.yaml")["MyData"]
     assert entry["kind"] == "dataset" and "model" not in entry
+
+
+def test_a_technique_outside_the_vocabulary_is_asked_for_again(
+    server, tmp_path, monkeypatch, capsys
+):
+    """Unlike the vendor list, the technique vocabulary is closed."""
+    base, _ = server
+    _answers(
+        monkeypatch,
+        "MyData",
+        "A 4D-STEM dataset of something.",
+        "4D-STEM, Ptychography",  # not a technique: asked for again
+        "4D-STEM",
+        "",  # license
+        "",  # detector manufacturer
+        "",  # detector
+        "",  # microscope vendor
+        "",  # microscope model
+        "",  # voltage
+        "",  # camera length
+        "",  # DOI
+        "",  # tags
+        "",  # no authors
+    )
+    assert main([f"{base}/MyData.zspy", "--out", str(tmp_path)]) == 0
+    printed = capsys.readouterr().out
+    assert "'Ptychography' not on the list" in printed
+    assert "Tomography" in printed  # the options it offers instead
+    assert _document(tmp_path / "MyData.yaml")["MyData"]["technique"] == ["4D-STEM"]
 
 
 def test_a_misspelled_vendor_is_asked_for_again(server, tmp_path, monkeypatch):

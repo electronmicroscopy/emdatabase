@@ -134,16 +134,28 @@ body:
     id: technique
     attributes:
       label: Technique
-      description: Tick every technique the dataset was acquired with. It is listed under each of them.
+      description: Tick how the dataset was acquired - it is listed under each one ticked. A weights entry also ticks every ML task the model performs.
       options:
         - label: 4D-STEM
-        - label: EELS
-        - label: EDS
+        - label: Cryo
+        - label: Diffraction
         - label: EBSD
+        - label: EDS
+        - label: EELS
+        - label: In-situ
+        - label: Lorentz
+        - label: Simulated
         - label: STEM
-        - label: In-situ TEM
-        - label: Cryo-EM
+        - label: TEM
+        - label: Tomography
         - label: Other
+        - label: ML - atom tracing
+        - label: ML - classification
+        - label: ML - denoising
+        - label: ML - peak finding
+        - label: ML - phase retrieval
+        - label: ML - segmentation
+        - label: ML - other
   - type: input
     id: doi
     attributes:

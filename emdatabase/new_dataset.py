@@ -30,6 +30,7 @@ import sys
 import tempfile
 import urllib.parse
 import urllib.request
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,7 @@ from emdatabase.metadata import (
     INDEX_DIR,
     check_vendor,
     load_vendors,
+    techniques,
     validate_document,
     validate_file,
 )
@@ -166,10 +168,26 @@ def _ask(prompt: str, default: str = "", assume_yes: bool = False) -> str:
     return answer or default
 
 
-def _ask_list(prompt: str, assume_yes: bool) -> list[str]:
-    """A comma-separated answer as a list, with the blanks dropped."""
-    answer = _ask(prompt, assume_yes=assume_yes)
-    return [item.strip() for item in answer.split(",") if item.strip()]
+def _ask_list(prompt: str, assume_yes: bool, known: Sequence[str] | None = None) -> list[str]:
+    """A comma-separated answer as a list, with the blanks dropped.
+
+    ``known`` makes it a closed vocabulary: the options are printed first, and
+    an answer holding anything else is asked for again.
+    """
+    if known is not None and not assume_yes:
+        print(f"  one or more of: {', '.join(known)}")
+    while True:
+        answer = _ask(prompt, assume_yes=assume_yes)
+        chosen = [item.strip() for item in answer.split(",") if item.strip()]
+        if known is None or assume_yes:
+            return chosen
+        unknown = [item for item in chosen if item not in known]
+        if not unknown:
+            return chosen
+        print(
+            f"  error: {', '.join(repr(item) for item in unknown)} "
+            f"not on the list; choose from: {', '.join(known)}"
+        )
 
 
 def _ask_vendor(prompt: str, known: list[str], assume_yes: bool) -> str:
@@ -391,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
         "checksum": checksum,
         "file": filename,
         "size_bytes": size_bytes,
-        "technique": _ask_list("techniques, comma separated, e.g. 4D-STEM", args.yes),
+        "technique": _ask_list("techniques, comma separated", args.yes, techniques()),
         "license": _ask("license, e.g. CC-BY-4.0", assume_yes=args.yes),
         "detector_manufacturer": _ask_vendor(
             "detector manufacturer", vendors["detector_manufacturer"], args.yes

@@ -18,6 +18,23 @@ you. Both end in the same place, and both run the same validator. The
 schema has, including model weights and a ``url`` for a download link that is
 not ``source/file``.
 
+Techniques
+----------
+
+``emdatabase/index/techniques.yaml`` is the technique vocabulary, and an entry
+declares its techniques from it. It has two lists: ``acquisition``, which is how
+the data was taken, and ``ml_task``, which is what a model does.
+
+A dataset ticks acquisition techniques only, one or more, and is listed under
+each of them. A ``kind: weights`` entry ticks one acquisition technique - the
+data the model was trained on - and every ML task it performs, at least one.
+
+A technique close to a vocabulary entry fails validation as a misspelling; one
+that is nothing like any of them warns and asks for it to be added to
+``techniques.yaml``. Adding a technique means adding it there, in the list it
+belongs to and in alphabetical order, with ``Other`` staying at the end of
+``acquisition``.
+
 Using the CLI
 -------------
 
@@ -30,8 +47,9 @@ size, streams the file to a temporary location to compute its md5 (deleted
 afterwards unless you pass ``--keep``), then prompts for the description,
 techniques, licence, detector, microscope, voltage, camera length, DOI, tags
 and authors. Techniques and tags are comma-separated, so a dataset that is both
-in-situ and 4D-STEM is entered as ``In-situ TEM, 4D-STEM`` and is listed under
-each. Anything left blank is omitted. It writes
+in-situ and 4D-STEM is entered as ``In-situ, 4D-STEM`` and is listed under
+each. The technique prompt prints the vocabulary and asks again for anything
+outside it. Anything left blank is omitted. It writes
 ``emdatabase/index/<Name>.yaml`` and refuses to overwrite an existing file
 unless you pass ``--force``.
 
@@ -73,7 +91,8 @@ class needs to be rebuilt.
 
 The entry declares ``model.class`` (the dotted import path),
 ``model.framework``, ``model.quantem`` (the versions the checkpoint loads
-under) and ``license``. Set the licence from the model's own terms: a model
+under), ``license``, and its techniques: the acquisition technique of the data
+it was trained on, plus every ``ML -`` task it performs. Set the licence from the model's own terms: a model
 trained on a dataset does not inherit that dataset's licence.
 
 Point the tooling at the link the weights are published at:
@@ -111,8 +130,10 @@ What CI checks
 
 Every pull request runs the test suite, which validates each YAML file in
 ``index/`` (the template included) against the schema, and checks the vendor
-names in ``vendors.yaml``: a name close to one already on the list fails as a
-misspelling, while a genuinely new one warns and asks for it to be added.
+names in ``vendors.yaml`` and the techniques in ``techniques.yaml``: a name
+close to one already on the list fails as a misspelling, while a genuinely new
+one warns and asks for it to be added. A weights entry without an ML task, and
+a dataset with one, fail as well.
 
 ``check_sources.yml`` runs weekly and asks each source server whether the file
 is still there and still the size the entry claims.
