@@ -192,6 +192,19 @@ to one already on the list fails CI as a misspelling. A technique close to one i
 `techniques.yaml` fails the same way.
 
 Open an issue with the [new dataset template](https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml),
+fill in the [Add Dataset form](https://electronmicroscopy.github.io/emdatabase/add_dataset.html),
 or run `python -m emdatabase.new_dataset <url>`, which fetches the checksum and size,
 prompts for the rest and writes the file for you to open a pull request with.  See
 [CONTRIBUTING.md](CONTRIBUTING.md).
+
+All three take one download link and split it into `source`, `file` and, when the file
+is not served at `source/file`, `url`.  A Google Drive share link - what the share
+button copies - is rewritten to the `uc?export=download&id=<id>` link that serves the
+file.  The form also has a local file picker: point it at the copy on your machine and
+it fills in the file name, size and md5, hashing the file in the browser without
+uploading it.
+
+Neither web route needs the checksum or the size.  A pull request carrying an entry
+that is missing either one has the file downloaded on GitHub and the fields filled in
+and pushed back to the branch; a pull request from a fork, whose branch cannot be
+pushed to, fails with the values to paste in instead.

@@ -853,7 +853,8 @@ def _app_page(
     """Wrap page ``body`` in the self-contained Catppuccin app shell.
 
     Built by concatenation (not ``str.format``/``%``) so CSS/JS braces need no
-    escaping. The result references no external hosts - all CSS/JS is inline.
+    escaping. All the CSS is inline, and so is every script but the ones a page
+    passes in ``scripts`` itself.
     """
     return (
         "<!doctype html>\n"
@@ -1000,9 +1001,25 @@ _VENDORS = tuple(_VENDOR_LISTS["microscope_vendor"])
 _TECHNIQUE_GROUPS = (("Acquisition", acquisition_techniques()), ("ML task", ml_tasks()))
 _KINDS = ("dataset", "weights")
 
+# Neither field is required: whatever a contributor leaves blank is downloaded
+# and filled in by .github/workflows/fill_download_fields.yml.
+_FILLED_IN = (
+    "Optional. Filled in automatically on the pull request by downloading the file; "
+    "for a very large file, pick the local file above instead."
+)
+
 # Owner/repo the prefilled "create new file" PR link targets.
 _REPO = "electronmicroscopy/emdatabase"
 _BRANCH = "main"
+
+# md5 in the browser, for the Add Dataset page's local-file picker - the one
+# external resource any generated page loads. If it does not load the picker
+# still fills in the file name and size, and says so.
+_SPARK_MD5_SRC = (
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.2/spark-md5.min.js"'
+    ' integrity="sha384-WAahC3S+69Co45zyyuhCjvdMwo7a42Yn0mM0IgZIUlYNebG24AVkPUltj3BQnM85"'
+    ' crossorigin="anonymous" referrerpolicy="no-referrer"></script>'
+)
 
 
 def _text_field(fid, label, required=False, placeholder="", hint="", full=False):
@@ -1122,6 +1139,20 @@ def _datalist_field(fid, label, options, placeholder="", hint=""):
     )
 
 
+def _file_field(fid, label, hint=""):
+    """A local file picker. Its hint carries an id, so the JS can show progress."""
+    return (
+        '<div class="field" style="grid-column:1/-1"><label for="'
+        + fid
+        + '">'
+        + _esc(label)
+        + "</label>"
+        '<div class="field-hint" id="hint-' + fid + '">' + _esc(hint) + "</div>"
+        '<input id="' + fid + '" type="file">'
+        '<div class="field-err" id="err-' + fid + '"></div></div>'
+    )
+
+
 def _author_row_html():
     return (
         '<div class="author-row">'
@@ -1155,41 +1186,35 @@ def generate_add_dataset_html() -> str:
         '<textarea id="f-description" placeholder="A 4D-STEM dataset of ..."></textarea>'
         '<div class="field-err" id="err-f-description"></div></div>'
         + _text_field(
-            "f-source",
-            "Source URL",
+            "f-link",
+            "Download link",
             required=True,
-            placeholder="https://zenodo.org/records/15490547/files",
-            hint="Direct download base (no file name).",
-        )
-        + _text_field(
-            "f-url",
-            "Download URL",
-            placeholder="https://drive.google.com/uc?export=download&id=<id>",
-            hint=(
-                "Only when the download link is not <source>/<file> - a Google Drive "
-                "uc?export=download&id= link, or anything else with a query string. "
-                "File stays the name the file is saved under."
-            ),
+            placeholder="https://zenodo.org/records/15490547/files/smallPtychography.hspy",
+            hint="A direct link to the file. A Google Drive share link works.",
             full=True,
+        )
+        + _file_field(
+            "f-localfile",
+            "Local file",
+            hint="Pick the file you uploaded to fill in the name, size and md5.",
         )
         + _text_field(
             "f-checksum",
             "Checksum",
             placeholder="md5:df9376d5c020a23f0f7f51cfe79f303f",
-            hint="md5:<32 hex chars>",
+            hint=f"md5:<32 hex chars>. {_FILLED_IN}",
         )
         + _text_field(
             "f-file",
             "File",
-            required=True,
             placeholder="smallPtychography.hspy",
-            hint="The file name at that source.",
+            hint="The name the file is saved under; needed when the link does not end in it.",
         )
         + _text_field(
             "f-size_bytes",
             "Size (bytes)",
             placeholder="1104287335",
-            hint="The file's Content-Length, in bytes.",
+            hint=f"The file's Content-Length, in bytes. {_FILLED_IN}",
         )
         + _datalist_field(
             "f-detector_manufacturer",
@@ -1274,8 +1299,9 @@ def generate_add_dataset_html() -> str:
         "<p>Fill in the metadata; the YAML builds live on the right. "
         "&ldquo;Open a Pull Request&rdquo; sends you to GitHub with the new file "
         "pre-filled &mdash; commit it to a branch there and GitHub opens the PR.</p>"
-        "<p>From a terminal, <code>python -m emdatabase.new_dataset &lt;url&gt;</code> "
-        "fills in the checksum and size for you; see "
+        "<p>Pick the file from your machine to fill in its name, size and md5. "
+        "From a terminal, <code>python -m emdatabase.new_dataset &lt;url&gt;</code> "
+        "does the same from the link; see "
         '<a href="contributing.html">Contributing a Dataset</a>.</p>'
         "</div>"
         '<div class="form-wrap">'
@@ -1316,7 +1342,7 @@ def generate_add_dataset_html() -> str:
     )
 
     js = _ADD_DATASET_JS.replace("__REPO__", _REPO).replace("__BRANCH__", _BRANCH)
-    scripts = "<script>\n" + ADD_DATASET_YAML_JS + js + "\n</script>"
+    scripts = _SPARK_MD5_SRC + "\n<script>\n" + ADD_DATASET_YAML_JS + js + "\n</script>"
     return _app_page(
         "Add Dataset &middot; EM-Database",
         body,
@@ -1336,6 +1362,30 @@ ADD_DATASET_YAML_JS = r"""
 // carry one - `AmorphousFilm4nm_4DSTEM`.
 function emdbEntryName(value) {
   return String(value == null ? "" : value).replace(/[^A-Za-z0-9_]+/g, "");
+}
+
+// A Google Drive share link as its download link; any other link unchanged.
+// The port of new_dataset.normalize_url - the two have to agree, and a test
+// runs the same links through both.
+function emdbNormalizeUrl(url) {
+  var m = /^https?:\/\/drive\.google\.com\/file\/d\/([^/?#]+)/i.exec(url)
+    || /^https?:\/\/drive\.google\.com\/open\?(?:[^#]*&)?id=([^&#]+)/i.exec(url);
+  return m ? "https://drive.google.com/uc?export=download&id=" + m[1] : url;
+}
+
+// `{source, file, url}` for a link, with `url` empty when unneeded. The port of
+// new_dataset.split_url, down to what each branch returns.
+function emdbSplitUrl(url) {
+  url = emdbNormalizeUrl(String(url == null ? "" : url));
+  var m = /^([A-Za-z][A-Za-z0-9+.\-]*):\/\/([^/?#]*)([^?#]*)(?:\?([^#]*))?/.exec(url);
+  if (!m || !m[2]) return { source: "", file: "", url: "" };
+  var path = m[3] || "", query = m[4] || "";
+  var last = path.slice(path.lastIndexOf("/") + 1);
+  if (query || last.indexOf(".") === -1) {
+    return { source: m[1].toLowerCase() + "://" + m[2], file: "", url: url };
+  }
+  var cut = url.lastIndexOf("/");
+  return { source: url.slice(0, cut), file: url.slice(cut + 1), url: "" };
 }
 
 // Today as YYMMDD, the label a new weights version is filed under.
@@ -1376,13 +1426,17 @@ function emdbBuildYaml(fields) {
   // A weights entry writes these inside `latest` and its dated version instead.
   var weights = get("kind") === "weights";
   var bytes = get("size_bytes").replace(/[^0-9]/g, "");
+  // The form asks for one download link; the YAML wants the directory and the
+  // file name apart, and keeps the whole link only when it is not source/file.
+  var split = emdbSplitUrl(get("link"));
+  var file = get("file") || split.file;
   add("description", get("description"));
-  add("source", get("source"));
+  add("source", split.source);
   if (!weights) {
-    add("url", get("url"));
+    add("url", split.url);
     add("checksum", get("checksum"));
   }
-  add("file", get("file"));
+  add("file", file);
   if (bytes && !weights) lines.push("  size_bytes: " + bytes);
   add("detector_manufacturer", get("detector_manufacturer"));
   add("detector", get("detector"));
@@ -1425,7 +1479,7 @@ function emdbBuildYaml(fields) {
       });
     }
     var pin = [
-      ["url", get("url") || (get("source") + "/" + get("file"))],
+      ["url", split.url || (split.source + "/" + file)],
       ["checksum", get("checksum")]
     ].filter(function (pair) { return pair[1]; });
     if (bytes) pin.push(["size_bytes", bytes]);
@@ -1445,7 +1499,12 @@ function emdbBuildYaml(fields) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { emdbBuildYaml: emdbBuildYaml, emdbEntryName: emdbEntryName };
+  module.exports = {
+    emdbBuildYaml: emdbBuildYaml,
+    emdbEntryName: emdbEntryName,
+    emdbNormalizeUrl: emdbNormalizeUrl,
+    emdbSplitUrl: emdbSplitUrl
+  };
 }
 """
 
@@ -1460,15 +1519,21 @@ _ADD_DATASET_JS = r"""
   var addAuthor = document.getElementById("add-author");
   var authorsBox = document.getElementById("authors");
   var modelGroup = document.getElementById("model-group");
+  var localFile = document.getElementById("f-localfile");
+  var localHint = document.getElementById("hint-f-localfile");
 
   var SCALARS = [
-    "name", "description", "source", "url", "checksum", "file", "size_bytes",
+    "name", "description", "link", "checksum", "file", "size_bytes",
     "detector_manufacturer", "detector", "microscope_vendor", "microscope_model",
     "camera_length", "voltage", "license", "doi",
     "kind", "version_date", "model_class", "model_framework", "model_quantem"
   ];
 
   function val(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
+  function setValue(id, value) { var e = document.getElementById(id); if (e) e.value = value; }
+
+  // The CLI strips a trailing slash off the link before splitting it; so does this.
+  function link() { return val("f-link").replace(/\/+$/, ""); }
 
   function authors() {
     var out = [];
@@ -1488,6 +1553,7 @@ _ADD_DATASET_JS = r"""
   function collect() {
     var fields = {};
     SCALARS.forEach(function (key) { fields[key] = val("f-" + key); });
+    fields.link = link();
     fields.technique = Array.prototype.map.call(
       document.querySelectorAll("#f-technique input:checked"),
       function (box) { return box.value; }
@@ -1515,14 +1581,15 @@ _ADD_DATASET_JS = r"""
     if (!emdbEntryName(val("f-name"))) { setError("f-name", "Required"); ok = false; }
     else setError("f-name", "");
     if (!requireField("f-description")) ok = false;
-    var src = val("f-source");
-    if (!src) { setError("f-source", "Required"); ok = false; }
-    else if (!/^https?:\/\/\S+$/i.test(src)) { setError("f-source", "Must be an http(s) URL"); ok = false; }
-    else setError("f-source", "");
-    var url = val("f-url");
-    if (url && !/^https?:\/\/\S+$/i.test(url)) { setError("f-url", "Must be an http(s) URL"); ok = false; }
-    else setError("f-url", "");
-    if (!requireField("f-file")) ok = false;
+    var url = link();
+    if (!url) { setError("f-link", "Required"); ok = false; }
+    else if (!/^https?:\/\/\S+$/i.test(url)) { setError("f-link", "Must be an http(s) URL"); ok = false; }
+    else setError("f-link", "");
+    // The file name is only asked for when the link does not already end in it.
+    if (!emdbSplitUrl(url).file && !val("f-file")) {
+      setError("f-file", "Required - the link does not end in a file name");
+      ok = false;
+    } else setError("f-file", "");
     var cs = val("f-checksum");
     if (cs && !/^md5:[0-9a-fA-F]{32}$/.test(cs)) { setError("f-checksum", "Must match md5:<32 hex>"); ok = false; }
     else setError("f-checksum", "");
@@ -1571,6 +1638,50 @@ _ADD_DATASET_JS = r"""
     document.body.appendChild(ta); ta.select();
     try { document.execCommand("copy"); done(); } catch (e) {}
     ta.remove();
+  }
+
+  // The md5 of a picked file, hashed a chunk at a time so that a multi-GB file
+  // is never held in memory. `done("")` when the file could not be read.
+  function hashFile(file, onProgress, done) {
+    var CHUNK = 8 * 1024 * 1024;
+    var spark = new window.SparkMD5.ArrayBuffer();
+    var reader = new FileReader();
+    var offset = 0;
+    function next() { reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK)); }
+    reader.onerror = function () { done(""); };
+    reader.onload = function (e) {
+      spark.append(e.target.result);
+      offset += e.target.result.byteLength;
+      onProgress(file.size ? offset / file.size : 1);
+      if (offset < file.size) next(); else done(spark.end());
+    };
+    next();
+  }
+
+  if (localFile) {
+    localFile.addEventListener("change", function () {
+      var file = localFile.files && localFile.files[0];
+      if (!file) return;
+      if (!val("f-file")) setValue("f-file", file.name);
+      setValue("f-size_bytes", String(file.size));
+      refresh();
+      if (!window.SparkMD5) {
+        localHint.textContent = "Filled in the name and size of " + file.name
+          + ". The checksum has to be typed in - the md5 script did not load.";
+        return;
+      }
+      localHint.textContent = "Hashing " + file.name + " - 0%";
+      hashFile(file, function (fraction) {
+        localHint.textContent = "Hashing " + file.name + " - "
+          + Math.round(fraction * 100) + "%";
+      }, function (digest) {
+        if (digest) setValue("f-checksum", "md5:" + digest);
+        localHint.textContent = digest
+          ? "Filled in the name, size and md5 of " + file.name + "."
+          : "Could not read " + file.name + " - the checksum has to be typed in.";
+        refresh();
+      });
+    });
   }
 
   form.addEventListener("input", refresh);

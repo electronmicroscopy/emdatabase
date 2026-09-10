@@ -5,7 +5,8 @@ asks the server how big it is, streams it to a temporary file to get its md5,
 prompts for the rest of the metadata and writes
 ``emdatabase/index/<Name>.yaml``. A link that does not end in the file name - a
 Google Drive link, or anything else with a query string - is written out as
-``url``, with the file name taken from the server. Nothing is written until the
+``url``, with the file name taken from the server. A Google Drive share link is
+rewritten to the ``uc?export=download&id=`` link that serves the file. Nothing is written until the
 entry passes :func:`~emdatabase.metadata.validate_document`, which is the same
 check the test suite and the issue-form workflow run.
 
@@ -17,6 +18,11 @@ that version under another date.
 
 ``--validate PATH`` runs that check on a file you wrote by hand and does
 nothing else.
+
+:func:`fill_download_fields` is the same download from the other end: it takes a
+parsed entry that is missing its ``checksum`` or ``size_bytes`` and fills them
+in. The issue route and ``.github/workflows/fill_download_fields.yml`` run it
+over an entry the forms left blank.
 """
 
 from __future__ import annotations
@@ -136,6 +142,26 @@ def download_md5(
     return digest.hexdigest(), downloaded, served, content_type
 
 
+_DRIVE_FILE = re.compile(r"^https?://drive\.google\.com/file/d/([^/?#]+)", re.IGNORECASE)
+_DRIVE_OPEN = re.compile(
+    r"^https?://drive\.google\.com/open\?(?:[^#]*&)?id=([^&#]+)", re.IGNORECASE
+)
+
+
+def normalize_url(url: str) -> str:
+    """A Google Drive share link as its download link; any other link unchanged.
+
+    The link Drive's share button hands out - ``file/d/<id>/view`` or
+    ``open?id=<id>`` - serves the viewer page, not the file. It carries the same
+    id as ``uc?export=download&id=<id>``, which serves the bytes, so it is
+    rewritten to that rather than refused.
+    """
+    match = _DRIVE_FILE.match(url) or _DRIVE_OPEN.match(url)
+    if match is None:
+        return url
+    return f"https://drive.google.com/uc?export=download&id={match.group(1)}"
+
+
 def split_url(url: str) -> tuple[str, str, str]:
     """``(source, file, url)`` for a link, with ``url`` empty when unneeded.
 
@@ -143,8 +169,10 @@ def split_url(url: str) -> tuple[str, str, str]:
     and the name, which is how nearly every entry is written. One with a query
     string, or with no extension on its last segment, names nothing: it is kept
     whole as ``url``, ``source`` is the host it points at, and the file name has
-    to come from the server.
+    to come from the server. A Google Drive share link is normalised first, so
+    what is written out is the link that serves the file.
     """
+    url = normalize_url(url)
     parts = urllib.parse.urlsplit(url)
     if not (parts.scheme and parts.netloc):
         return "", "", ""
@@ -260,6 +288,59 @@ def as_weights_family(entry: dict[str, Any], date: str) -> dict[str, Any]:
     }
 
 
+def _fill_pin(label: str, pin: dict[str, Any], url: str) -> list[str]:
+    """Download ``url`` for whichever of the two fields ``pin`` is missing."""
+    if pin.get("checksum") and pin.get("size_bytes"):
+        return []
+    with tempfile.TemporaryDirectory() as directory:
+        digest, downloaded, _, content_type = download_md5(
+            url, Path(directory) / "download", progressbar=False
+        )
+    if content_type.startswith("text/html"):
+        raise ValueError(
+            f"{label}: {url} answered with {content_type}, so it served a page rather than the "
+            "file - a Google Drive viewer page, or a 404 dressed up as HTML. Fix the link."
+        )
+    filled = []
+    if not pin.get("checksum"):
+        pin["checksum"] = f"md5:{digest}"
+        filled.append(f"checksum {pin['checksum']}")
+    if not pin.get("size_bytes"):
+        pin["size_bytes"] = downloaded
+        filled.append(f"size_bytes {downloaded}")
+    return [f"{label}: filled in {' and '.join(filled)} from {url}"]
+
+
+def fill_download_fields(document: dict[str, Any]) -> list[str]:
+    """Fill in every missing ``checksum`` and ``size_bytes`` in a parsed document.
+
+    The docs form and the issue form both let those two fields be blank, and
+    every entry needs both, so whatever is missing is computed here by
+    downloading the file. A weights family carries them per pin rather than at
+    the top level, so ``latest`` and each dated version is followed on its own
+    link. An entry that already has both is not downloaded.
+
+    The document is filled in place and nothing is written - the caller decides
+    where the result goes. The lines returned say what was filled, and are empty
+    when nothing was.
+    """
+    lines: list[str] = []
+    for name, entry in document.items():
+        if entry.get("kind") == "weights":
+            pins = [(f"{name} latest", entry.get("latest"))]
+            pins += [
+                (f"{name} version {date}", pin)
+                for date, pin in (entry.get("versions") or {}).items()
+            ]
+            for label, pin in pins:
+                if pin:
+                    lines += _fill_pin(label, pin, pin.get("url", ""))
+        else:
+            url = entry.get("url") or f"{entry.get('source', '')}/{entry.get('file', '')}"
+            lines += _fill_pin(name, entry, url)
+    return lines
+
+
 class _IndexDumper(yaml.SafeDumper):
     """PyYAML output in the house style of the hand-written index files.
 
@@ -355,7 +436,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.url:
         parser.error("a URL is required (or --validate PATH)")
 
-    url = args.url.rstrip("/")
+    url = normalize_url(args.url.rstrip("/"))
     source, filename, link = split_url(url)
     if not source:
         print(f"{args.url!r} is not a link to a file")

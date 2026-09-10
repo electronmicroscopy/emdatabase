@@ -12,11 +12,12 @@ Three routes
 Fill in the `new-dataset issue form
 <https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml>`_
 and an action turns it into the YAML file and opens a pull request for you. Or
-run the CLI below, which writes the file locally and leaves the pull request to
-you. Both end in the same place, and both run the same validator. The
-:doc:`Add Dataset <add_dataset>` form and the issue form carry every field the
-schema has, including model weights and a ``url`` for a download link that is
-not ``source/file``.
+fill in the :doc:`Add Dataset <add_dataset>` form, which builds the YAML in the
+browser and sends you to GitHub with the file pre-filled. Or run the CLI below,
+which writes the file locally and leaves the pull request to you. All three end
+in the same place, and all three run the same validator. Neither web route has
+to be given the checksum or the size: a pull request carrying an entry that is
+missing either one has the file downloaded and the fields filled in for it.
 
 Techniques
 ----------
@@ -35,6 +36,28 @@ that is nothing like any of them warns and asks for it to be added to
 belongs to and in alphabetical order, with ``Other`` staying at the end of
 ``acquisition``.
 
+Using the web form
+------------------
+
+The :doc:`Add Dataset <add_dataset>` form carries every field the schema has,
+model weights included. It asks for one **Download link**: the direct link to
+the file, which it splits into ``source`` and ``file`` the way the CLI does, or
+keeps whole as ``url`` when the file is not served at ``source/file``. A Google
+Drive share link - the link the share button copies, ``file/d/<id>/view`` or
+``open?id=<id>`` - is rewritten to the ``uc?export=download&id=<id>`` link that
+serves the file. The file name is only asked for when the link does not end in
+one.
+
+The **Local file** picker fills in the file name, size and md5 from the copy on
+your machine, so the checksum need not be computed by hand. The file is read in
+the browser and nothing is uploaded; a multi-GB file is hashed a chunk at a
+time, with progress under the picker. The three fields it fills stay editable.
+
+**Checksum** and **Size (bytes)** may be left blank, in which case the pull
+request downloads the file and fills them in. The picker is the quicker route
+for a large file, and a pull request from a fork has to use it, because a fork's
+branch cannot be pushed to.
+
 Using the CLI
 -------------
 
@@ -42,8 +65,9 @@ Using the CLI
 
    python -m emdatabase.new_dataset https://zenodo.org/records/15490547/files/PdNiP.zspy
 
-It splits the URL into ``source`` and ``file``, asks the server for the file's
-size, streams the file to a temporary location to compute its md5 (deleted
+It splits the URL into ``source`` and ``file`` - a Google Drive share link is
+rewritten to its ``uc?export=download&id=`` form first - asks the server for
+the file's size, streams the file to a temporary location to compute its md5 (deleted
 afterwards unless you pass ``--keep``), then prompts for the description,
 techniques, licence, detector, microscope, voltage, camera length, DOI, tags
 and authors. Techniques and tags are comma-separated, so a dataset that is both
@@ -135,6 +159,14 @@ close to one already on the list fails as a misspelling, while a genuinely new
 one warns and asks for it to be added. A weights entry without an ML task, and
 a dataset with one, fail as well.
 
+``fill_download_fields.yml`` runs on every pull request that touches
+``emdatabase/index/``. It downloads the file behind each changed entry that is
+missing its ``checksum`` or ``size_bytes`` - a weights family's ``latest`` and
+each dated version on their own links - fills the fields in and pushes the
+result back to the branch, which is how an entry from the web form or the issue
+form ends up complete. A fork's branch cannot be pushed to, so a pull request
+from one fails instead and prints the values to paste in.
+
 ``check_sources.yml`` runs weekly and asks each source server whether the file
 is still there and still the size the entry claims.
 
@@ -186,5 +218,6 @@ GitHub archival is only for links that move in place, Google Drive among them.
 Google Drive works for a small file, as a
 ``https://drive.google.com/uc?export=download&id=<id>`` link written to the
 entry's ``url``; above about 100 MB Drive answers with a virus-scan page
-instead of the file, and the entry will not download. The CLI recognises a link
-like that and fills in ``url``, ``source`` and ``file`` itself.
+instead of the file, and the entry will not download. All three routes take the
+share link as well and rewrite it to that form, and fill in ``url``, ``source``
+and ``file`` themselves.
