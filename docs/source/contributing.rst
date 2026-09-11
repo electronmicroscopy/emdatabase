@@ -183,6 +183,17 @@ that record, and moves ``latest`` to it. The file it looks for in the new
 record is the one whose name matches the current link; if the name has changed
 and the record holds more than one file, the run fails rather than guess.
 
+Removing an entry
+-----------------
+
+Delete the entry's file from ``emdatabase/index/``, run
+``python -m emdatabase._create_stubs`` so ``emdatabase/data/__init__.pyi`` no
+longer lists it, and open a pull request. Copies people have already downloaded
+are not touched. If the weekly weights job archived versions of a weights family
+to the ``weights-archive`` release, delete those assets too::
+
+    gh release delete-asset weights-archive <Family>_<date>.pt
+
 Hosting
 -------
 
