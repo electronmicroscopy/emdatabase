@@ -457,6 +457,7 @@ def test_a_drive_share_link_becomes_the_download_link(url):
     "url",
     [
         "https://zenodo.org/records/15490547/files/PdNiP.zspy",
+        "https://zenodo.org/records/15490547/files/PdNiP.zspy?download=1&x=y",
         "https://example.com/data/file.zspy?download=1",
         "https://docs.google.com/file/d/abc/view",
         "not a url",
@@ -465,6 +466,16 @@ def test_a_drive_share_link_becomes_the_download_link(url):
 )
 def test_a_link_that_is_not_a_drive_share_link_is_left_alone(url):
     assert normalize_url(url) == url
+
+
+def test_a_zenodo_copy_link_loses_its_download_flag():
+    bare = "https://zenodo.org/records/22311217/files/best.pth"
+    assert normalize_url(bare + "?download=1") == bare
+    assert split_url(bare + "?download=1") == (
+        "https://zenodo.org/records/22311217/files",
+        "best.pth",
+        "",
+    )
 
 
 def test_split_url_normalises_a_drive_share_link():

@@ -2,7 +2,7 @@
 
 Run by ``.github/workflows/on_new_issue.yml``. The entry is assembled by
 ``emdatabase.new_dataset.build_document``, so the issue route writes the same
-keys in the same order as the CLI and the docs form, and it goes through
+keys in the same order as the CLI, and it goes through
 ``emdatabase.metadata.validate_document`` before it is written - the same check
 the test suite and ``emdatabase.new_dataset`` run - so a malformed issue fails
 here rather than in the pull request the workflow opens.
@@ -31,9 +31,7 @@ from emdatabase.new_dataset import (
 # The form's field labels, with the ``--...--`` markers stripped off.
 FIELDS = (
     "Dataset Name",
-    "Author",
-    "Affiliation",
-    "ORCID",
+    "Authors",
     "URL",
     "File Name",
     "Checksum",
@@ -66,6 +64,34 @@ def clean(value):
     return "" if value == "_No response_" else value
 
 
+def parse_authors(value):
+    """``({name: {affiliation, orcid}}, problems)`` for the --Authors-- block.
+
+    One author per line, as ``Name; Affiliation; ORCID``, the ORCID optional. A
+    line with no semicolon in it cannot be split into those, so it is reported
+    rather than guessed at.
+    """
+    authors = {}
+    problems = []
+    for line in value.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if ";" not in line:
+            problems.append(
+                f"--Authors--: {line!r} is not 'Name; Affiliation; ORCID' - "
+                "one author per line, with the parts separated by semicolons"
+            )
+            continue
+        name, _, rest = line.partition(";")
+        affiliation, _, orcid = rest.partition(";")
+        author = {"affiliation": affiliation.strip() or "Unspecified"}
+        if orcid.strip():
+            author["orcid"] = orcid.strip()
+        authors[name.strip()] = author
+    return authors, problems
+
+
 def checked(value):
     """The options ticked in a checkboxes answer, in the order the form lists them.
 
@@ -96,7 +122,11 @@ def parse_issue_body(text):
 
 
 def build_yaml(data):
-    """``(document, dataset_name)`` for a parsed issue."""
+    """``(document, dataset_name, problems)`` for a parsed issue.
+
+    ``problems`` is whatever could not be read out of the issue at all; the
+    schema check in :func:`write_yaml` adds to it.
+    """
     name = re.sub(r"\W+", "", data["Dataset Name"])
     if not name:
         sys.exit("the issue has no dataset name")
@@ -112,8 +142,8 @@ def build_yaml(data):
     filename = data["File Name"] or filename
     if not filename:
         sys.exit(f"{data['URL']!r} does not end in a file name; fill in --File Name--")
-    # The Add Dataset form's file picker fills the size in from the local copy;
-    # without it the server is asked for the file's Content-Length.
+    # The issue may already carry the size; without it the server is asked for
+    # the file's Content-Length.
     size = data["Size (bytes)"].replace(",", "").replace("_", "").strip()
 
     entry = {
@@ -134,11 +164,7 @@ def build_yaml(data):
         "doi": data["DOI"],
         "tags": [t.strip() for t in data["Tags"].split(",") if t.strip()],
     }
-    if data["Author"]:
-        author = {"affiliation": data["Affiliation"] or "Unspecified"}
-        if data["ORCID"]:
-            author["orcid"] = data["ORCID"]
-        entry["authors"] = {data["Author"]: author}
+    entry["authors"], problems = parse_authors(data["Authors"])
     if data["Kind"] == "weights":
         entry["kind"] = "weights"
         model = {
@@ -148,19 +174,21 @@ def build_yaml(data):
         }
         entry["model"] = {k: v for k, v in model.items() if v}
         entry = as_weights_family(entry, data["Version Date"] or version_date())
-    return build_document(name, entry), name
+    return build_document(name, entry), name, problems
 
 
 def write_yaml(issue_file, out_dir):
     """Parse one issue body and write the entry it describes into ``out_dir``."""
-    document, dataset_name = build_yaml(parse_issue_body(Path(issue_file).read_text()))
+    document, dataset_name, problems = build_yaml(parse_issue_body(Path(issue_file).read_text()))
     out_path = Path(out_dir) / f"{dataset_name}.yaml"
-    for line in fill_download_fields(document):
-        print(line)
-    # A field the issue left blank is missing from the entry rather than at the
-    # end of it, so the document is rebuilt into the shipped key order.
-    document = {name: build_document(name, entry)[name] for name, entry in document.items()}
-    problems = validate_document(document, origin=out_path)
+    # Nothing is downloaded for an issue that is already known to be wrong.
+    if not problems:
+        for line in fill_download_fields(document):
+            print(line)
+        # A field the issue left blank is missing from the entry rather than at
+        # the end of it, so the document is rebuilt into the shipped key order.
+        document = {name: build_document(name, entry)[name] for name, entry in document.items()}
+        problems = validate_document(document, origin=out_path)
     for problem in problems:
         print(problem)
     if problems:

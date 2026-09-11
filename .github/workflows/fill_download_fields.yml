@@ -86,7 +86,6 @@ jobs:
           cat filled.md
           git diff -- emdatabase/index
           echo "This pull request comes from a fork, so these fields cannot be pushed to its"
-          echo "branch. Copy the values above into the entry, or fill them in yourself with"
-          echo "the Add Dataset form's file picker, and check the file with:"
+          echo "branch. Copy the values above into the entry, then check the file with:"
           echo "  python -m emdatabase.new_dataset --validate <file>"
           exit 1

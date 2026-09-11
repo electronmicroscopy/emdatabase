@@ -5,7 +5,7 @@
 it serves. The two things the script does to the outside world are stubbed: the
 ``gh`` calls are recorded rather than run, and the index it rewrites is a
 throwaway directory rather than the shipped one. The script does not ship in the
-wheel, so it is loaded from its path the way ``test_forms`` loads the issue
+wheel, so it is loaded from its path the way ``test_issue_route`` loads the issue
 script.
 """
 

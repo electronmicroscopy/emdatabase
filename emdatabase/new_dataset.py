@@ -22,7 +22,7 @@ nothing else.
 :func:`fill_download_fields` is the same download from the other end: it takes a
 parsed entry that is missing its ``checksum`` or ``size_bytes`` and fills them
 in. The issue route and ``.github/workflows/fill_download_fields.yml`` run it
-over an entry the forms left blank.
+over an entry the issue form left blank.
 """
 
 from __future__ import annotations
@@ -142,6 +142,9 @@ def download_md5(
     return digest.hexdigest(), downloaded, served, content_type
 
 
+_ZENODO_DOWNLOAD = re.compile(
+    r"^(https?://(?:sandbox\.)?zenodo\.org/records/\d+/files/[^?#]+)\?download=1$", re.IGNORECASE
+)
 _DRIVE_FILE = re.compile(r"^https?://drive\.google\.com/file/d/([^/?#]+)", re.IGNORECASE)
 _DRIVE_OPEN = re.compile(
     r"^https?://drive\.google\.com/open\?(?:[^#]*&)?id=([^&#]+)", re.IGNORECASE
@@ -149,13 +152,20 @@ _DRIVE_OPEN = re.compile(
 
 
 def normalize_url(url: str) -> str:
-    """A Google Drive share link as its download link; any other link unchanged.
+    """A share link as the link that serves the file; any other link unchanged.
+
+    Zenodo's copy-link button appends ``?download=1``, which the bare file link
+    does not need; it is dropped so the link splits into ``source`` and ``file``
+    like the hand-written Zenodo entries.
 
     The link Drive's share button hands out - ``file/d/<id>/view`` or
     ``open?id=<id>`` - serves the viewer page, not the file. It carries the same
     id as ``uc?export=download&id=<id>``, which serves the bytes, so it is
     rewritten to that rather than refused.
     """
+    zenodo = _ZENODO_DOWNLOAD.match(url)
+    if zenodo is not None:
+        return zenodo.group(1)
     match = _DRIVE_FILE.match(url) or _DRIVE_OPEN.match(url)
     if match is None:
         return url
