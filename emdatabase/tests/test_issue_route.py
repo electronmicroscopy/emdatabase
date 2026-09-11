@@ -438,7 +438,7 @@ def test_add_dataset_page_points_at_the_issue_form_and_the_cli(build_docs):
     assert build_docs._ISSUE_URL.endswith("/issues/new?template=new_dataset.yaml")
     assert "python -m emdatabase.new_dataset" in html
     assert "--kind weights" in html
-    assert "Name; Affiliation; ORCID" in html
+    assert "filled in automatically" in html
     for gone in ("<form", "<input", "spark-md5", "emdbBuildYaml"):
         assert gone not in html, gone
 

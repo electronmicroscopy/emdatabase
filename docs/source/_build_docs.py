@@ -955,7 +955,7 @@ _CLI_COMMAND = (
 
 
 def generate_add_dataset_html() -> str:
-    """The Add Dataset page: what a submission needs, and the two ways to send one."""
+    """The Add Dataset page: the issue form, and the CLI as the terminal route."""
     body = (
         '<main class="app-main"><div class="explainer">'
         '<div class="app-hero" style="padding:24px 0 6px">'
@@ -964,18 +964,6 @@ def generate_add_dataset_html() -> str:
         "an action turns it into the entry\u2019s YAML file, fills in whatever it can "
         "work out for itself, and opens the pull request.</p>"
         "</div>"
-        "<h2>What to have ready</h2>"
-        "<ul>"
-        "<li>A direct link to the file. A Google Drive share link or a Zenodo file "
-        "link both work.</li>"
-        "<li>The file name, if the link does not end in one.</li>"
-        "<li>A description of the data, the licence it is released under, and how it "
-        "was acquired \u2014 one technique or several.</li>"
-        "<li>The authors, one per line, as "
-        "<code>Name; Affiliation; ORCID</code>. The ORCID is optional.</li>"
-        "<li>For model weights: the class the checkpoint loads into, the framework it "
-        "was saved with, and the quantem versions it loads under.</li>"
-        "</ul>"
         '<p class="note">The checksum and the size are filled in automatically by '
         "downloading the file, so both can be left blank.</p>"
         '<div class="submit-row">'
