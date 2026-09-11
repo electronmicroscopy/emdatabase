@@ -1,0 +1,44 @@
+# $schema: ./json-schema.json
+PeakDetectionPolymers:
+  description: >-
+    NN weights from: Mapping Order in Semicrystalline Polymers using Machine
+    Learning of Nanobeam Electron Diffraction
+
+    Published on arXiv: https://doi.org/10.48550/arXiv.2607.16570
+  source: https://zenodo.org/records/22311217/files
+  file: best.pth
+  license: CC-BY-4.0
+  technique:
+    - ML - peak finding
+  doi: 10.5281/zenodo.22311216
+  tags:
+    - Orientation mapping
+    - polymers
+  authors:
+    Nicholas Marchese:
+      affiliation: Stanford University
+    Arthur R. C. McCray:
+      affiliation: Stanford University
+    Yael Tsarfati:
+      affiliation: SLAC National Accelerator Laboratory
+    Karen Bustillo:
+      affiliation: NCEM, Lawrence Berkeley National Laboratory
+    Adam Marks:
+      affiliation: Stanford University
+    Alberto Salleo:
+      affiliation: Stanford University
+    Colin Ophus:
+      affiliation: Stanford University
+  kind: weights
+  model:
+    class: other
+    framework: torch
+  latest:
+    url: https://zenodo.org/records/22311217/files/best.pth
+    size_bytes: 57343166
+    checksum: md5:1d2524b53c6f8be4a85d0530312a4ade
+  versions:
+    "260911":
+      url: https://zenodo.org/records/22311217/files/best.pth
+      size_bytes: 57343166
+      checksum: md5:1d2524b53c6f8be4a85d0530312a4ade

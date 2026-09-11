@@ -283,6 +283,23 @@ class PdNiPGlass(DownloadableDataset):
     """
     ...
 
+class PeakDetectionPolymers(DownloadableDataset):
+    """
+    PeakDetectionPolymers
+
+    NN weights from: Mapping Order in Semicrystalline Polymers using Machine Learning of Nanobeam Electron Diffraction
+Published on arXiv: https://doi.org/10.48550/arXiv.2607.16570
+
+    DOI: 10.5281/zenodo.22311216
+
+    License: CC-BY-4.0
+
+    Model weights hosted at https://zenodo.org/records/22311217/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
 class SPEDAg(DownloadableDataset):
     """
     SPEDAg
@@ -341,4 +358,4 @@ class ZrNbPrecipitate(DownloadableDataset):
     """
     ...
 
-__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'SPEDAg', 'TutorialUNet', 'TutorialUNet_instance', 'ZrNbPrecipitate']
+__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'PeakDetectionPolymers', 'SPEDAg', 'TutorialUNet', 'TutorialUNet_instance', 'ZrNbPrecipitate']
