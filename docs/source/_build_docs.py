@@ -789,11 +789,6 @@ _FORM_CSS = """
 }
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.3); }
 .btn-primary:not(:disabled):hover { filter: brightness(1.06); }
-.btn-secondary {
-  text-align: center; font-size: 12px; font-weight: 600; color: var(--emdb-subtext);
-  border: 1px solid var(--emdb-surface1); border-radius: 8px; padding: 9px 14px;
-}
-.btn-secondary:hover { color: var(--emdb-text); border-color: var(--emdb-blue); text-decoration: none; }
 .copy-mini {
   cursor: pointer; font-size: 11px; font-weight: 600; color: var(--emdb-blue);
   background: transparent; border: 1px solid var(--emdb-surface1); border-radius: 6px; padding: 2px 9px;
@@ -1008,9 +1003,11 @@ _FILLED_IN = (
     "for a very large file, pick the local file above instead."
 )
 
-# Owner/repo the prefilled "create new file" PR link targets.
-_REPO = "electronmicroscopy/emdatabase"
-_BRANCH = "main"
+# The new-dataset issue form. The page's submit button appends the field values
+# to this as query parameters, which is how GitHub prefills an issue form.
+_ISSUE_URL = (
+    "https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml"
+)
 
 # md5 in the browser, for the Add Dataset page's local-file picker - the one
 # external resource any generated page loads. If it does not load the picker
@@ -1170,7 +1167,7 @@ def _author_row_html():
 
 
 def generate_add_dataset_html() -> str:
-    """The Add Dataset page: a schema-driven form that opens a prefilled PR."""
+    """The Add Dataset page: a schema-driven form that opens a prefilled issue."""
     fields = (
         _text_field(
             "f-name",
@@ -1290,24 +1287,27 @@ def generate_add_dataset_html() -> str:
         )
     )
 
-    issue_url = "https://github.com/" + _REPO + "/issues/new?template=new_dataset.yaml"
-
     body = (
         '<main class="app-main">'
         '<div class="app-hero" style="padding:24px 0 6px">'
         '<h1 style="font-size:32px">Add a Dataset</h1>'
-        "<p>Fill in the metadata; the YAML builds live on the right. "
-        "&ldquo;Open a Pull Request&rdquo; sends you to GitHub with the new file "
-        "pre-filled &mdash; commit it to a branch there and GitHub opens the PR.</p>"
-        "<p>Pick the file from your machine to fill in its name, size and md5. "
-        "From a terminal, <code>python -m emdatabase.new_dataset &lt;url&gt;</code> "
-        "does the same from the link; see "
-        '<a href="contributing.html">Contributing a Dataset</a>.</p>'
+        "<p>Submissions go through an issue. Fill in the metadata below and "
+        "&ldquo;Submit as an issue&rdquo; opens the new-dataset issue form on GitHub "
+        "with these fields already filled in; an action turns the issue into the "
+        "entry, fills in whatever is missing and opens the pull request.</p>"
+        "<p>The form checks each field as you type, and picking the file from your "
+        "machine fills in its name, size and md5 &mdash; it is hashed in the browser "
+        "and nothing is uploaded. If you would rather stay in a terminal, "
+        "<code>python -m emdatabase.new_dataset &lt;url&gt;</code> asks the same "
+        'questions there; see <a href="contributing.html">Contributing a Dataset</a>.</p>'
         "</div>"
         '<div class="form-wrap">'
         '<form id="ds-form" class="ds-form" autocomplete="off">'
         '<div class="grid2">' + fields + "</div>"
         '<div class="section-title">Authors</div>'
+        '<div class="field-hint" style="margin-bottom:10px">The issue carries the '
+        "first author only; the rest can be added to the YAML on the pull "
+        "request.</div>"
         '<div id="authors">' + _author_row_html() + "</div>"
         '<button type="button" id="add-author" class="btn-ghost">+ Add author</button>'
         '<div class="section-title">Entry</div>'
@@ -1321,27 +1321,27 @@ def generate_add_dataset_html() -> str:
         "</div>"
         "</form>"
         '<aside class="yaml-side">'
-        '<div class="yaml-head"><span>Generated YAML</span>'
+        '<div class="submit-row">'
+        '<button type="button" id="submit-issue" class="btn-primary" disabled>'
+        "Submit as an issue &#8599;</button>"
+        "</div>"
+        '<p class="form-note">Requires a GitHub account. Fields marked '
+        '<span class="req">*</span> are required. GitHub does not prefill tick boxes '
+        "or dropdowns, so <strong>Technique</strong> has to be ticked on the issue "
+        "itself, and <strong>Kind</strong> set to <code>weights</code> there for a "
+        "model checkpoint.</p>"
+        '<p class="form-note" id="issue-trim" hidden></p>'
+        '<div class="yaml-head"><span>What the entry will look like</span>'
         '<button type="button" id="copy-yaml" class="copy-mini">Copy</button></div>'
         '<pre id="yaml-preview" class="yaml-pre"><code></code></pre>'
-        '<div class="submit-row">'
-        '<button type="button" id="submit-pr" class="btn-primary" disabled>'
-        "Open a Pull Request on GitHub &#8599;</button>"
-        '<a id="submit-issue" class="btn-secondary" target="_blank" rel="noopener" href="'
-        + issue_url
-        + '">Submit as an issue instead</a>'
-        "</div>"
-        '<p class="form-note">Requires a GitHub account. The button opens GitHub&rsquo;s '
-        "&ldquo;create new file&rdquo; page pre-filled at "
-        "<code>emdatabase/index/&lt;Name&gt;.yaml</code>; if you cannot push to the "
-        "repo, GitHub forks it for you and lets you propose the change. Fields marked "
-        '<span class="req">*</span> are required.</p>'
+        '<p class="form-note">The file the issue will produce. The CLI writes the same '
+        "entry, so this is also what to paste into a hand-written pull request.</p>"
         "</aside>"
         "</div>"
         "</main>"
     )
 
-    js = _ADD_DATASET_JS.replace("__REPO__", _REPO).replace("__BRANCH__", _BRANCH)
+    js = _ADD_DATASET_JS.replace("__ISSUE_URL__", _ISSUE_URL)
     scripts = _SPARK_MD5_SRC + "\n<script>\n" + ADD_DATASET_YAML_JS + js + "\n</script>"
     return _app_page(
         "Add Dataset &middot; EM-Database",
@@ -1498,12 +1498,93 @@ function emdbBuildYaml(fields) {
   return lines.join("\n") + "\n";
 }
 
+// The issue form's field ids, keyed by the field names above. GitHub prefills an
+// issue form from query parameters named after each field's `id`, which it does
+// for `input` and `textarea` fields only - `technique` is a checkboxes field and
+// `kind` a dropdown, so those are set on the issue itself. `kind` is sent anyway,
+// against the day GitHub honours it.
+var EMDB_ISSUE_IDS = [
+  ["name", "dataset_name"],
+  ["link", "url"],
+  ["file", "file_name"],
+  ["checksum", "checksum"],
+  ["size_bytes", "size_bytes"],
+  ["description", "description"],
+  ["detector_manufacturer", "detector_manufacturer"],
+  ["detector", "detector_model"],
+  ["microscope_vendor", "microscope_vendor"],
+  ["microscope_model", "microscope_model"],
+  ["camera_length", "camera_length"],
+  ["voltage", "accelerating_voltage"],
+  ["license", "license"],
+  ["doi", "doi"],
+  ["tags", "tags"],
+  ["kind", "kind"],
+  ["version_date", "version_date"],
+  ["model_class", "model_class"],
+  ["model_framework", "model_framework"],
+  ["model_quantem", "model_quantem"]
+];
+
+// A prefilled URL over ~8k characters is refused as `414 URI Too Long`, so the
+// description is cut back to fit rather than the whole submission failing.
+var EMDB_ISSUE_URL_MAX = 8000;
+
+// `{issue field id: value}` for one set of form values. The issue form asks for
+// one author, so the first filled-in row is the one it carries.
+function emdbIssueFields(fields) {
+  var out = {};
+  EMDB_ISSUE_IDS.forEach(function (pair) {
+    var v = fields[pair[0]];
+    if (Array.isArray(v)) v = v.join(", ");
+    v = v == null ? "" : String(v).trim();
+    if (v) out[pair[1]] = v;
+  });
+  var author = (fields.authors || []).filter(function (a) { return a && a.name; })[0];
+  if (author) {
+    out.name = String(author.name).trim();
+    if (author.aff) out.affiliation = String(author.aff).trim();
+    if (author.orcid) out.orcid = String(author.orcid).trim();
+  }
+  return out;
+}
+
+// `{url, trimmed}` - the prefilled issue link, and how many characters of the
+// description had to be left out of it.
+function emdbIssueUrl(base, fields) {
+  var params = emdbIssueFields(fields);
+  var description = params.description || "";
+  function build(desc) {
+    var parts = [];
+    Object.keys(params).forEach(function (id) {
+      var value = id === "description" ? desc : params[id];
+      if (value) parts.push(encodeURIComponent(id) + "=" + encodeURIComponent(value));
+    });
+    return base + (parts.length ? "&" + parts.join("&") : "");
+  }
+  if (build(description).length <= EMDB_ISSUE_URL_MAX) {
+    return { url: build(description), trimmed: 0 };
+  }
+  var kept = 0, most = description.length;
+  while (kept < most) {
+    var mid = Math.ceil((kept + most) / 2);
+    if (build(description.slice(0, mid) + " …").length <= EMDB_ISSUE_URL_MAX) kept = mid;
+    else most = mid - 1;
+  }
+  return {
+    url: build(kept ? description.slice(0, kept) + " …" : ""),
+    trimmed: description.length - kept
+  };
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     emdbBuildYaml: emdbBuildYaml,
     emdbEntryName: emdbEntryName,
     emdbNormalizeUrl: emdbNormalizeUrl,
-    emdbSplitUrl: emdbSplitUrl
+    emdbSplitUrl: emdbSplitUrl,
+    emdbIssueFields: emdbIssueFields,
+    emdbIssueUrl: emdbIssueUrl
   };
 }
 """
@@ -1511,10 +1592,11 @@ if (typeof module !== "undefined" && module.exports) {
 
 _ADD_DATASET_JS = r"""
 (function () {
-  var REPO = "__REPO__", BRANCH = "__BRANCH__";
+  var ISSUE_URL = "__ISSUE_URL__";
   var form = document.getElementById("ds-form");
   var preview = document.querySelector("#yaml-preview code");
-  var submitPr = document.getElementById("submit-pr");
+  var submitIssue = document.getElementById("submit-issue");
+  var trimNote = document.getElementById("issue-trim");
   var copyBtn = document.getElementById("copy-yaml");
   var addAuthor = document.getElementById("add-author");
   var authorsBox = document.getElementById("authors");
@@ -1619,8 +1701,15 @@ _ADD_DATASET_JS = r"""
 
   function refresh() {
     modelGroup.hidden = val("f-kind") !== "weights";
-    preview.textContent = emdbBuildYaml(collect());
-    submitPr.disabled = !validate();
+    var fields = collect();
+    preview.textContent = emdbBuildYaml(fields);
+    submitIssue.disabled = !validate();
+    var trimmed = emdbIssueUrl(ISSUE_URL, fields).trimmed;
+    trimNote.hidden = !trimmed;
+    trimNote.textContent = trimmed
+      ? "The description is too long for a link, so the issue opens with its last "
+        + trimmed + " characters cut off - paste them back in before you submit it."
+      : "";
   }
 
   function copyText(text, btn) {
@@ -1699,13 +1788,9 @@ _ADD_DATASET_JS = r"""
 
   copyBtn.addEventListener("click", function () { copyText(emdbBuildYaml(collect()), copyBtn); });
 
-  submitPr.addEventListener("click", function () {
+  submitIssue.addEventListener("click", function () {
     if (!validate()) { refresh(); return; }
-    var name = emdbEntryName(val("f-name")) || "Dataset";
-    var url = "https://github.com/" + REPO + "/new/" + BRANCH
-      + "?filename=" + encodeURIComponent("emdatabase/index/" + name + ".yaml")
-      + "&value=" + encodeURIComponent(emdbBuildYaml(collect()));
-    window.open(url, "_blank", "noopener");
+    window.open(emdbIssueUrl(ISSUE_URL, collect()).url, "_blank", "noopener");
   });
 
   refresh();
