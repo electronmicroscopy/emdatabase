@@ -49,7 +49,7 @@ jobs:
       - name: Fill in the checksum and size
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            files=$(git diff --name-only origin/${{ github.base_ref }}... -- 'emdatabase/index/*.yaml')
+            files=$(git diff --name-only --diff-filter=AM origin/${{ github.base_ref }}... -- 'emdatabase/index/*.yaml')
             if [ -z "$files" ]; then
               echo "no index file changed" | tee filled.md
               exit 0

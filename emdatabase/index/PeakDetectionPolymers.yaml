@@ -31,7 +31,7 @@ PeakDetectionPolymers:
       affiliation: Stanford University
   kind: weights
   model:
-    class: other
+    class: quantem.core.ml.CNN2d
     framework: torch
   latest:
     url: https://zenodo.org/records/22311217/files/best.pth
