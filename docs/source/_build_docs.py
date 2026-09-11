@@ -1192,8 +1192,13 @@ def generate_add_dataset_html() -> str:
         )
         + _file_field(
             "f-localfile",
-            "Local file",
-            hint="Pick the file you uploaded to fill in the name, size and md5.",
+            "Local file (optional)",
+            hint=(
+                "Optional. Leave this alone unless the file is very large: the checksum "
+                "and size are otherwise computed on the pull request by downloading it. "
+                "Picking your local copy of the uploaded file fills in the name, size "
+                "and md5 here instead, without uploading anything."
+            ),
         )
         + _text_field(
             "f-checksum",
