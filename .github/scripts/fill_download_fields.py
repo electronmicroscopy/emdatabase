@@ -38,7 +38,8 @@ def index_files(index_dir: Path | None, paths: list[Path]) -> list[Path]:
     the pull request changed.
     """
     if paths:
-        return [path for path in paths if path.name not in NON_DATASET_FILES]
+        # A pull request that removes an entry names a file that is gone.
+        return [path for path in paths if path.name not in NON_DATASET_FILES and path.exists()]
     if index_dir is None:
         return dataset_files()
     return sorted(p for p in index_dir.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
