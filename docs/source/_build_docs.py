@@ -1368,6 +1368,8 @@ function emdbEntryName(value) {
 // The port of new_dataset.normalize_url - the two have to agree, and a test
 // runs the same links through both.
 function emdbNormalizeUrl(url) {
+  var z = /^(https?:\/\/(?:sandbox\.)?zenodo\.org\/records\/\d+\/files\/[^?#]+)\?download=1$/i.exec(url);
+  if (z) return z[1];
   var m = /^https?:\/\/drive\.google\.com\/file\/d\/([^/?#]+)/i.exec(url)
     || /^https?:\/\/drive\.google\.com\/open\?(?:[^#]*&)?id=([^&#]+)/i.exec(url);
   return m ? "https://drive.google.com/uc?export=download&id=" + m[1] : url;
