@@ -7,9 +7,9 @@ keys in the same order as the CLI and the docs form, and it goes through
 the test suite and ``emdatabase.new_dataset`` run - so a malformed issue fails
 here rather than in the pull request the workflow opens.
 
-The form's checksum is optional, and the size is only what a HEAD request said,
-so ``emdatabase.new_dataset.fill_download_fields`` downloads the file for
-whichever of the two the issue left blank before any of that.
+The form's checksum and size are both optional - the size falls back to what a
+HEAD request says - so ``emdatabase.new_dataset.fill_download_fields`` downloads
+the file for whichever of the two is still missing before any of that.
 """
 
 import re
@@ -37,6 +37,7 @@ FIELDS = (
     "URL",
     "File Name",
     "Checksum",
+    "Size (bytes)",
     "Description",
     "Detector Manufacturer",
     "Detector Model",
@@ -111,6 +112,9 @@ def build_yaml(data):
     filename = data["File Name"] or filename
     if not filename:
         sys.exit(f"{data['URL']!r} does not end in a file name; fill in --File Name--")
+    # The Add Dataset form's file picker fills the size in from the local copy;
+    # without it the server is asked for the file's Content-Length.
+    size = data["Size (bytes)"].replace(",", "").replace("_", "").strip()
 
     entry = {
         "description": data["Description"],
@@ -118,7 +122,7 @@ def build_yaml(data):
         "url": link,
         "checksum": data["Checksum"],
         "file": filename,
-        "size_bytes": content_length(url),
+        "size_bytes": int(size) if size.isdigit() else content_length(url),
         "detector_manufacturer": data["Detector Manufacturer"],
         "detector": data["Detector Model"],
         "microscope_vendor": data["Microscope Vendor"],

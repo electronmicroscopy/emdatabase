@@ -24,6 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlsplit
 
 import pytest
 import yaml
@@ -100,6 +101,43 @@ def run_form(build_docs, tmp_path):
             check=True,
         )
         return result.stdout
+
+    return run
+
+
+@pytest.fixture
+def run_issue_url(build_docs, tmp_path):
+    """Run the form's issue-link builder under node.
+
+    Returns ``(params, built)`` - the link's query parameters, decoded and with
+    the template name dropped, and the ``{url, trimmed, max}`` the builder gave.
+    """
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    script = tmp_path / "issue_url.js"
+    script.write_text(
+        build_docs.ADD_DATASET_YAML_JS
+        + '\nvar fields = JSON.parse(require("fs").readFileSync(0, "utf8"));\n'
+        + "process.stdout.write(JSON.stringify(Object.assign(emdbIssueUrl("
+        + json.dumps(build_docs._ISSUE_URL)
+        + ", fields), {max: EMDB_ISSUE_URL_MAX})));\n",
+        encoding="utf-8",
+    )
+
+    def run(fields):
+        result = subprocess.run(
+            [node, str(script)],
+            input=json.dumps(fields),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        built = json.loads(result.stdout)
+        assert built["url"].startswith(build_docs._ISSUE_URL)
+        params = dict(parse_qsl(urlsplit(built["url"]).query))
+        assert params.pop("template") == "new_dataset.yaml"
+        return params, built
 
     return run
 
@@ -286,6 +324,100 @@ def test_form_takes_a_drive_share_link(run_form):
     assert entry["source"] == "https://drive.google.com"
     assert entry["url"] == normalize_url(share)
     assert entry["file"] == "example.zspy"
+
+
+# What the issue form's field ids are called on the docs form. The submit link
+# is only worth having if the two agree, so the mapping is written out here
+# rather than read back off the page.
+ISSUE_IDS = {
+    "dataset_name": "DemoNet",
+    "name": "Jane Doe",
+    "affiliation": "University of Somewhere",
+    "orcid": "0000-0002-1825-0097",
+    "url": DRIVE_LINK,
+    "file_name": "DemoNet.pt",
+    "checksum": "md5:df9376d5c020a23f0f7f51cfe79f303f",
+    "size_bytes": "1104287335",
+    "description": "Trained weights for the peak-finding U-Net.",
+    "detector_manufacturer": "Direct Electron",
+    "detector_model": "CeleritasXS",
+    "microscope_vendor": "Thermo Fisher Scientific",
+    "microscope_model": "Gen 1 Titan",
+    "camera_length": "100 mm",
+    "accelerating_voltage": "200 kV",
+    "license": "CC-BY-4.0",
+    "doi": "10.5281/zenodo.15490547",
+    "tags": "Nanocrystals, Orientation Mapping",
+    "kind": "weights",
+    "version_date": VERSION_DATE,
+    "model_class": "quantem.core.ml.CNN2d",
+    "model_framework": "torch",
+    "model_quantem": ">=0.2,<0.3",
+}
+
+
+def test_form_submits_as_an_issue(build_docs):
+    """One button, and it goes to the issue form; nothing opens a pull request."""
+    html = build_docs.generate_add_dataset_html()
+    assert 'id="submit-issue" class="btn-primary"' in html
+    assert build_docs._ISSUE_URL in html
+    assert build_docs._ISSUE_URL.endswith("/issues/new?template=new_dataset.yaml")
+    assert "/new/main" not in html and "filename=" not in html
+    assert "create new file" not in html
+    assert not hasattr(build_docs, "_REPO") and not hasattr(build_docs, "_BRANCH")
+
+
+def test_form_shows_the_yaml_below_the_submit_button(build_docs):
+    """The entry is a preview of what the issue produces, not the way to submit it."""
+    html = build_docs.generate_add_dataset_html()
+    assert html.index('id="submit-issue"') < html.index('id="copy-yaml"')
+    assert html.index('id="copy-yaml"') < html.index('id="yaml-preview"')
+
+
+def test_form_issue_link_carries_every_field_the_template_has(run_issue_url):
+    """The link's query has to decode back to the values the YAML is built from."""
+    params, built = run_issue_url(WEIGHTS_FIELDS)
+    assert params == ISSUE_IDS
+    assert built["trimmed"] == 0
+
+
+def test_form_issue_link_ids_are_the_ones_the_template_declares(run_issue_url):
+    """Every prefillable field on the template, and nothing GitHub will not prefill."""
+    form = yaml.safe_load(ISSUE_FORM.read_text(encoding="utf-8"))
+    blocks = {b["id"]: b["type"] for b in form["body"] if b["type"] != "markdown"}
+    params, _built = run_issue_url(WEIGHTS_FIELDS)
+    assert set(params) <= set(blocks)
+    # GitHub prefills `input` and `textarea` only, so the technique tick boxes
+    # are left to be filled in on the issue itself.
+    assert blocks["technique"] == "checkboxes"
+    assert "technique" not in params
+    assert set(blocks) - set(params) == {"technique"}
+
+
+def test_form_issue_link_leaves_out_what_the_form_was_not_given(run_issue_url):
+    """A blank field is absent from the query rather than sent empty."""
+    params, _built = run_issue_url(dict(DATASET_FIELDS, doi="", authors=[], tags=[]))
+    assert "doi" not in params and "tags" not in params
+    assert "name" not in params and "affiliation" not in params
+    assert params["dataset_name"] == "MgONanoCrystals"
+    assert params["kind"] == "dataset"
+
+
+def test_form_issue_link_trims_a_description_that_will_not_fit(run_issue_url):
+    """GitHub answers an over-long URL with 414, so the description gives way."""
+    long_description = ("A 4D-STEM dataset of MgO nanocrystals. " * 400).strip()
+    params, built = run_issue_url(dict(DATASET_FIELDS, description=long_description))
+    trimmed = built["trimmed"]
+    assert trimmed > 0
+    assert len(built["url"]) <= built["max"] <= 8192
+    assert len(params["description"]) + trimmed == len(long_description) + 2
+    assert params["description"].endswith(" \u2026")
+    for key, value in ISSUE_IDS.items():
+        if key in ("description", "dataset_name", "file_name", "kind", "version_date"):
+            continue
+        if key.startswith("model_"):
+            continue
+        assert params[key] == value
 
 
 def test_form_offers_a_local_file_picker(build_docs):
@@ -542,6 +674,49 @@ def test_issue_drive_link_becomes_url_plus_file_name(parse):
     ]
     assert entry["kind"] == "dataset"
     assert "model" not in entry
+
+
+def test_issue_takes_the_size_the_form_measured(issue_to_yaml, monkeypatch):
+    """The picker fills the size in, so the server is not asked for it."""
+
+    def no_head(url):
+        raise AssertionError(f"asked the server about {url}")
+
+    monkeypatch.setattr(issue_to_yaml, "content_length", no_head)
+    body = _issue_body(
+        **{
+            "--Dataset Name--": "MgONanoCrystals",
+            "--URL--": "https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40Ccd",
+            "--File Name--": "MgONanoCrystals.zspy",
+            "--Checksum--": "md5:df9376d5c020a23f0f7f51cfe79f303f",
+            "--Size (bytes)--": "1104287335",
+            "--Description--": "A 4D-STEM dataset of MgO nanocrystals.",
+            "--Dataset License--": "CC-BY-4.0",
+            "Technique": _ticked("4D-STEM"),
+        }
+    )
+    document, name = issue_to_yaml.build_yaml(issue_to_yaml.parse_issue_body(body))
+    assert validate_document(document) == []
+    assert document[name]["size_bytes"] == 1104287335
+
+
+def test_issue_asks_the_server_when_the_size_is_not_a_number(issue_to_yaml, monkeypatch):
+    """A blank or unparseable answer falls back to the HEAD request."""
+    monkeypatch.setattr(issue_to_yaml, "content_length", lambda url: 4242)
+    for answer in ("_No response_", "about 1 GB"):
+        body = _issue_body(
+            **{
+                "--Dataset Name--": "MgONanoCrystals",
+                "--URL--": "https://zenodo.org/records/1/files/MgONanoCrystals.zspy",
+                "--Checksum--": "md5:df9376d5c020a23f0f7f51cfe79f303f",
+                "--Size (bytes)--": answer,
+                "--Description--": "A 4D-STEM dataset of MgO nanocrystals.",
+                "--Dataset License--": "CC-BY-4.0",
+                "Technique": _ticked("4D-STEM"),
+            }
+        )
+        document, name = issue_to_yaml.build_yaml(issue_to_yaml.parse_issue_body(body))
+        assert document[name]["size_bytes"] == 4242
 
 
 FILE_BYTES = b"a small 4D-STEM dataset, allegedly" * 100

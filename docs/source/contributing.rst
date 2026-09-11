@@ -6,18 +6,21 @@ Contributing a Dataset
 A dataset is one YAML file in ``emdatabase/index/``, validated against
 ``emdatabase/index/json-schema.json``. Adding one means adding that file.
 
-Three routes
-------------
+Two routes
+----------
 
 Fill in the `new-dataset issue form
 <https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml>`_
-and an action turns it into the YAML file and opens a pull request for you. Or
-fill in the :doc:`Add Dataset <add_dataset>` form, which builds the YAML in the
-browser and sends you to GitHub with the file pre-filled. Or run the CLI below,
-which writes the file locally and leaves the pull request to you. All three end
-in the same place, and all three run the same validator. Neither web route has
-to be given the checksum or the size: a pull request carrying an entry that is
-missing either one has the file downloaded and the fields filled in for it.
+and an action turns it into the YAML file and opens a pull request for you. The
+:doc:`Add Dataset <add_dataset>` form is the front door to that: it carries
+every field the schema has, checks each one, computes the checksum from your
+local copy of the file, and then opens the issue form with all of it filled in.
+
+Or run the CLI below, which asks the same questions in a terminal and writes the
+file locally, leaving the pull request to you. Both routes end in the same file
+and both run the same validator. Neither has to be given the checksum or the
+size: an entry missing either one has the file downloaded and the fields filled
+in for it.
 
 Techniques
 ----------
@@ -53,10 +56,19 @@ your machine, so the checksum need not be computed by hand. The file is read in
 the browser and nothing is uploaded; a multi-GB file is hashed a chunk at a
 time, with progress under the picker. The three fields it fills stay editable.
 
-**Checksum** and **Size (bytes)** may be left blank, in which case the pull
-request downloads the file and fills them in. The picker is the quicker route
-for a large file, and a pull request from a fork has to use it, because a fork's
-branch cannot be pushed to.
+**Submit as an issue** opens the new-dataset issue form with everything you
+typed already in it. GitHub prefills text fields only, so **Technique** has to
+be ticked on the issue itself, and **Kind** set to ``weights`` there for a model
+checkpoint. A description too long to fit in a link is cut short, with a note on
+the page saying how much has to be pasted back in.
+
+The panel below the button is the entry the issue will produce. Nothing has to
+be done with it - it is there for reading, and for the **Copy** button, since
+the CLI writes the same file.
+
+**Checksum** and **Size (bytes)** may be left blank, in which case the file is
+downloaded and the fields filled in. The picker is the quicker route for a large
+file.
 
 Using the CLI
 -------------
@@ -160,12 +172,14 @@ one warns and asks for it to be added. A weights entry without an ML task, and
 a dataset with one, fail as well.
 
 ``fill_download_fields.yml`` runs on every pull request that touches
-``emdatabase/index/``. It downloads the file behind each changed entry that is
-missing its ``checksum`` or ``size_bytes`` - a weights family's ``latest`` and
-each dated version on their own links - fills the fields in and pushes the
-result back to the branch, which is how an entry from the web form or the issue
-form ends up complete. A fork's branch cannot be pushed to, so a pull request
-from one fails instead and prints the values to paste in.
+``emdatabase/index/``, which is to say on hand-edited and CLI-written index
+files. It downloads the file behind each changed entry that is missing its
+``checksum`` or ``size_bytes`` - a weights family's ``latest`` and each dated
+version on their own links - fills the fields in and pushes the result back to
+the branch. A fork's branch cannot be pushed to, so a pull request from one
+fails instead and prints the values to paste in. An entry coming in through the
+issue form is filled in the same way before its pull request is opened, so it
+arrives complete.
 
 ``check_sources.yml`` runs weekly and asks each source server whether the file
 is still there and still the size the entry claims.
@@ -218,6 +232,6 @@ GitHub archival is only for links that move in place, Google Drive among them.
 Google Drive works for a small file, as a
 ``https://drive.google.com/uc?export=download&id=<id>`` link written to the
 entry's ``url``; above about 100 MB Drive answers with a virus-scan page
-instead of the file, and the entry will not download. All three routes take the
+instead of the file, and the entry will not download. Both routes take the
 share link as well and rewrite it to that form, and fill in ``url``, ``source``
 and ``file`` themselves.

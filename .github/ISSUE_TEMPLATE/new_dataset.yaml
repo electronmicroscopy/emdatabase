@@ -66,6 +66,14 @@ body:
       placeholder: ex. md5:df9376d5c020a23f0f7f51cfe79f303f
     validations:
       required: false
+  - type: input
+    id: size_bytes
+    attributes:
+      label: --Size (bytes)--
+      description: The size of the file in bytes. Optional. Filled in automatically when it is left blank by asking the server for the file's `Content-Length`; the Add Dataset form's file picker fills it in from your local copy.
+      placeholder: ex. 1104287335
+    validations:
+      required: false
   - type: textarea
     id: description
     attributes:
