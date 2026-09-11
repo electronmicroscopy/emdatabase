@@ -3,10 +3,10 @@
 A dataset is one YAML file in `emdatabase/index/`. To add one, fill in the
 [new-dataset issue form](https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml)
 and an action turns it into that file and opens the pull request for you. The
-[Add Dataset form](https://electronmicroscopy.github.io/emdatabase/add_dataset.html)
-is the easier way in: it takes one download link - a Google Drive share link included -
-fills in the file name, size and md5 from your local copy of the file, checks
-everything, and opens the issue form with all of it already filled in.
+[Add Dataset page](https://electronmicroscopy.github.io/emdatabase/add_dataset.html)
+says what to have ready: one download link - a Google Drive share link included - a
+description, the licence, the technique, and the authors as `Name; Affiliation; ORCID`,
+one per line.
 
 If you would rather stay in a terminal, run
 

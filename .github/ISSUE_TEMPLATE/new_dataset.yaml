@@ -18,30 +18,14 @@ body:
       placeholder: ex. MgONanocrystals
     validations:
       required: true
-  - type: input
-    id: name
+  - type: textarea
+    id: authors
     attributes:
-      label: --Author--
-      description: What is your name?
-      placeholder: ex. Jane Doe
+      label: --Authors--
+      description: "One author per line, as `Name; Affiliation; ORCID`. The ORCID is optional; leave it off and end the line after the affiliation."
+      placeholder: "ex. Jane Doe; University of Somewhere; 0000-0002-1825-0097"
     validations:
       required: true
-  - type: input
-    id: affiliation
-    attributes:
-      label: --Affiliation--
-      description: Which institution or company are you at?
-      placeholder: ex. University of Mars
-    validations:
-      required: true
-  - type: input
-    id: orcid
-    attributes:
-      label: --ORCID--
-      description: Your ORCID, as 0000-0000-0000-0000.
-      placeholder: ex. 0000-0000-0000-0000
-    validations:
-      required: false
   - type: input
     id: url
     attributes:
@@ -62,7 +46,7 @@ body:
     id: checksum
     attributes:
       label: --Checksum--
-      description: The md5 of the file, as `md5:<32 hex chars>`. Optional. Filled in automatically on the pull request by downloading the file; for a very large file, use the Add Dataset form's file picker instead. The size is filled in the same way.
+      description: The md5 of the file, as `md5:<32 hex chars>`. Optional. Filled in automatically on the pull request by downloading the file; for a very large file, run `python -m emdatabase.new_dataset <url>` instead, which computes it locally. The size is filled in the same way.
       placeholder: ex. md5:df9376d5c020a23f0f7f51cfe79f303f
     validations:
       required: false
@@ -70,7 +54,7 @@ body:
     id: size_bytes
     attributes:
       label: --Size (bytes)--
-      description: The size of the file in bytes. Optional. Filled in automatically when it is left blank by asking the server for the file's `Content-Length`; the Add Dataset form's file picker fills it in from your local copy.
+      description: The size of the file in bytes. Optional. Filled in automatically when it is left blank by asking the server for the file's `Content-Length`.
       placeholder: ex. 1104287335
     validations:
       required: false

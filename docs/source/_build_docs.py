@@ -5,12 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from emdatabase.metadata import (
-    NON_DATASET_FILES,
-    acquisition_techniques,
-    load_vendors,
-    ml_tasks,
-)
+from emdatabase.metadata import NON_DATASET_FILES, acquisition_techniques
 
 
 def parse_datasets(yaml_dir):
@@ -628,13 +623,14 @@ _DOCS_BROWSER_JS = r"""
 # ---------------------------------------------------------------------------
 # Shared "app" chrome: a Catppuccin-Mocha shell that makes the whole docs site
 # look like emdatabase.browse(). Every generated page (landing / all-data /
-# add-dataset) is a self-contained file: the widget CSS is inlined, the palette
-# and top-nav live in _APP_CSS, and the catalogue JSON is baked in at build
-# time so search and the list work with no backend and no external requests.
+# weights / add-dataset) is a self-contained file: the widget CSS is inlined,
+# the palette and top-nav live in _APP_CSS, and the catalogue JSON is baked in
+# at build time so search and the list work with no backend and no external
+# requests.
 # ---------------------------------------------------------------------------
 
 # Palette + top-nav + hero, keyed to the same Catppuccin tokens browser.css
-# defines on .emdb (mirrored here on :root so the nav/hero/form get them too).
+# defines on .emdb (mirrored here on :root so the nav and hero get them too).
 _APP_CSS = """
 :root {
   --emdb-base: #1e1e2e; --emdb-mantle: #181825; --emdb-crust: #11111b;
@@ -726,77 +722,35 @@ _BROWSER_OVERRIDES = """
 .emdb-d-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 820px; gap: 6px 30px; }
 """
 
-# Form styling for the Add Dataset page.
-_FORM_CSS = """
-.form-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 430px); gap: 26px; align-items: start; }
-@media (max-width: 900px) { .form-wrap { grid-template-columns: 1fr; } .yaml-side { position: static; } }
-.ds-form { display: flex; flex-direction: column; gap: 14px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
-.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.field label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--emdb-muted); }
-.field .req { color: var(--emdb-red); }
-.field-hint { font-size: 11px; color: var(--emdb-subtext); }
-.field input, .field textarea, .field select {
-  width: 100%; box-sizing: border-box;
-  background: var(--emdb-crust); color: var(--emdb-text);
-  border: 1px solid var(--emdb-surface0); border-radius: 7px; padding: 8px 10px;
-  font-size: 13px; font-family: var(--emdb-font); outline: none;
+# Styling for the Add Dataset explainer page.
+_EXPLAINER_CSS = """
+.explainer { max-width: 780px; margin: 0 auto; }
+.explainer h2 {
+  font-size: 13px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--emdb-subtext); margin: 34px 0 12px; padding-top: 18px;
+  border-top: 1px solid var(--emdb-surface0);
 }
-.field textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
-.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--emdb-blue); }
-.field input.invalid, .field textarea.invalid, .field select.invalid { border-color: var(--emdb-red); }
-.field-err { font-size: 11px; color: var(--emdb-red); min-height: 13px; }
-.check-group { display: flex; flex-direction: column; gap: 8px; padding: 4px 0; }
-.check-set { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
-.check-set-label {
-  font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--emdb-subtext);
+.explainer ul { padding-left: 20px; margin: 0; }
+.explainer li { margin: 8px 0; }
+.explainer code {
+  font-family: var(--emdb-mono); font-size: 13.5px; color: var(--emdb-text);
+  background: var(--emdb-crust); border: 1px solid var(--emdb-surface0);
+  border-radius: 5px; padding: 1px 6px;
 }
-.check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
-.check input { width: auto; }
-.section-title {
-  font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--emdb-subtext); margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--emdb-surface0);
+.explainer pre {
+  margin: 0 0 14px; padding: 14px; overflow-x: auto;
+  background: var(--emdb-crust); border: 1px solid var(--emdb-surface0); border-radius: 10px;
+  font-family: var(--emdb-mono); font-size: 13px;
 }
-#authors { display: flex; flex-direction: column; gap: 12px; }
-.author-row {
-  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
-  background: var(--emdb-mantle); border: 1px solid var(--emdb-surface0); border-radius: 9px; padding: 12px;
-}
-@media (max-width: 620px) { .author-row { grid-template-columns: 1fr; } }
-.btn-ghost {
-  align-self: flex-start; cursor: pointer; font-weight: 600; font-size: 12px;
-  background: var(--emdb-surface0); color: var(--emdb-text);
-  border: 1px solid var(--emdb-surface1); border-radius: 7px; padding: 6px 12px;
-}
-.btn-ghost:hover { border-color: var(--emdb-blue); color: var(--emdb-blue); }
-
-.yaml-side { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 12px; }
-.yaml-head {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--emdb-muted);
-}
-.yaml-pre {
-  margin: 0; background: var(--emdb-crust); border: 1px solid var(--emdb-surface0);
-  border-radius: 10px; padding: 14px; max-height: 440px; overflow: auto;
-  font-family: var(--emdb-mono); font-size: 12px; color: var(--emdb-text); white-space: pre;
-}
-.submit-row { display: flex; flex-direction: column; gap: 10px; }
+.explainer pre code { background: none; border: 0; padding: 0; }
+.note { font-size: 14px; color: var(--emdb-subtext); }
+.submit-row { display: flex; justify-content: center; margin: 28px 0 4px; }
 .btn-primary {
-  cursor: pointer; font-weight: 700; font-size: 14px; text-align: center;
+  display: inline-block; font-weight: 700; font-size: 15px; text-align: center;
   color: var(--emdb-crust); background: linear-gradient(135deg, var(--emdb-blue), var(--emdb-mauve));
-  border: 0; border-radius: 9px; padding: 12px 16px;
+  border: 0; border-radius: 9px; padding: 13px 26px;
 }
-.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.3); }
-.btn-primary:not(:disabled):hover { filter: brightness(1.06); }
-.copy-mini {
-  cursor: pointer; font-size: 11px; font-weight: 600; color: var(--emdb-blue);
-  background: transparent; border: 1px solid var(--emdb-surface1); border-radius: 6px; padding: 2px 9px;
-}
-.copy-mini:hover { border-color: var(--emdb-blue); background: rgba(137, 180, 250, 0.1); }
-.copy-mini.copied { color: var(--emdb-green); border-color: var(--emdb-green); }
-.form-note { font-size: 11.5px; color: var(--emdb-subtext); line-height: 1.55; }
-.form-note code { font-family: var(--emdb-mono); color: var(--emdb-text); }
+.btn-primary:hover { filter: brightness(1.06); text-decoration: none; }
 """
 
 
@@ -848,8 +802,8 @@ def _app_page(
     """Wrap page ``body`` in the self-contained Catppuccin app shell.
 
     Built by concatenation (not ``str.format``/``%``) so CSS/JS braces need no
-    escaping. All the CSS is inline, and so is every script but the ones a page
-    passes in ``scripts`` itself.
+    escaping. Every page is self-contained: the CSS and any ``scripts`` are
+    inlined, and none of them loads an external resource.
     """
     return (
         "<!doctype html>\n"
@@ -990,819 +944,62 @@ def generate_weights_html() -> str:
 
 # -- Add Dataset page --------------------------------------------------------
 
-_VENDOR_LISTS = load_vendors()
-_MANUFACTURERS = tuple(_VENDOR_LISTS["detector_manufacturer"])
-_VENDORS = tuple(_VENDOR_LISTS["microscope_vendor"])
-_TECHNIQUE_GROUPS = (("Acquisition", acquisition_techniques()), ("ML task", ml_tasks()))
-_KINDS = ("dataset", "weights")
-
-# Neither field is required: whatever a contributor leaves blank is downloaded
-# and filled in by .github/workflows/fill_download_fields.yml.
-_FILLED_IN = (
-    "Optional. Filled in automatically on the pull request by downloading the file; "
-    "for a very large file, pick the local file above instead."
-)
-
-# The new-dataset issue form. The page's submit button appends the field values
-# to this as query parameters, which is how GitHub prefills an issue form.
+# The new-dataset issue form: the one submission route the page points at.
 _ISSUE_URL = (
     "https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml"
 )
 
-# md5 in the browser, for the Add Dataset page's local-file picker - the one
-# external resource any generated page loads. If it does not load the picker
-# still fills in the file name and size, and says so.
-_SPARK_MD5_SRC = (
-    '<script src="https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.2/spark-md5.min.js"'
-    ' integrity="sha384-WAahC3S+69Co45zyyuhCjvdMwo7a42Yn0mM0IgZIUlYNebG24AVkPUltj3BQnM85"'
-    ' crossorigin="anonymous" referrerpolicy="no-referrer"></script>'
+_CLI_COMMAND = (
+    "python -m emdatabase.new_dataset https://zenodo.org/records/15490547/files/PdNiP.zspy"
 )
 
 
-def _text_field(fid, label, required=False, placeholder="", hint="", full=False):
-    req = ' <span class="req">*</span>' if required else ""
-    ph = ' placeholder="' + _esc(placeholder) + '"' if placeholder else ""
-    hn = '<div class="field-hint">' + _esc(hint) + "</div>" if hint else ""
-    style = ' style="grid-column:1/-1"' if full else ""
-    return (
-        '<div class="field"'
-        + style
-        + '><label for="'
-        + fid
-        + '">'
-        + _esc(label)
-        + req
-        + "</label>"
-        + hn
-        + '<input id="'
-        + fid
-        + '" type="text"'
-        + ph
-        + ">"
-        '<div class="field-err" id="err-' + fid + '"></div></div>'
-    )
-
-
-def _select_field(fid, label, options, hint="", default=""):
-    """A dropdown; with ``default`` set it starts on that option rather than blank."""
-    hn = '<div class="field-hint">' + _esc(hint) + "</div>" if hint else ""
-    opts = "" if default else '<option value="">&mdash; select &mdash;</option>'
-    opts += "".join(
-        '<option value="'
-        + _esc(o)
-        + '"'
-        + (" selected" if o == default else "")
-        + ">"
-        + _esc(o)
-        + "</option>"
-        for o in options
-    )
-    return (
-        '<div class="field"><label for="'
-        + fid
-        + '">'
-        + _esc(label)
-        + "</label>"
-        + hn
-        + '<select id="'
-        + fid
-        + '">'
-        + opts
-        + "</select>"
-        '<div class="field-err" id="err-' + fid + '"></div></div>'
-    )
-
-
-def _checkbox_field(fid, label, groups, hint="", full=False):
-    """Checkboxes in labelled groups - a field a dataset may have several of.
-
-    ``groups`` is ``(group label, options)`` pairs. They share one container,
-    so the form reads every box with one selector whichever group it is in.
-    """
-    hn = '<div class="field-hint">' + _esc(hint) + "</div>" if hint else ""
-    style = ' style="grid-column:1/-1"' if full else ""
-    boxes = "".join(
-        '<div class="check-set"><div class="check-set-label">'
-        + _esc(group)
-        + "</div>"
-        + "".join(
-            '<label class="check"><input type="checkbox" value="'
-            + _esc(o)
-            + '">'
-            + _esc(o)
-            + "</label>"
-            for o in options
-        )
-        + "</div>"
-        for group, options in groups
-    )
-    return (
-        '<div class="field"'
-        + style
-        + "><label>"
-        + _esc(label)
-        + "</label>"
-        + hn
-        + '<div class="check-group" id="'
-        + fid
-        + '">'
-        + boxes
-        + "</div>"
-        '<div class="field-err" id="err-' + fid + '"></div></div>'
-    )
-
-
-def _datalist_field(fid, label, options, placeholder="", hint=""):
-    """A free-text field with suggestions - the open-string vendor lists."""
-    hn = '<div class="field-hint">' + _esc(hint) + "</div>" if hint else ""
-    ph = ' placeholder="' + _esc(placeholder) + '"' if placeholder else ""
-    opts = "".join('<option value="' + _esc(o) + '">' for o in options)
-    return (
-        '<div class="field"><label for="'
-        + fid
-        + '">'
-        + _esc(label)
-        + "</label>"
-        + hn
-        + '<input id="'
-        + fid
-        + '" type="text" list="'
-        + fid
-        + '-list"'
-        + ph
-        + ">"
-        '<datalist id="' + fid + '-list">' + opts + "</datalist>"
-        '<div class="field-err" id="err-' + fid + '"></div></div>'
-    )
-
-
-def _file_field(fid, label, hint=""):
-    """A local file picker. Its hint carries an id, so the JS can show progress."""
-    return (
-        '<div class="field" style="grid-column:1/-1"><label for="'
-        + fid
-        + '">'
-        + _esc(label)
-        + "</label>"
-        '<div class="field-hint" id="hint-' + fid + '">' + _esc(hint) + "</div>"
-        '<input id="' + fid + '" type="file">'
-        '<div class="field-err" id="err-' + fid + '"></div></div>'
-    )
-
-
-def _author_row_html():
-    return (
-        '<div class="author-row">'
-        '<div class="field"><label>Name</label>'
-        '<input class="a-name" type="text" placeholder="Jane Doe">'
-        '<div class="field-err a-name-err"></div></div>'
-        '<div class="field"><label>Affiliation <span class="req">*</span></label>'
-        '<input class="a-aff" type="text" placeholder="University of ...">'
-        '<div class="field-err a-aff-err"></div></div>'
-        '<div class="field"><label>ORCID</label>'
-        '<input class="a-orcid" type="text" placeholder="0000-0000-0000-0000">'
-        '<div class="field-err a-orcid-err"></div></div>'
-        "</div>"
-    )
-
-
 def generate_add_dataset_html() -> str:
-    """The Add Dataset page: a schema-driven form that opens a prefilled issue."""
-    fields = (
-        _text_field(
-            "f-name",
-            "Dataset Name",
-            required=True,
-            placeholder="MgONanoCrystals",
-            hint="Short CamelCase identifier - becomes the YAML key and file name.",
-            full=True,
-        )
-        + '<div class="field" style="grid-column:1/-1"><label for="f-description">Description '
-        '<span class="req">*</span></label>'
-        '<div class="field-hint">Technique, sample, size, and anything notable.</div>'
-        '<textarea id="f-description" placeholder="A 4D-STEM dataset of ..."></textarea>'
-        '<div class="field-err" id="err-f-description"></div></div>'
-        + _text_field(
-            "f-link",
-            "Download link",
-            required=True,
-            placeholder="https://zenodo.org/records/15490547/files/smallPtychography.hspy",
-            hint="A direct link to the file. A Google Drive share link works.",
-            full=True,
-        )
-        + _file_field(
-            "f-localfile",
-            "Local file (optional)",
-            hint=(
-                "Optional. Leave this alone unless the file is very large: the checksum "
-                "and size are otherwise computed on the pull request by downloading it. "
-                "Picking your local copy of the uploaded file fills in the name, size "
-                "and md5 here instead, without uploading anything."
-            ),
-        )
-        + _text_field(
-            "f-checksum",
-            "Checksum",
-            placeholder="md5:df9376d5c020a23f0f7f51cfe79f303f",
-            hint=f"md5:<32 hex chars>. {_FILLED_IN}",
-        )
-        + _text_field(
-            "f-file",
-            "File",
-            placeholder="smallPtychography.hspy",
-            hint="The name the file is saved under; needed when the link does not end in it.",
-        )
-        + _text_field(
-            "f-size_bytes",
-            "Size (bytes)",
-            placeholder="1104287335",
-            hint=f"The file's Content-Length, in bytes. {_FILLED_IN}",
-        )
-        + _datalist_field(
-            "f-detector_manufacturer",
-            "Detector Manufacturer",
-            _MANUFACTURERS,
-            placeholder="Direct Electron",
-        )
-        + _text_field("f-detector", "Detector", placeholder="CeleritasXS")
-        + _datalist_field(
-            "f-microscope_vendor",
-            "Microscope Vendor",
-            _VENDORS,
-            placeholder="Thermo Fisher Scientific",
-        )
-        + _text_field("f-microscope_model", "Microscope Model", placeholder="Gen 1 Titan")
-        + _text_field("f-camera_length", "Camera Length", placeholder="e.g. 100 mm")
-        + _text_field("f-voltage", "Voltage", placeholder="200 kV", hint="e.g. 200 kV")
-        + _text_field("f-license", "License", placeholder="CC-BY-4.0")
-        + _checkbox_field(
-            "f-technique",
-            "Technique",
-            _TECHNIQUE_GROUPS,
-            hint=(
-                "Tick how the data was acquired; it is listed under each. A model "
-                "checkpoint also ticks what the model does."
-            ),
-            full=True,
-        )
-        + _text_field("f-doi", "DOI", placeholder="10.5281/zenodo.15490547")
-        + _text_field(
-            "f-tags",
-            "Tags",
-            placeholder="Orientation Mapping, Nanocrystals",
-            hint="Comma-separated.",
-            full=True,
-        )
-    )
-
-    entry_fields = _select_field(
-        "f-kind",
-        "Kind",
-        _KINDS,
-        hint="What the entry hands out.",
-        default="dataset",
-    )
-
-    model_fields = (
-        _text_field(
-            "f-model_class",
-            "Model Class",
-            required=True,
-            placeholder="quantem.core.ml.CNN2d",
-            hint="Dotted import path of the class the checkpoint loads into.",
-            full=True,
-        )
-        + _text_field(
-            "f-model_framework",
-            "Framework",
-            required=True,
-            placeholder="torch",
-        )
-        + _text_field(
-            "f-model_quantem",
-            "quantem Versions",
-            placeholder=">=0.2,<0.3",
-            hint="The versions the checkpoint loads under.",
-        )
-        + _text_field(
-            "f-version_date",
-            "Version Date",
-            placeholder="260902",
-            hint="YYMMDD of the first dated version; today if blank.",
-        )
-    )
-
+    """The Add Dataset page: what a submission needs, and the two ways to send one."""
     body = (
-        '<main class="app-main">'
+        '<main class="app-main"><div class="explainer">'
         '<div class="app-hero" style="padding:24px 0 6px">'
         '<h1 style="font-size:32px">Add a Dataset</h1>'
-        "<p>Submissions go through an issue. Fill in the metadata below and "
-        "&ldquo;Submit as an issue&rdquo; opens the new-dataset issue form on GitHub "
-        "with these fields already filled in; an action turns the issue into the "
-        "entry, fills in whatever is missing and opens the pull request.</p>"
-        "<p>The form checks each field as you type, and picking the file from your "
-        "machine fills in its name, size and md5 &mdash; it is hashed in the browser "
-        "and nothing is uploaded. If you would rather stay in a terminal, "
-        "<code>python -m emdatabase.new_dataset &lt;url&gt;</code> asks the same "
-        'questions there; see <a href="contributing.html">Contributing a Dataset</a>.</p>'
+        "<p>Submissions go through an issue. Fill in the new-dataset issue form and "
+        "an action turns it into the entry\u2019s YAML file, fills in whatever it can "
+        "work out for itself, and opens the pull request.</p>"
         "</div>"
-        '<div class="form-wrap">'
-        '<form id="ds-form" class="ds-form" autocomplete="off">'
-        '<div class="grid2">' + fields + "</div>"
-        '<div class="section-title">Authors</div>'
-        '<div class="field-hint" style="margin-bottom:10px">The issue carries the '
-        "first author only; the rest can be added to the YAML on the pull "
-        "request.</div>"
-        '<div id="authors">' + _author_row_html() + "</div>"
-        '<button type="button" id="add-author" class="btn-ghost">+ Add author</button>'
-        '<div class="section-title">Entry</div>'
-        '<div class="grid2">' + entry_fields + "</div>"
-        '<div id="model-group" hidden>'
-        '<div class="section-title">Model</div>'
-        '<div class="field-hint" style="margin-bottom:10px">Model weights only - a '
-        "dataset entry with a model block is rejected. The class and framework are "
-        "required.</div>"
-        '<div class="grid2">' + model_fields + "</div>"
-        "</div>"
-        "</form>"
-        '<aside class="yaml-side">'
+        "<h2>What to have ready</h2>"
+        "<ul>"
+        "<li>A direct link to the file. A Google Drive share link or a Zenodo file "
+        "link both work.</li>"
+        "<li>The file name, if the link does not end in one.</li>"
+        "<li>A description of the data, the licence it is released under, and how it "
+        "was acquired \u2014 one technique or several.</li>"
+        "<li>The authors, one per line, as "
+        "<code>Name; Affiliation; ORCID</code>. The ORCID is optional.</li>"
+        "<li>For model weights: the class the checkpoint loads into, the framework it "
+        "was saved with, and the quantem versions it loads under.</li>"
+        "</ul>"
+        '<p class="note">The checksum and the size are filled in automatically by '
+        "downloading the file, so both can be left blank.</p>"
         '<div class="submit-row">'
-        '<button type="button" id="submit-issue" class="btn-primary" disabled>'
-        "Submit as an issue &#8599;</button>"
+        '<a class="btn-primary" target="_blank" rel="noopener" href="'
+        + _ISSUE_URL
+        + '">Open the issue form &#8599;</a>'
         "</div>"
-        '<p class="form-note">Requires a GitHub account. Fields marked '
-        '<span class="req">*</span> are required. GitHub does not prefill tick boxes '
-        "or dropdowns, so <strong>Technique</strong> has to be ticked on the issue "
-        "itself, and <strong>Kind</strong> set to <code>weights</code> there for a "
-        "model checkpoint.</p>"
-        '<p class="form-note" id="issue-trim" hidden></p>'
-        '<div class="yaml-head"><span>What the entry will look like</span>'
-        '<button type="button" id="copy-yaml" class="copy-mini">Copy</button></div>'
-        '<pre id="yaml-preview" class="yaml-pre"><code></code></pre>'
-        '<p class="form-note">The file the issue will produce. The CLI writes the same '
-        "entry, so this is also what to paste into a hand-written pull request.</p>"
-        "</aside>"
-        "</div>"
-        "</main>"
+        "<h2>From a terminal</h2>"
+        "<pre><code>" + _esc(_CLI_COMMAND) + "</code></pre>"
+        "<p>It asks the same questions at the prompt and writes the YAML file, leaving "
+        "the pull request to you. A trained model checkpoint takes "
+        "<code>--kind weights</code> as well.</p>"
+        "<p>It computes the checksum from the file on your own machine rather than on "
+        "GitHub, which is the route to take for a very large file.</p>"
+        '<p class="note">Full instructions, including writing the entry by hand and '
+        'what CI checks: <a href="contributing.html">Contributing a Dataset</a>.</p>'
+        "</div></main>"
     )
-
-    js = _ADD_DATASET_JS.replace("__ISSUE_URL__", _ISSUE_URL)
-    scripts = _SPARK_MD5_SRC + "\n<script>\n" + ADD_DATASET_YAML_JS + js + "\n</script>"
     return _app_page(
         "Add Dataset &middot; EM-Database",
         body,
         active="Add Dataset",
-        extra_css=_FORM_CSS,
-        scripts=scripts,
+        extra_css=_EXPLAINER_CSS,
     )
-
-
-ADD_DATASET_YAML_JS = r"""
-// Build one entry's YAML from a plain object of field values. Pure - the form
-// and the DOM stay with the caller - so the test suite can run it under node.
-// Key order matches new_dataset.FIELD_ORDER, so the web form, the issue form
-// and the CLI all write the same file.
-
-// The YAML key and the file name. An underscore survives, because a name may
-// carry one - `AmorphousFilm4nm_4DSTEM`.
-function emdbEntryName(value) {
-  return String(value == null ? "" : value).replace(/[^A-Za-z0-9_]+/g, "");
-}
-
-// A Google Drive share link as its download link; any other link unchanged.
-// The port of new_dataset.normalize_url - the two have to agree, and a test
-// runs the same links through both.
-function emdbNormalizeUrl(url) {
-  var z = /^(https?:\/\/(?:sandbox\.)?zenodo\.org\/records\/\d+\/files\/[^?#]+)\?download=1$/i.exec(url);
-  if (z) return z[1];
-  var m = /^https?:\/\/drive\.google\.com\/file\/d\/([^/?#]+)/i.exec(url)
-    || /^https?:\/\/drive\.google\.com\/open\?(?:[^#]*&)?id=([^&#]+)/i.exec(url);
-  return m ? "https://drive.google.com/uc?export=download&id=" + m[1] : url;
-}
-
-// `{source, file, url}` for a link, with `url` empty when unneeded. The port of
-// new_dataset.split_url, down to what each branch returns.
-function emdbSplitUrl(url) {
-  url = emdbNormalizeUrl(String(url == null ? "" : url));
-  var m = /^([A-Za-z][A-Za-z0-9+.\-]*):\/\/([^/?#]*)([^?#]*)(?:\?([^#]*))?/.exec(url);
-  if (!m || !m[2]) return { source: "", file: "", url: "" };
-  var path = m[3] || "", query = m[4] || "";
-  var last = path.slice(path.lastIndexOf("/") + 1);
-  if (query || last.indexOf(".") === -1) {
-    return { source: m[1].toLowerCase() + "://" + m[2], file: "", url: url };
-  }
-  var cut = url.lastIndexOf("/");
-  return { source: url.slice(0, cut), file: url.slice(cut + 1), url: "" };
-}
-
-// Today as YYMMDD, the label a new weights version is filed under.
-function emdbVersionDate() {
-  var d = new Date();
-  function two(n) { return ("0" + n).slice(-2); }
-  return two(d.getFullYear() % 100) + two(d.getMonth() + 1) + two(d.getDate());
-}
-
-// Emit a YAML scalar: plain when safe, double-quoted (with escapes) otherwise.
-function emdbYamlStr(v) {
-  v = String(v);
-  if (v === "") return '""';
-  if (/\n/.test(v)) {
-    return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-      .replace(/\n/g, "\\n").replace(/\t/g, "\\t") + '"';
-  }
-  var risky = /^\s|\s$/.test(v)
-    || /^[-?:,\[\]{}#&*!|>'"%@`]/.test(v)
-    || /:(\s|$)/.test(v)
-    || /\s#/.test(v)
-    || /^(true|false|null|yes|no|on|off|~)$/i.test(v)
-    || /^[-+]?(\d[\d_]*\.?\d*([eE][-+]?\d+)?)$/.test(v);
-  if (risky) return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
-  return v;
-}
-
-function emdbBuildYaml(fields) {
-  function get(key) {
-    var v = fields[key];
-    return v == null ? "" : String(v).trim();
-  }
-  var name = emdbEntryName(get("name")) || "DatasetName";
-  var lines = ["# $schema: ./json-schema.json", name + ":"];
-  function add(key, value) {
-    if (value) lines.push("  " + key + ": " + emdbYamlStr(value));
-  }
-  // A weights entry writes these inside `latest` and its dated version instead.
-  var weights = get("kind") === "weights";
-  var bytes = get("size_bytes").replace(/[^0-9]/g, "");
-  // The form asks for one download link; the YAML wants the directory and the
-  // file name apart, and keeps the whole link only when it is not source/file.
-  var split = emdbSplitUrl(get("link"));
-  var file = get("file") || split.file;
-  add("description", get("description"));
-  add("source", split.source);
-  if (!weights) {
-    add("url", split.url);
-    add("checksum", get("checksum"));
-  }
-  add("file", file);
-  if (bytes && !weights) lines.push("  size_bytes: " + bytes);
-  add("detector_manufacturer", get("detector_manufacturer"));
-  add("detector", get("detector"));
-  add("microscope_vendor", get("microscope_vendor"));
-  add("microscope_model", get("microscope_model"));
-  add("camera_length", get("camera_length"));
-  add("voltage", get("voltage"));
-  add("license", get("license"));
-  function list(key, values) {
-    values = (values || []).map(function (v) { return String(v).trim(); }).filter(Boolean);
-    if (!values.length) return;
-    lines.push("  " + key + ":");
-    values.forEach(function (v) { lines.push("    - " + emdbYamlStr(v)); });
-  }
-  list("technique", fields.technique);
-  add("doi", get("doi"));
-  list("tags", fields.tags);
-  var authors = (fields.authors || []).filter(function (a) { return a && a.name; });
-  if (authors.length) {
-    lines.push("  authors:");
-    authors.forEach(function (a) {
-      lines.push("    " + emdbYamlStr(a.name) + ":");
-      lines.push("      affiliation: " + emdbYamlStr(a.aff || ""));
-      if (a.orcid) lines.push("      orcid: " + emdbYamlStr(a.orcid));
-    });
-  }
-  // `kind` is always written, `dataset` included; only a weights entry may
-  // carry a model block, a `latest` link and dated versions.
-  lines.push("  kind: " + (weights ? "weights" : "dataset"));
-  if (weights) {
-    var model = [
-      ["class", get("model_class")],
-      ["framework", get("model_framework")],
-      ["quantem", get("model_quantem")]
-    ].filter(function (pair) { return pair[1]; });
-    if (model.length) {
-      lines.push("  model:");
-      model.forEach(function (pair) {
-        lines.push("    " + pair[0] + ": " + emdbYamlStr(pair[1]));
-      });
-    }
-    var pin = [
-      ["url", split.url || (split.source + "/" + file)],
-      ["checksum", get("checksum")]
-    ].filter(function (pair) { return pair[1]; });
-    if (bytes) pin.push(["size_bytes", bytes]);
-    lines.push("  latest:");
-    pin.forEach(function (pair) {
-      lines.push("    " + pair[0] + ": " + (pair[0] === "size_bytes" ? pair[1]
-        : emdbYamlStr(pair[1])));
-    });
-    lines.push("  versions:");
-    lines.push('    "' + (get("version_date") || emdbVersionDate()) + '":');
-    pin.forEach(function (pair) {
-      lines.push("      " + pair[0] + ": " + (pair[0] === "size_bytes" ? pair[1]
-        : emdbYamlStr(pair[1])));
-    });
-  }
-  return lines.join("\n") + "\n";
-}
-
-// The issue form's field ids, keyed by the field names above. GitHub prefills an
-// issue form from query parameters named after each field's `id`, which it does
-// for `input` and `textarea` fields only - `technique` is a checkboxes field and
-// `kind` a dropdown, so those are set on the issue itself. `kind` is sent anyway,
-// against the day GitHub honours it.
-var EMDB_ISSUE_IDS = [
-  ["name", "dataset_name"],
-  ["link", "url"],
-  ["file", "file_name"],
-  ["checksum", "checksum"],
-  ["size_bytes", "size_bytes"],
-  ["description", "description"],
-  ["detector_manufacturer", "detector_manufacturer"],
-  ["detector", "detector_model"],
-  ["microscope_vendor", "microscope_vendor"],
-  ["microscope_model", "microscope_model"],
-  ["camera_length", "camera_length"],
-  ["voltage", "accelerating_voltage"],
-  ["license", "license"],
-  ["doi", "doi"],
-  ["tags", "tags"],
-  ["kind", "kind"],
-  ["version_date", "version_date"],
-  ["model_class", "model_class"],
-  ["model_framework", "model_framework"],
-  ["model_quantem", "model_quantem"]
-];
-
-// A prefilled URL over ~8k characters is refused as `414 URI Too Long`, so the
-// description is cut back to fit rather than the whole submission failing.
-var EMDB_ISSUE_URL_MAX = 8000;
-
-// `{issue field id: value}` for one set of form values. The issue form asks for
-// one author, so the first filled-in row is the one it carries.
-function emdbIssueFields(fields) {
-  var out = {};
-  EMDB_ISSUE_IDS.forEach(function (pair) {
-    var v = fields[pair[0]];
-    if (Array.isArray(v)) v = v.join(", ");
-    v = v == null ? "" : String(v).trim();
-    if (v) out[pair[1]] = v;
-  });
-  var author = (fields.authors || []).filter(function (a) { return a && a.name; })[0];
-  if (author) {
-    out.name = String(author.name).trim();
-    if (author.aff) out.affiliation = String(author.aff).trim();
-    if (author.orcid) out.orcid = String(author.orcid).trim();
-  }
-  return out;
-}
-
-// `{url, trimmed}` - the prefilled issue link, and how many characters of the
-// description had to be left out of it.
-function emdbIssueUrl(base, fields) {
-  var params = emdbIssueFields(fields);
-  var description = params.description || "";
-  function build(desc) {
-    var parts = [];
-    Object.keys(params).forEach(function (id) {
-      var value = id === "description" ? desc : params[id];
-      if (value) parts.push(encodeURIComponent(id) + "=" + encodeURIComponent(value));
-    });
-    return base + (parts.length ? "&" + parts.join("&") : "");
-  }
-  if (build(description).length <= EMDB_ISSUE_URL_MAX) {
-    return { url: build(description), trimmed: 0 };
-  }
-  var kept = 0, most = description.length;
-  while (kept < most) {
-    var mid = Math.ceil((kept + most) / 2);
-    if (build(description.slice(0, mid) + " …").length <= EMDB_ISSUE_URL_MAX) kept = mid;
-    else most = mid - 1;
-  }
-  return {
-    url: build(kept ? description.slice(0, kept) + " …" : ""),
-    trimmed: description.length - kept
-  };
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    emdbBuildYaml: emdbBuildYaml,
-    emdbEntryName: emdbEntryName,
-    emdbNormalizeUrl: emdbNormalizeUrl,
-    emdbSplitUrl: emdbSplitUrl,
-    emdbIssueFields: emdbIssueFields,
-    emdbIssueUrl: emdbIssueUrl
-  };
-}
-"""
-
-
-_ADD_DATASET_JS = r"""
-(function () {
-  var ISSUE_URL = "__ISSUE_URL__";
-  var form = document.getElementById("ds-form");
-  var preview = document.querySelector("#yaml-preview code");
-  var submitIssue = document.getElementById("submit-issue");
-  var trimNote = document.getElementById("issue-trim");
-  var copyBtn = document.getElementById("copy-yaml");
-  var addAuthor = document.getElementById("add-author");
-  var authorsBox = document.getElementById("authors");
-  var modelGroup = document.getElementById("model-group");
-  var localFile = document.getElementById("f-localfile");
-  var localHint = document.getElementById("hint-f-localfile");
-
-  var SCALARS = [
-    "name", "description", "link", "checksum", "file", "size_bytes",
-    "detector_manufacturer", "detector", "microscope_vendor", "microscope_model",
-    "camera_length", "voltage", "license", "doi",
-    "kind", "version_date", "model_class", "model_framework", "model_quantem"
-  ];
-
-  function val(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
-  function setValue(id, value) { var e = document.getElementById(id); if (e) e.value = value; }
-
-  // The CLI strips a trailing slash off the link before splitting it; so does this.
-  function link() { return val("f-link").replace(/\/+$/, ""); }
-
-  function authors() {
-    var out = [];
-    form.querySelectorAll(".author-row").forEach(function (r) {
-      var name = r.querySelector(".a-name").value.trim();
-      if (name) {
-        out.push({
-          name: name,
-          aff: r.querySelector(".a-aff").value.trim(),
-          orcid: r.querySelector(".a-orcid").value.trim()
-        });
-      }
-    });
-    return out;
-  }
-
-  function collect() {
-    var fields = {};
-    SCALARS.forEach(function (key) { fields[key] = val("f-" + key); });
-    fields.link = link();
-    fields.technique = Array.prototype.map.call(
-      document.querySelectorAll("#f-technique input:checked"),
-      function (box) { return box.value; }
-    );
-    fields.tags = val("f-tags").split(",").map(function (t) { return t.trim(); }).filter(Boolean);
-    fields.authors = authors();
-    return fields;
-  }
-
-  function setError(id, msg) {
-    var e = document.getElementById("err-" + id);
-    if (e) e.textContent = msg || "";
-    var field = document.getElementById(id);
-    if (field) field.classList.toggle("invalid", !!msg);
-  }
-
-  function requireField(id) {
-    var ok = !!val(id);
-    setError(id, ok ? "" : "Required");
-    return ok;
-  }
-
-  function validate() {
-    var ok = true;
-    if (!emdbEntryName(val("f-name"))) { setError("f-name", "Required"); ok = false; }
-    else setError("f-name", "");
-    if (!requireField("f-description")) ok = false;
-    var url = link();
-    if (!url) { setError("f-link", "Required"); ok = false; }
-    else if (!/^https?:\/\/\S+$/i.test(url)) { setError("f-link", "Must be an http(s) URL"); ok = false; }
-    else setError("f-link", "");
-    // The file name is only asked for when the link does not already end in it.
-    if (!emdbSplitUrl(url).file && !val("f-file")) {
-      setError("f-file", "Required - the link does not end in a file name");
-      ok = false;
-    } else setError("f-file", "");
-    var cs = val("f-checksum");
-    if (cs && !/^md5:[0-9a-fA-F]{32}$/.test(cs)) { setError("f-checksum", "Must match md5:<32 hex>"); ok = false; }
-    else setError("f-checksum", "");
-    var volt = val("f-voltage");
-    if (volt && !/^[0-9]+\s?kV$/.test(volt)) { setError("f-voltage", "e.g. 200 kV"); ok = false; }
-    else setError("f-voltage", "");
-    var vdate = val("f-version_date");
-    if (vdate && !/^\d{6}$/.test(vdate)) { setError("f-version_date", "YYMMDD, or blank for today"); ok = false; }
-    else setError("f-version_date", "");
-    if (val("f-kind") === "weights") {
-      if (!requireField("f-model_class")) ok = false;
-      if (!requireField("f-model_framework")) ok = false;
-    } else {
-      setError("f-model_class", "");
-      setError("f-model_framework", "");
-    }
-    form.querySelectorAll(".author-row").forEach(function (r) {
-      var n = r.querySelector(".a-name"), a = r.querySelector(".a-aff"), o = r.querySelector(".a-orcid");
-      var ae = r.querySelector(".a-aff-err"), oe = r.querySelector(".a-orcid-err");
-      if (n.value.trim() && !a.value.trim()) { if (ae) ae.textContent = "Affiliation required"; a.classList.add("invalid"); ok = false; }
-      else { if (ae) ae.textContent = ""; a.classList.remove("invalid"); }
-      if (o.value.trim() && !/^\d{4}-\d{4}-\d{4}-\d{4}$/.test(o.value.trim())) { if (oe) oe.textContent = "0000-0000-0000-0000"; o.classList.add("invalid"); ok = false; }
-      else { if (oe) oe.textContent = ""; o.classList.remove("invalid"); }
-    });
-    return ok;
-  }
-
-  function refresh() {
-    modelGroup.hidden = val("f-kind") !== "weights";
-    var fields = collect();
-    preview.textContent = emdbBuildYaml(fields);
-    submitIssue.disabled = !validate();
-    var trimmed = emdbIssueUrl(ISSUE_URL, fields).trimmed;
-    trimNote.hidden = !trimmed;
-    trimNote.textContent = trimmed
-      ? "The description is too long for a link, so the issue opens with its last "
-        + trimmed + " characters cut off - paste them back in before you submit it."
-      : "";
-  }
-
-  function copyText(text, btn) {
-    var done = function () {
-      var old = btn.textContent; btn.textContent = "Copied!"; btn.classList.add("copied");
-      setTimeout(function () { btn.textContent = old; btn.classList.remove("copied"); }, 1100);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
-    } else { fallbackCopy(text, done); }
-  }
-  function fallbackCopy(text, done) {
-    var ta = document.createElement("textarea");
-    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand("copy"); done(); } catch (e) {}
-    ta.remove();
-  }
-
-  // The md5 of a picked file, hashed a chunk at a time so that a multi-GB file
-  // is never held in memory. `done("")` when the file could not be read.
-  function hashFile(file, onProgress, done) {
-    var CHUNK = 8 * 1024 * 1024;
-    var spark = new window.SparkMD5.ArrayBuffer();
-    var reader = new FileReader();
-    var offset = 0;
-    function next() { reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK)); }
-    reader.onerror = function () { done(""); };
-    reader.onload = function (e) {
-      spark.append(e.target.result);
-      offset += e.target.result.byteLength;
-      onProgress(file.size ? offset / file.size : 1);
-      if (offset < file.size) next(); else done(spark.end());
-    };
-    next();
-  }
-
-  if (localFile) {
-    localFile.addEventListener("change", function () {
-      var file = localFile.files && localFile.files[0];
-      if (!file) return;
-      if (!val("f-file")) setValue("f-file", file.name);
-      setValue("f-size_bytes", String(file.size));
-      refresh();
-      if (!window.SparkMD5) {
-        localHint.textContent = "Filled in the name and size of " + file.name
-          + ". The checksum has to be typed in - the md5 script did not load.";
-        return;
-      }
-      localHint.textContent = "Hashing " + file.name + " - 0%";
-      hashFile(file, function (fraction) {
-        localHint.textContent = "Hashing " + file.name + " - "
-          + Math.round(fraction * 100) + "%";
-      }, function (digest) {
-        if (digest) setValue("f-checksum", "md5:" + digest);
-        localHint.textContent = digest
-          ? "Filled in the name, size and md5 of " + file.name + "."
-          : "Could not read " + file.name + " - the checksum has to be typed in.";
-        refresh();
-      });
-    });
-  }
-
-  form.addEventListener("input", refresh);
-  form.addEventListener("change", refresh);
-
-  addAuthor.addEventListener("click", function () {
-    var tmp = document.createElement("div");
-    tmp.innerHTML = authorsBox.querySelector(".author-row").outerHTML;
-    var row = tmp.firstChild;
-    row.querySelectorAll("input").forEach(function (i) { i.value = ""; i.classList.remove("invalid"); });
-    row.querySelectorAll(".field-err").forEach(function (e) { e.textContent = ""; });
-    authorsBox.appendChild(row);
-    refresh();
-  });
-
-  copyBtn.addEventListener("click", function () { copyText(emdbBuildYaml(collect()), copyBtn); });
-
-  submitIssue.addEventListener("click", function () {
-    if (!validate()) { refresh(); return; }
-    window.open(emdbIssueUrl(ISSUE_URL, collect()).url, "_blank", "noopener");
-  });
-
-  refresh();
-})();
-"""
 
 
 if __name__ == "__main__":

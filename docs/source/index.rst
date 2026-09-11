@@ -21,5 +21,5 @@ lines of Python from your analysis.
    This landing page is rendered as a self-contained, widget-styled app during
    the build (see ``build-finished`` in ``conf.py``); this reStructuredText is a
    fallback that only shows if that generation step fails. Browse the datasets on
-   the :doc:`All Data <all_data>` page, or add one on :doc:`Add Dataset
-   <add_dataset>`.
+   the :doc:`All Data <all_data>` page, or see :doc:`Add Dataset <add_dataset>`
+   for how to contribute one.

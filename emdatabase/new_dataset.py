@@ -22,7 +22,7 @@ nothing else.
 :func:`fill_download_fields` is the same download from the other end: it takes a
 parsed entry that is missing its ``checksum`` or ``size_bytes`` and fills them
 in. The issue route and ``.github/workflows/fill_download_fields.yml`` run it
-over an entry the forms left blank.
+over an entry the issue form left blank.
 """
 
 from __future__ import annotations

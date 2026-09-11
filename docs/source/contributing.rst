@@ -12,15 +12,22 @@ Two routes
 Fill in the `new-dataset issue form
 <https://github.com/electronmicroscopy/emdatabase/issues/new?template=new_dataset.yaml>`_
 and an action turns it into the YAML file and opens a pull request for you. The
-:doc:`Add Dataset <add_dataset>` form is the front door to that: it carries
-every field the schema has, checks each one, computes the checksum from your
-local copy of the file, and then opens the issue form with all of it filled in.
+:doc:`Add Dataset <add_dataset>` page says what to have ready before you start
+and links to the form.
 
 Or run the CLI below, which asks the same questions in a terminal and writes the
 file locally, leaving the pull request to you. Both routes end in the same file
 and both run the same validator. Neither has to be given the checksum or the
 size: an entry missing either one has the file downloaded and the fields filled
 in for it.
+
+The issue form takes one **URL**: the direct link to the file, which is split
+into ``source`` and ``file`` the way the CLI splits it, or kept whole as ``url``
+when the file is not served at ``source/file``. A Google Drive share link - the
+link the share button copies, ``file/d/<id>/view`` or ``open?id=<id>`` - is
+rewritten to the ``uc?export=download&id=<id>`` link that serves the file. The
+file name is only asked for when the link does not end in one. **Authors** is
+one author per line, as ``Name; Affiliation; ORCID``, with the ORCID optional.
 
 Techniques
 ----------
@@ -38,37 +45,6 @@ that is nothing like any of them warns and asks for it to be added to
 ``techniques.yaml``. Adding a technique means adding it there, in the list it
 belongs to and in alphabetical order, with ``Other`` staying at the end of
 ``acquisition``.
-
-Using the web form
-------------------
-
-The :doc:`Add Dataset <add_dataset>` form carries every field the schema has,
-model weights included. It asks for one **Download link**: the direct link to
-the file, which it splits into ``source`` and ``file`` the way the CLI does, or
-keeps whole as ``url`` when the file is not served at ``source/file``. A Google
-Drive share link - the link the share button copies, ``file/d/<id>/view`` or
-``open?id=<id>`` - is rewritten to the ``uc?export=download&id=<id>`` link that
-serves the file. The file name is only asked for when the link does not end in
-one.
-
-The **Local file** picker fills in the file name, size and md5 from the copy on
-your machine, so the checksum need not be computed by hand. The file is read in
-the browser and nothing is uploaded; a multi-GB file is hashed a chunk at a
-time, with progress under the picker. The three fields it fills stay editable.
-
-**Submit as an issue** opens the new-dataset issue form with everything you
-typed already in it. GitHub prefills text fields only, so **Technique** has to
-be ticked on the issue itself, and **Kind** set to ``weights`` there for a model
-checkpoint. A description too long to fit in a link is cut short, with a note on
-the page saying how much has to be pasted back in.
-
-The panel below the button is the entry the issue will produce. Nothing has to
-be done with it - it is there for reading, and for the **Copy** button, since
-the CLI writes the same file.
-
-**Checksum** and **Size (bytes)** may be left blank, in which case the file is
-downloaded and the fields filled in. The picker is the quicker route for a large
-file.
 
 Using the CLI
 -------------
@@ -140,9 +116,8 @@ Point the tooling at the link the weights are published at:
 It asks for the rest and writes two things from that one link: ``latest``,
 which follows the link wherever it leads, and ``versions``, holding one dated
 snapshot pinned to the md5 the link serves now. ``--version-date YYMMDD`` files
-that snapshot under a date other than today; the :doc:`Add Dataset
-<add_dataset>` form and the issue form ask for the same date, and take today
-when it is left blank.
+that snapshot under a date other than today; the issue form asks for the same
+date, and takes today when it is left blank.
 
 Retraining a model means re-uploading the file to the same link, or publishing
 a new version of the Zenodo record. Nothing in the entry needs editing by hand:
