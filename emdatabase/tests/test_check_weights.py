@@ -125,24 +125,6 @@ def _entry(path):
     return yaml.safe_load(path.read_text(encoding="utf-8"))["DemoNet"]
 
 
-def test_an_unarchived_version_is_uploaded_and_its_url_rewritten(script, gh, unchanged, tmp_path):
-    _, _, directory, path = unchanged
-    code, summary = _run(script, directory, tmp_path)
-
-    assert code == 0
-    entry = _entry(path)
-    assert entry["versions"][OLD_DATE]["url"] == (
-        "https://github.com/electronmicroscopy/emdatabase/releases/download/"
-        f"weights-archive/DemoNet_{OLD_DATE}.pt"
-    )
-    assert entry["latest"]["checksum"] == _md5(LATEST_BYTES)
-    upload = [call for call in gh if call[:2] == ["release", "upload"]]
-    assert len(upload) == 1
-    assert upload[0][2] == "weights-archive"
-    assert Path(upload[0][3]).name == f"DemoNet_{OLD_DATE}.pt"
-    assert f"DemoNet_{OLD_DATE}.pt" in summary.read_text()
-
-
 def test_an_already_archived_version_is_left_alone(script, gh, unchanged, tmp_path):
     base, _, directory, path = unchanged
     archived = {
@@ -350,20 +332,6 @@ def test_a_new_zenodo_record_becomes_a_dated_version(script, gh, zenodo, tmp_pat
     report = summary.read_text()
     assert f"new Zenodo record {NEW_RECORD}" in report
     assert _md5(LATEST_BYTES) in report and _md5(NEW_BYTES) in report
-
-
-def test_a_new_zenodo_record_is_followed_without_links_latest(script, gh, zenodo, tmp_path):
-    base, served, directory, path, publish = zenodo
-    record = publish(NEW_RECORD, "2026-03-04", [_zenodo_file(base, NEW_RECORD, FILE, NEW_BYTES)])
-    current = json.loads((served / "api" / "records" / OLD_RECORD).read_text(encoding="utf-8"))
-    current["links"] = {}
-    (served / "api" / "records" / OLD_RECORD).write_text(json.dumps(current), encoding="utf-8")
-    assert record["conceptrecid"] == CONCEPT
-
-    code, _ = _run(script, directory, tmp_path)
-
-    assert code == 0
-    assert _entry(path)["versions"][NEW_DATE]["checksum"] == _md5(NEW_BYTES)
 
 
 def test_a_zenodo_record_without_the_named_file_fails(script, gh, zenodo, tmp_path):

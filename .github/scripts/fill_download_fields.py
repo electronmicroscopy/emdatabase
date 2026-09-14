@@ -30,7 +30,7 @@ from emdatabase.metadata import (
 from emdatabase.new_dataset import build_document, fill_download_fields, write_document
 
 
-def index_files(index_dir: Path | None, paths: list[Path]) -> list[Path]:
+def index_files(index_dir: Path, paths: list[Path]) -> list[Path]:
     """Every dataset YAML to fill in: the ones named, or a whole directory.
 
     ``vendors.yaml`` and the rest of ``index/`` are not dataset collections, so
@@ -40,9 +40,7 @@ def index_files(index_dir: Path | None, paths: list[Path]) -> list[Path]:
     if paths:
         # A pull request that removes an entry names a file that is gone.
         return [path for path in paths if path.name not in NON_DATASET_FILES and path.exists()]
-    if index_dir is None:
-        return dataset_files()
-    return sorted(p for p in index_dir.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
+    return dataset_files(index_dir)
 
 
 def fill_file(path: Path) -> tuple[list[str], bool]:
@@ -80,6 +78,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--index",
         type=Path,
+        default=INDEX_DIR,
         help=f"directory of dataset YAML to fill in (default {INDEX_DIR})",
     )
     parser.add_argument("--summary", type=Path, help="write a markdown report of the run here")

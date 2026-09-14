@@ -48,9 +48,9 @@ REQUIRED_FIELDS = ("description", "source", "file")
 _STR_WIDTH = 88
 
 
-def dataset_files() -> list[Path]:
-    """Every dataset collection YAML, sorted by name."""
-    return sorted(p for p in INDEX_DIR.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
+def dataset_files(directory: Path = INDEX_DIR) -> list[Path]:
+    """Every dataset collection YAML in ``directory``, sorted by name."""
+    return sorted(p for p in directory.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
 
 
 class IndexEntry(NamedTuple):
