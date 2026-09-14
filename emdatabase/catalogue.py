@@ -155,7 +155,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         "source": md.source,
         "file": md.file,
         "url": ds.download_url,
-        "latest_checksum": ds.latest_checksum or "",
+        "latest_checksum": ds.checksum or "",
         "versions": _versions(ds),
         "model_class": md.model.class_ if md.model else "",
         "model_framework": md.model.framework if md.model else "",

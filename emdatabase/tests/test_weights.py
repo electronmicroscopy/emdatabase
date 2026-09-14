@@ -211,7 +211,7 @@ def test_the_plain_fields_describe_latest():
     ds = DownloadableDataset(**ENTRY)
     assert ds.versions == (VERSION,)
     assert ds.download_url == ENTRY["latest"]["url"]
-    assert ds.checksum == ENTRY["latest"]["checksum"] == ds.latest_checksum
+    assert ds.checksum == ENTRY["latest"]["checksum"]
     assert ds.size_bytes == ENTRY["latest"]["size_bytes"]
 
 
