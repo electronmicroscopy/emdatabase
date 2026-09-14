@@ -180,10 +180,8 @@ def split_url(url: str) -> tuple[str, str, str]:
     and the name, which is how nearly every entry is written. One with a query
     string, or with no extension on its last segment, names nothing: it is kept
     whole as ``url``, ``source`` is the host it points at, and the file name has
-    to come from the server. A Google Drive share link is normalised first, so
-    what is written out is the link that serves the file.
+    to come from the server. Pass the link through :func:`normalize_url` first.
     """
-    url = normalize_url(url)
     parts = urllib.parse.urlsplit(url)
     if not (parts.scheme and parts.netloc):
         return "", "", ""
@@ -275,8 +273,9 @@ def version_date() -> str:
     return datetime.date.today().strftime("%y%m%d")
 
 
-def as_weights_family(entry: dict[str, Any], date: str) -> dict[str, Any]:
-    """The entry with its download fields moved into ``latest`` and one version.
+def as_weights_family(entry: dict[str, Any], date: str, model: dict[str, str]) -> dict[str, Any]:
+    """The entry as a weights family: its download fields moved into ``latest``
+    and one version, and ``model``, blank fields dropped, as its model block.
 
     A weights entry is a family: ``latest`` follows the published link, and a
     dated version pins each state that link has served. A new entry is both,
@@ -291,6 +290,8 @@ def as_weights_family(entry: dict[str, Any], date: str) -> dict[str, Any]:
     pin = {key: value for key, value in pin.items() if value}
     return {
         **entry,
+        "kind": "weights",
+        "model": {key: value for key, value in model.items() if value},
         "url": None,
         "checksum": None,
         "size_bytes": None,
@@ -522,14 +523,12 @@ def main(argv: list[str] | None = None) -> int:
         "authors": _ask_authors(args.yes),
     }
     if args.kind == "weights":
-        entry["kind"] = "weights"
         model = {
             "class": _ask("model class, e.g. quantem.ml.inr.INR", assume_yes=args.yes),
             "framework": _ask("framework", "torch", args.yes),
             "quantem": _ask('quantem versions, e.g. ">=0.2,<0.3"', assume_yes=args.yes),
         }
-        entry["model"] = {k: v for k, v in model.items() if v}
-        entry = as_weights_family(entry, args.version_date)
+        entry = as_weights_family(entry, args.version_date, model)
 
     document = build_document(name, entry)
     problems = validate_document(document, origin=out_path)

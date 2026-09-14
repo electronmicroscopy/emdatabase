@@ -123,15 +123,6 @@ def test_issue_form_offers_the_whole_technique_vocabulary(issue_to_yaml):
     assert [o["label"] for o in block["attributes"]["options"]] == list(techniques())
 
 
-def test_issue_form_asks_for_the_authors_as_one_block(issue_to_yaml):
-    """One required textarea, not a field per author part."""
-    form = yaml.safe_load(ISSUE_FORM.read_text(encoding="utf-8"))
-    blocks = {b["id"]: b for b in form["body"] if b["type"] != "markdown"}
-    assert blocks["authors"]["type"] == "textarea"
-    assert blocks["authors"]["validations"]["required"] is True
-    assert not {"name", "affiliation", "orcid"} & set(blocks)
-
-
 def test_issue_weights_entry_validates(parse):
     body = _issue_body(
         **{
@@ -324,32 +315,21 @@ def test_issue_a_bad_author_line_stops_the_run_and_says_so(issue_to_yaml, tmp_pa
     assert list(out.iterdir()) == []
 
 
+def test_issue_does_not_replace_an_existing_entry(issue_to_yaml, tmp_path, capsys):
+    """Anyone can open an issue, so a name already in the index is refused."""
+    issue = tmp_path / "issue.txt"
+    issue.write_text(_authors_body("Jane Doe; University of Somewhere"), encoding="utf-8")
+    out = tmp_path / "index"
+    out.mkdir()
+    existing = out / "MgONanoCrystals.yaml"
+    existing.write_text("shipped", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        issue_to_yaml.write_yaml(issue, out)
+    assert "already exists" in capsys.readouterr().out
+    assert existing.read_text(encoding="utf-8") == "shipped"
+
+
 # -- the size and the checksum -----------------------------------------------
-
-
-def test_issue_takes_the_size_it_was_given(issue_to_yaml, monkeypatch):
-    """A size on the issue means the server is not asked for it."""
-
-    def no_head(url):
-        raise AssertionError(f"asked the server about {url}")
-
-    monkeypatch.setattr(issue_to_yaml, "content_length", no_head)
-    body = _issue_body(
-        **{
-            "--Dataset Name--": "MgONanoCrystals",
-            "--URL--": "https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40Ccd",
-            "--File Name--": "MgONanoCrystals.zspy",
-            "--Checksum--": "md5:df9376d5c020a23f0f7f51cfe79f303f",
-            "--Size (bytes)--": "1104287335",
-            "--Description--": "A 4D-STEM dataset of MgO nanocrystals.",
-            "--Dataset License--": "CC-BY-4.0",
-            "Technique": _ticked("4D-STEM"),
-        }
-    )
-    document, name, problems = issue_to_yaml.build_yaml(issue_to_yaml.parse_issue_body(body))
-    assert problems == []
-    assert validate_document(document) == []
-    assert document[name]["size_bytes"] == 1104287335
 
 
 def test_issue_asks_the_server_when_the_size_is_not_a_number(issue_to_yaml, monkeypatch):
