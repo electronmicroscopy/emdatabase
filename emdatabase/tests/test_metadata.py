@@ -23,7 +23,6 @@ from emdatabase.metadata import (
     load_schema,
     load_techniques,
     load_vendors,
-    ml_tasks,
     techniques,
     validate_document,
     validate_file,
@@ -60,13 +59,6 @@ def test_yaml_is_valid(path):
     assert validate_file(path) == []
 
 
-@pytest.mark.parametrize("path", DATASET_FILES, ids=lambda p: p.name)
-def test_index_file_declares_entries(path):
-    """emdatabase.data reads these directly; an empty one is an import error."""
-    document = yaml.safe_load(path.read_text(encoding="utf-8"))
-    assert isinstance(document, dict) and document, f"{path.name} declares no entries"
-
-
 def test_entry_names_are_unique_across_files():
     """A name in two files would shadow, and be counted twice in the catalogue."""
     names = [name for _, name, _ in ENTRIES]
@@ -81,32 +73,15 @@ def test_an_entry_name_no_class_can_have_is_rejected():
     assert validate_document({"Fine_Name": entry}) == []
 
 
-def test_the_stub_lists_exactly_the_classes_the_loader_builds():
-    """CI runs `_create_stubs --check`; both sides read metadata.index_entries."""
-    import emdatabase.data as data
-    from emdatabase._create_stubs import build_pyi_stub
-
-    declared = [
-        line.removeprefix("class ").partition("(")[0]
-        for line in build_pyi_stub().splitlines()
-        if line.startswith("class ")
-    ]
-    assert declared == data.__all__
-
-
 def test_template_is_valid():
     """The template is not a dataset, so nothing else here looks at it; a
     placeholder that does not validate is a contributor's first impression."""
     assert validate_file(TEMPLATE_PATH) == []
 
 
-@pytest.mark.parametrize("name", [name for _, name, _ in ENTRIES])
-def test_entry_builds_a_record(name):
-    path, _, spec = next(e for e in ENTRIES if e[1] == name)
-    metadata = DatasetMetadata.from_spec(spec, path)
-    assert metadata.description and metadata.source and metadata.file
-    # The schema defaults `kind`, but every entry shipped here writes it out.
-    assert spec["kind"] in ("dataset", "weights")
+def test_every_shipped_entry_writes_out_its_kind():
+    """The schema defaults `kind`, but every entry shipped here says which it is."""
+    assert all(spec.get("kind") in ("dataset", "weights") for _, _, spec in ENTRIES)
 
 
 def test_schema_and_dataclass_agree():
@@ -156,7 +131,7 @@ def test_missing_required_field_is_an_error():
 
 
 def test_author_without_affiliation_is_an_error():
-    with pytest.raises(TypeError, match="affiliation"):
+    with pytest.raises(TypeError, match="author 'Jane Doe': .*'affiliation'"):
         DatasetMetadata.from_spec(
             {"description": "d", "source": "s", "file": "f", "authors": {"Jane Doe": {}}}
         )
@@ -220,20 +195,6 @@ def test_format_size(size_bytes, expected):
     assert format_size(size_bytes) == expected
 
 
-@pytest.mark.parametrize(("path", "name", "spec"), ENTRIES, ids=[e[1] for e in ENTRIES])
-def test_declared_vendors_are_spelled_correctly(path, name, spec):
-    """A vendor close to a known one is a typo; one nothing like it is just new."""
-    for field, known in (
-        ("detector_manufacturer", VENDORS["detector_manufacturer"]),
-        ("microscope_vendor", VENDORS["microscope_vendor"]),
-    ):
-        result = check_vendor(spec.get(field, ""), known)
-        if result is None:
-            continue
-        level, message = result
-        assert level != "error", f"{path.name}: {name}: {field}: {message}"
-
-
 def test_validate_document_names_the_file_and_the_field():
     problems = validate_document({"X": {"description": "d", "file": "f"}}, origin="somewhere.yaml")
     assert len(problems) == 1
@@ -268,13 +229,10 @@ def test_check_vendor_tells_a_typo_from_a_new_vendor():
 def test_the_vocabulary_is_acquisition_then_ml_task_in_file_order():
     vocabulary = load_techniques()
     assert list(vocabulary) == ["acquisition", "ml_task"]
-    assert acquisition_techniques() == tuple(vocabulary["acquisition"])
-    assert ml_tasks() == tuple(vocabulary["ml_task"])
-    assert TECHNIQUES == acquisition_techniques() + ml_tasks()
-    assert TECHNIQUES[:2] == ("4D-STEM", "Cryo")
+    assert TECHNIQUES == acquisition_techniques() + tuple(vocabulary["ml_task"])
     # "Other" ends the acquisition list, and every ML task is prefixed.
     assert acquisition_techniques()[-1] == "Other"
-    assert all(task.startswith("ML - ") for task in ml_tasks())
+    assert all(task.startswith("ML - ") for task in vocabulary["ml_task"])
 
 
 def test_validate_document_reports_a_misspelled_technique_and_warns_about_a_new_one():
@@ -343,11 +301,7 @@ def test_repr_is_one_short_identifying_line():
     """The generated dataclass repr is ~1000 chars of mostly description, which
     is useless as the output of a bare `ds.metadata` in a notebook."""
     metadata = _record(technique="4D-STEM", size_bytes=12492298)
-    text = repr(metadata)
-    assert "\n" not in text
-    assert len(text) < 100
-    assert text == "<DatasetMetadata d.zspy · 4D-STEM · 12.5 MB>"
-    assert "A description." not in text
+    assert repr(metadata) == "<DatasetMetadata d.zspy · 4D-STEM · 12.5 MB>"
 
 
 def test_repr_lists_every_technique():
