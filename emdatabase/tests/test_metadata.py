@@ -34,7 +34,7 @@ pytest.importorskip("jsonschema")
 
 DATASET_FILES = dataset_files()
 SCHEMA = load_schema()
-ENTRY_SCHEMA = SCHEMA["patternProperties"]["^.+$"]
+ENTRY_SCHEMA = next(iter(SCHEMA["patternProperties"].values()))
 VENDORS = load_vendors()
 TECHNIQUES = techniques()
 
@@ -43,7 +43,7 @@ def entries():
     """``(file, name, spec)`` for every entry in every dataset YAML."""
     for path in DATASET_FILES:
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
-        for name, spec in document.items():
+        for name, spec in (document or {}).items():
             yield path, name, spec
 
 
@@ -58,6 +58,40 @@ def test_datasets_are_found():
 @pytest.mark.parametrize("path", DATASET_FILES, ids=lambda p: p.name)
 def test_yaml_is_valid(path):
     assert validate_file(path) == []
+
+
+@pytest.mark.parametrize("path", DATASET_FILES, ids=lambda p: p.name)
+def test_index_file_declares_entries(path):
+    """emdatabase.data reads these directly; an empty one is an import error."""
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert isinstance(document, dict) and document, f"{path.name} declares no entries"
+
+
+def test_entry_names_are_unique_across_files():
+    """A name in two files would shadow, and be counted twice in the catalogue."""
+    names = [name for _, name, _ in ENTRIES]
+    assert not [n for n in names if names.count(n) > 1]
+
+
+def test_an_entry_name_no_class_can_have_is_rejected():
+    """The names become classes in emdatabase.data, so the schema restricts them."""
+    entry = {"description": "d", "source": "https://example.com", "file": "f.zspy"}
+    assert validate_document({"Fe3O4 (2021)": entry})
+    assert validate_document({"2D-MoS2": entry})
+    assert validate_document({"Fine_Name": entry}) == []
+
+
+def test_the_stub_lists_exactly_the_classes_the_loader_builds():
+    """CI runs `_create_stubs --check`; both sides read metadata.index_entries."""
+    import emdatabase.data as data
+    from emdatabase._create_stubs import build_pyi_stub
+
+    declared = [
+        line.removeprefix("class ").partition("(")[0]
+        for line in build_pyi_stub().splitlines()
+        if line.startswith("class ")
+    ]
+    assert declared == data.__all__
 
 
 def test_template_is_valid():

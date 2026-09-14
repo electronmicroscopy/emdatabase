@@ -376,3 +376,23 @@ def test_a_card_delete_that_fails_warns_rather_than_claiming_success(monkeypatch
     widget = widget_mod.card(ds)
     with pytest.warns(UserWarning, match="could not delete"):
         widget._on_command({"new": {"action": "delete", "nonce": 1}})
+
+
+def test_module_display_reports_a_real_error_rather_than_install_advice(monkeypatch):
+    """A misconfigured locations key is not a missing anywidget."""
+
+    def _boom():
+        raise TypeError("The locations config must be a mapping of name to directory")
+
+    monkeypatch.setattr(emdatabase, "browse", _boom)
+    text = emdatabase._repr_mimebundle_()["text/plain"]
+    assert "must be a mapping" in text
+    assert "pip install" not in text
+
+
+def test_module_display_still_advises_installing_the_widget(monkeypatch):
+    def _boom():
+        raise ImportError("no anywidget")
+
+    monkeypatch.setattr(emdatabase, "browse", _boom)
+    assert "pip install" in emdatabase._repr_mimebundle_()["text/plain"]

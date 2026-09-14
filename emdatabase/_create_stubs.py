@@ -9,9 +9,7 @@ if the committed stub has drifted from them.
 import sys
 from pathlib import Path
 
-import yaml
-
-from emdatabase.metadata import dataset_files
+from emdatabase.metadata import index_entries
 
 STUB_PATH = Path(__file__).parent / "data" / "__init__.pyi"
 
@@ -47,24 +45,22 @@ def build_pyi_stub() -> str:
 
     dataset_classes = []
 
-    for dataset_path in dataset_files():
-        data_dict_yaml = yaml.safe_load(dataset_path.read_text(encoding="utf-8"))
-        for name in data_dict_yaml:
-            data_dict = data_dict_yaml[name]
-            class_name = name.replace(" ", "_").replace("-", "_")
-            description = build_docstring(data_dict)
+    # The same entries emdatabase.data builds classes from, so the stub cannot
+    # claim a class the loader skipped or miss one it made.
+    for entry in index_entries():
+        description = build_docstring(entry.spec)
 
-            stub_lines.append(f"class {class_name}(DownloadableDataset):")
-            stub_lines.append('    """')
-            stub_lines.append(f"    {name}")
-            if description:
-                stub_lines.append("")
-                stub_lines.append(f"    {description}")
-            stub_lines.append('    """')
-            stub_lines.append("    ...")
+        stub_lines.append(f"class {entry.class_name}(DownloadableDataset):")
+        stub_lines.append('    """')
+        stub_lines.append(f"    {entry.name}")
+        if description:
             stub_lines.append("")
+            stub_lines.append(f"    {description}")
+        stub_lines.append('    """')
+        stub_lines.append("    ...")
+        stub_lines.append("")
 
-            dataset_classes.append(class_name)
+        dataset_classes.append(entry.class_name)
 
     stub_lines.append(f"__all__ = {dataset_classes}")
     return "\n".join(stub_lines)

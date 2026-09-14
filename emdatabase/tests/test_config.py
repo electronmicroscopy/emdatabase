@@ -328,14 +328,6 @@ def test_locations_that_is_not_a_mapping_says_so(monkeypatch):
         config.locations()
 
 
-def test_write_leaves_out_what_the_environment_is_supplying(tmp_path, monkeypatch):
-    monkeypatch.setenv("EMDATABASE_LOCATIONS__PERSONAL", str(tmp_path / "from-env"))
-    config.refresh()
-    config.write()
-    written = yaml.safe_load((tmp_path / "config" / "config.yaml").read_text())
-    assert "personal" not in written.get("locations", {})
-
-
 def test_add_location_persists_only_its_own_change(tmp_path, monkeypatch):
     monkeypatch.setenv("EMDATABASE_LOCATIONS__PERSONAL", str(tmp_path / "from-env"))
     config.refresh()
@@ -352,10 +344,3 @@ def test_add_location_keeps_the_entries_already_in_the_file(tmp_path):
         "first": str(tmp_path / "first"),
         "second": str(tmp_path / "second"),
     }
-
-
-def test_remove_location_says_the_environment_still_sets_it(tmp_path, monkeypatch):
-    monkeypatch.setenv("EMDATABASE_LOCATIONS__GROUP", str(_dir(tmp_path, "group")))
-    config.refresh()
-    with pytest.warns(UserWarning, match="still sets 'group'"):
-        config.remove_location("group")

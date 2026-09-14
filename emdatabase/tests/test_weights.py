@@ -188,7 +188,8 @@ def test_an_unquoted_version_key_is_reported():
 
 def test_the_model_schema_and_the_dataclass_agree():
     """``class`` is a keyword, so the field is ``class_``; nothing else differs."""
-    model_schema = load_schema()["patternProperties"]["^.+$"]["properties"]["model"]
+    entry_schema = next(iter(load_schema()["patternProperties"].values()))
+    model_schema = entry_schema["properties"]["model"]
     assert list(model_schema["properties"]) == ["class", "framework", "quantem"]
     assert model_schema["required"] == ["class", "framework"]
 

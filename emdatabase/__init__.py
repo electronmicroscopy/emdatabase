@@ -50,7 +50,7 @@ class _EmDatabaseModule(_ModuleType):
     def _repr_mimebundle_(self, include=None, exclude=None, **kwargs):
         try:
             widget = browse()
-        except Exception:
+        except ImportError:
             return {
                 "text/plain": (
                     "emdatabase — install the interactive browser with "
@@ -58,6 +58,10 @@ class _EmDatabaseModule(_ModuleType):
                     "emdatabase.browse()."
                 )
             }
+        except Exception as error:
+            # Anything else is a real problem - a misconfigured locations key,
+            # say - and its message is the only thing that explains the repr.
+            return {"text/plain": f"emdatabase — the browser could not be built: {error}"}
         return widget._repr_mimebundle_(**kwargs)
 
 

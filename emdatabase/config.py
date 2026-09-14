@@ -526,23 +526,6 @@ def check_key_val(key: str, val: Any, deprecations: dict = deprecations) -> tupl
     return key, val
 
 
-def _without_env(document: Mapping, env: Mapping) -> dict:
-    """``document`` minus the entries the environment is currently supplying."""
-    result: dict = {}
-    for key, value in document.items():
-        if key in env:
-            from_env = env[key]
-            if isinstance(value, Mapping) and isinstance(from_env, Mapping):
-                nested = _without_env(value, from_env)
-                if nested:
-                    result[key] = nested
-                continue
-            if value == from_env:
-                continue
-        result[key] = value
-    return result
-
-
 def _dump(document: Mapping, path: Path | str | None = None) -> Path:
     """Write ``document`` to a yaml file, creating the config directory."""
     path = Path(path) if path is not None else _config_dir() / "config.yaml"
@@ -555,17 +538,13 @@ def _dump(document: Mapping, path: Path | str | None = None) -> Path:
 def write(path: Path | str | None = None) -> None:
     """Write the current configuration to a yaml file.
 
-    What the environment is supplying is left out: ``EMDATABASE_*`` holds for
-    the session that set it, and writing it here would keep it long after it is
-    unset.
-
     Parameters
     ----------
     path : Path or str, optional
         Path to write the yaml file to. Defaults to ``config.yaml`` in the
         config directory.
     """
-    _dump(_without_env(config, collect_env()), path)
+    _dump(config, path)
 
 
 def _persist_locations(updates: Mapping[str, str | None], remove: str | None = None) -> None:
@@ -822,12 +801,6 @@ def remove_location(name_or_path: Path | str, persist: bool = True) -> None:
     set({"locations": updated})
     if persist:
         _persist_locations({"personal": None} if name == "personal" else {}, remove=name)
-        from_env = collect_env().get("locations")
-        if isinstance(from_env, Mapping) and name in from_env:
-            warnings.warn(
-                f"{ENV_PREFIX}LOCATIONS__{name.upper()} still sets {name!r} in the "
-                "environment, so it comes back in a new session until that is unset."
-            )
 
 
 def first_run_notice(directory: Path | None = None) -> None:

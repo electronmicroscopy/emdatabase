@@ -12,10 +12,10 @@ A ``kind: weights`` entry is a family rather than a single file: it declares a
 called on disk.
 
 This module also owns the small amount of shared knowledge about where the
-dataset files live - :func:`dataset_files`, :func:`load_schema`,
-:func:`load_vendors`, :func:`techniques` - so the loader, the stub generator,
-the docs form and the tests all read the same directory and the same technique
-vocabulary the same way, and the one check a candidate file has to pass -
+dataset files live - :func:`dataset_files`, :func:`index_entries`,
+:func:`load_schema`, :func:`load_vendors`, :func:`techniques` - so the loader,
+the stub generator, the docs form and the tests all read the same directory and
+the same technique vocabulary the same way, and the one check a candidate file has to pass -
 :func:`validate_document`, :func:`validate_file` - so the test suite, the
 issue-form workflow and ``emdatabase.new_dataset`` accept and reject exactly the
 same files.
@@ -26,10 +26,10 @@ from __future__ import annotations
 import difflib
 import textwrap
 import warnings
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import yaml
 
@@ -51,6 +51,34 @@ _STR_WIDTH = 88
 def dataset_files() -> list[Path]:
     """Every dataset collection YAML, sorted by name."""
     return sorted(p for p in INDEX_DIR.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
+
+
+class IndexEntry(NamedTuple):
+    """One usable entry from the index, as :func:`index_entries` yields it."""
+
+    name: str
+    class_name: str
+    spec: dict[str, Any]
+    origin: Path
+    metadata: DatasetMetadata
+
+
+def index_entries() -> Iterator[IndexEntry]:
+    """Every entry in the index files, in file then declaration order.
+
+    The one place that decides which entries exist, so the classes
+    :mod:`emdatabase.data` builds and the stub generated for them cannot
+    disagree about the set. The files ship with the package and CI validates
+    all of them, so a malformed one raises here rather than being skipped: that
+    is a broken release, not something a user can cause or fix.
+    """
+    for path in dataset_files():
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for name, spec in document.items():
+            class_name = str(name).replace(" ", "_").replace("-", "_")
+            yield IndexEntry(
+                str(name), class_name, spec, path, DatasetMetadata.from_spec(spec, path)
+            )
 
 
 def load_schema() -> dict[str, Any]:
