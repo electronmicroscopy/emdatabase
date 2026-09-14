@@ -38,7 +38,7 @@ jobs:
         run: python -m emdatabase._create_stubs --check
 
   build-with-pip:
-    name: ${{ matrix.os }}-py${{ matrix.python-version }}${{ matrix.LABEL }}
+    name: ${{ matrix.os }}-py${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -70,11 +70,6 @@ jobs:
         shell: bash
         run: |
           pip install -U -e .'[tests]'
-
-      - name: Install oldest supported versions
-        if: contains(matrix.LABEL, 'oldest')
-        run: |
-          pip install ${{ matrix.DEPENDENCIES }}
 
       - name: Display Python, pip and package versions
         run: |

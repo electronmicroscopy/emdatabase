@@ -200,6 +200,27 @@ def test_issue_takes_today_when_the_version_date_is_blank(parse):
     assert list(document[name]["versions"]) == [datetime.date.today().strftime("%y%m%d")]
 
 
+def test_issue_file_name_keeps_only_the_name(parse):
+    """The File Name is typed by whoever opened the issue, and is later joined
+    onto a directory."""
+    body = _issue_body(
+        **{
+            "--Dataset Name--": "MgONanoCrystals",
+            "--Authors--": "Jane Doe; University of Somewhere",
+            "--URL--": "https://zenodo.org/records/0000000/files/MgONanoCrystals.zspy",
+            "--File Name--": "/etc/passwd",
+            "--Checksum--": "md5:df9376d5c020a23f0f7f51cfe79f303f",
+            "--Description--": "A 4D-STEM dataset of MgO nanocrystals.",
+            "--Detector Manufacturer--": "Direct Electron",
+            "Dataset License": "CC-BY-4.0",
+            "Technique": _ticked("4D-STEM"),
+        }
+    )
+    document, name, problems = parse(body)
+    assert problems == []
+    assert document[name]["file"] == "passwd"
+
+
 def test_issue_drive_link_becomes_url_plus_file_name(parse):
     body = _issue_body(
         **{

@@ -139,7 +139,9 @@ def build_yaml(data):
     source, filename, link = split_url(url)
     if not source:
         sys.exit(f"{data['URL']!r} is not a link to a file")
-    filename = data["File Name"] or filename
+    # Whoever opened the issue typed this, and it is joined onto a directory
+    # later (check_latest_weights.py), so keep the name and nothing else.
+    filename = Path(data["File Name"] or filename).name
     if not filename:
         sys.exit(f"{data['URL']!r} does not end in a file name; fill in --File Name--")
     # The issue may already carry the size; without it the server is asked for

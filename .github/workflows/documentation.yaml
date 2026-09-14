@@ -47,6 +47,7 @@ jobs:
       - name: Sphinx build
         timeout-minutes: 15
         run: |
+          set -o pipefail
           make html -C docs 2>&1 | tee sphinx.log
 
       # A failed gallery example only warns (see conf.py), so say so where a
