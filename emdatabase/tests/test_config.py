@@ -96,6 +96,19 @@ def test_a_nested_key_under_a_known_one_does_not_warn(recwarn):
     assert config.resolve_destination("other") == Path("/other")
 
 
+def test_location_names_differing_by_hyphen_and_underscore_stay_separate(tmp_path):
+    _write_yaml(tmp_path, locations={"example-data": "/a", "example_data": "/b"})
+    config.refresh()
+    config.set({"locations.group-one": "/c", "locations.group_one": "/d"})
+    assert config.get("locations") == {
+        "personal": None,
+        "example-data": "/a",
+        "example_data": "/b",
+        "group-one": "/c",
+        "group_one": "/d",
+    }
+
+
 def test_write_round_trips(tmp_path):
     config.set({"locations": {"group": "/group", "personal": str(tmp_path / "written")}})
     path = tmp_path / "config" / "config.yaml"
