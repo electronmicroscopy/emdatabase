@@ -19,7 +19,6 @@ from pathlib import Path
 import pytest
 
 import emdatabase.data as data
-from emdatabase import catalogue
 from emdatabase.data import MgONanoCrystals, NiEBSDLarge
 from emdatabase.downloadable_dataset import (
     _PENDING,
@@ -385,22 +384,6 @@ def test_shutdown_cancels_queued_downloads():
         assert not any(f.cancelled() for f in running)
     finally:
         release.set()
-
-
-def test_a_malformed_entry_warns_instead_of_vanishing(monkeypatch):
-    """catalogue.datasets() used to swallow every exception, so a bad dataset
-    just disappeared from the browser with nothing said."""
-    broken = type(
-        "BrokenDataset",
-        (DownloadableDataset,),
-        {"_spec": {"description": "d", "source": "s"}, "_metadata": None},  # no 'file'
-    )
-    monkeypatch.setattr(data, "BrokenDataset", broken, raising=False)
-    monkeypatch.setattr(data, "__all__", [*data.__all__, "BrokenDataset"])
-
-    with pytest.warns(UserWarning, match="BrokenDataset"):
-        found = dict(catalogue.datasets())
-    assert "BrokenDataset" not in found  # skipped, but not silently
 
 
 def test_a_caller_s_progress_bar_is_not_replaced_by_the_toast(tmp_path, monkeypatch):

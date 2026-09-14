@@ -1,10 +1,7 @@
-### Example datasets ###
 from emdatabase import config, data
 from emdatabase.config import LocationName, add_location, locations, remove_location
 from emdatabase.downloadable_dataset import DownloadableDataset
 from emdatabase.query import filter, list_datasets, list_weights, search  # noqa: A004
-
-__all__ = []
 
 
 def browse(**kwargs):
