@@ -576,7 +576,7 @@ class DownloadableDataset:
         # In Jupyter (with the widget installed) a background download pops a
         # cancelable toast; the toast's monitor replaces the plain progress bar.
         monitor = finish = None
-        if progressbar:
+        if progressbar is True:  # a caller's own Progress is theirs to drive
             try:
                 from emdatabase.widget import _attach_toast
 

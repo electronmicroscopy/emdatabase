@@ -10,7 +10,6 @@ form left incomplete, is tested against the same server at the end.
 """
 
 import hashlib
-from pathlib import Path
 
 import pytest
 import yaml
@@ -551,7 +550,9 @@ def test_keep_leaves_the_temporary_download(server, tmp_path, monkeypatch):
             "--keep",
         ]
     )
-    assert Path(tmp_path / "scratch" / "MyData.zspy").read_bytes() == CONTENT
+    kept = list((tmp_path / "scratch").glob("emdatabase-*/MyData.zspy"))
+    assert len(kept) == 1
+    assert kept[0].read_bytes() == CONTENT
 
 
 def test_write_document_matches_the_hand_written_style(tmp_path):

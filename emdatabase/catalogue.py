@@ -57,7 +57,11 @@ def resolve(name: str) -> DownloadableDataset | None:
     import emdatabase.data as data
 
     obj = getattr(data, str(name), None)
-    if not inspect.isclass(obj) or not issubclass(obj, DownloadableDataset):
+    if (
+        not inspect.isclass(obj)
+        or obj is DownloadableDataset
+        or not issubclass(obj, DownloadableDataset)
+    ):
         return None
     return obj()
 

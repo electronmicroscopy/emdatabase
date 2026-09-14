@@ -178,6 +178,8 @@ def test_tags_and_authors_are_converted():
         (104291721, "104.3 MB"),
         (1104287335, "1.10 GB"),
         (5748299565, "5.75 GB"),
+        (999999, "1.00 MB"),  # rounds up into the next unit, not "1000.0 kB"
+        (999999999, "1.00 GB"),
     ],
 )
 def test_format_size(size_bytes, expected):
@@ -361,3 +363,12 @@ def test_str_without_a_description():
     text = str(DatasetMetadata(description="", source="https://example.com", file="d.zspy"))
     assert text.startswith("d.zspy\n\n")
     assert "source: https://example.com" in text
+
+
+def test_validate_document_reports_an_empty_document(tmp_path):
+    path = tmp_path / "Empty.yaml"
+    path.write_text("# nothing here yet\n", encoding="utf-8")
+    problems = validate_file(path)
+    assert len(problems) == 1
+    assert "Empty.yaml" in problems[0]
+    assert validate_document({}) == ["dataset entry: document: no entries"]

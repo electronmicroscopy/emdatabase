@@ -354,3 +354,25 @@ def test_widget_download_end_to_end(tmp_path):
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     assert (tmp_path / ds.file).exists()
+
+
+def test_resolve_does_not_build_the_base_class():
+    """DownloadableDataset is in the emdatabase.data namespace, but is not an entry."""
+    assert catalogue.resolve("DownloadableDataset") is None
+    assert catalogue.resolve("NotADataset") is None
+
+
+def test_a_card_delete_that_fails_warns_rather_than_claiming_success(monkeypatch):
+    pytest.importorskip("anywidget")
+    ds = catalogue.resolve(TINY_DATASET)
+    assert ds is not None
+
+    def boom(version=None):
+        raise PermissionError("read-only location")
+
+    import emdatabase.widget as widget_mod
+
+    monkeypatch.setattr(ds, "delete", boom)
+    widget = widget_mod.card(ds)
+    with pytest.warns(UserWarning, match="could not delete"):
+        widget._on_command({"new": {"action": "delete", "nonce": 1}})

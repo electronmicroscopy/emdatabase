@@ -32,6 +32,7 @@ import datetime
 import email.message
 import hashlib
 import re
+import shutil
 import sys
 import tempfile
 import urllib.parse
@@ -461,10 +462,14 @@ def main(argv: list[str] | None = None) -> int:
     size_bytes = content_length(url)
     checksum = args.checksum
     if checksum is None:
-        temporary = Path(tempfile.gettempdir()) / (filename or "download")
+        # A private directory: a predictable name in the shared temp dir would
+        # truncate whatever is already there, and two runs would collide.
+        directory = Path(tempfile.mkdtemp(prefix="emdatabase-"))
+        temporary = directory / (filename or "download")
         try:
             digest, downloaded, served, _ = download_md5(url, temporary)
         except OSError as error:
+            shutil.rmtree(directory, ignore_errors=True)
             print(f"could not download {url}: {error}")
             return 1
         checksum = f"md5:{digest}"
@@ -475,7 +480,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.keep:
             print(f"kept {temporary}")
         else:
-            temporary.unlink(missing_ok=True)
+            shutil.rmtree(directory, ignore_errors=True)
 
     if not filename:
         filename = _ask("file name the download should be saved as", assume_yes=args.yes)

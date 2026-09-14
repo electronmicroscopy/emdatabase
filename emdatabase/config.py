@@ -163,9 +163,12 @@ class set:
                     self._record.append(("insert", path, None))
             d[key] = value
         else:
-            if key not in d:
+            if key not in d or not isinstance(d[key], dict):
                 if record:
-                    self._record.append(("insert", path, None))
+                    if key in d:
+                        self._record.append(("replace", path, d[key]))
+                    else:
+                        self._record.append(("insert", path, None))
                 d[key] = {}
                 record = False
             self._assign(keys[1:], value, d[key], path, record=record)
@@ -523,8 +526,38 @@ def check_key_val(key: str, val: Any, deprecations: dict = deprecations) -> tupl
     return key, val
 
 
+def _without_env(document: Mapping, env: Mapping) -> dict:
+    """``document`` minus the entries the environment is currently supplying."""
+    result: dict = {}
+    for key, value in document.items():
+        if key in env:
+            from_env = env[key]
+            if isinstance(value, Mapping) and isinstance(from_env, Mapping):
+                nested = _without_env(value, from_env)
+                if nested:
+                    result[key] = nested
+                continue
+            if value == from_env:
+                continue
+        result[key] = value
+    return result
+
+
+def _dump(document: Mapping, path: Path | str | None = None) -> Path:
+    """Write ``document`` to a yaml file, creating the config directory."""
+    path = Path(path) if path is not None else _config_dir() / "config.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        yaml.dump(dict(document), f)
+    return path
+
+
 def write(path: Path | str | None = None) -> None:
     """Write the current configuration to a yaml file.
+
+    What the environment is supplying is left out: ``EMDATABASE_*`` holds for
+    the session that set it, and writing it here would keep it long after it is
+    unset.
 
     Parameters
     ----------
@@ -532,11 +565,26 @@ def write(path: Path | str | None = None) -> None:
         Path to write the yaml file to. Defaults to ``config.yaml`` in the
         config directory.
     """
-    path = Path(path) if path is not None else _config_dir() / "config.yaml"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    _dump(_without_env(config, collect_env()), path)
 
-    with open(path, "w") as f:
-        yaml.dump(config, f)
+
+def _persist_locations(updates: Mapping[str, str | None], remove: str | None = None) -> None:
+    """Merge these ``locations`` entries into the config file, and only these.
+
+    Writing the whole live mapping would bake whatever the environment or an
+    open :class:`set` block is supplying into the file alongside the change the
+    caller asked for.
+    """
+    path = _config_dir() / "config.yaml"
+    document = (_load_config_file(path) if path.exists() else None) or {}
+    configured = document.get("locations")
+    if not isinstance(configured, dict):
+        configured = {}
+    if remove is not None:
+        configured.pop(remove, None)
+    configured.update(updates)
+    document["locations"] = configured
+    _dump(document, path)
 
 
 # ---------------------------------------------------------------------------
@@ -575,6 +623,13 @@ def _configured() -> dict[str, Path | None]:
     yaml could leave any other entry empty the same way.
     """
     configured = get("locations", None) or {}
+    if not isinstance(configured, Mapping):
+        raise TypeError(
+            f"The locations config must be a mapping of name to directory, not "
+            f"{configured!r}. Set one entry at a time: "
+            f"{ENV_PREFIX}LOCATIONS__PERSONAL=/scratch, or "
+            'config.set({"locations.personal": "/scratch"}).'
+        )
     return {
         str(name): (Path(str(path)).expanduser() if path else None)
         for name, path in configured.items()
@@ -712,7 +767,7 @@ def add_location(path: Path | str, name: str | None = None, persist: bool = True
     set({"locations": updated})
 
     if persist:
-        write()
+        _persist_locations({name: str(expanded)})
     return expanded
 
 
@@ -766,7 +821,13 @@ def remove_location(name_or_path: Path | str, persist: bool = True) -> None:
         updated.setdefault("personal", None)
     set({"locations": updated})
     if persist:
-        write()
+        _persist_locations({"personal": None} if name == "personal" else {}, remove=name)
+        from_env = collect_env().get("locations")
+        if isinstance(from_env, Mapping) and name in from_env:
+            warnings.warn(
+                f"{ENV_PREFIX}LOCATIONS__{name.upper()} still sets {name!r} in the "
+                "environment, so it comes back in a new session until that is unset."
+            )
 
 
 def first_run_notice(directory: Path | None = None) -> None:

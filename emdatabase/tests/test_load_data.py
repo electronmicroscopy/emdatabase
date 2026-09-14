@@ -401,3 +401,26 @@ def test_a_malformed_entry_warns_instead_of_vanishing(monkeypatch):
     with pytest.warns(UserWarning, match="BrokenDataset"):
         found = dict(catalogue.datasets())
     assert "BrokenDataset" not in found  # skipped, but not silently
+
+
+def test_a_caller_s_progress_bar_is_not_replaced_by_the_toast(tmp_path, monkeypatch):
+    """The Jupyter toast stands in for the default bar, not for one passed in."""
+    import emdatabase.widget as widget_mod
+
+    dataset = getattr(data, TINY_DATASET)()
+    seen = []
+
+    def record(destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False):
+        seen.append(progressbar)
+        target = tmp_path / dataset.file
+        target.write_bytes(b"payload")
+        return str(target)
+
+    monitor = object()
+    monkeypatch.setattr(dataset, "_retrieve", record)
+    monkeypatch.setattr(widget_mod, "_attach_toast", lambda label: (monitor, None))
+
+    mine = object()
+    dataset.download(destination=tmp_path, progressbar=mine).wait(2)
+    dataset.download(destination=tmp_path, progressbar=True, refresh=True).wait(2)
+    assert seen == [mine, monitor]

@@ -174,6 +174,14 @@ def validate_document(
             "validating a dataset YAML needs jsonschema: pip install emdatabase[dev]"
         ) from error
 
+    if not isinstance(document, Mapping):
+        got = "nothing" if document is None else f"a {type(document).__name__}"
+        return [
+            f"{_where(origin)}: document: expected a mapping of entry name to entry, got {got}"
+        ]
+    if not document:
+        return [f"{_where(origin)}: document: no entries"]
+
     schema = load_schema()
     validator = validator_for(schema)(schema)
     problems = [
@@ -256,7 +264,9 @@ def format_size(size_bytes: int | None) -> str:
     value = float(size_bytes)
     unit = _SIZE_UNITS[0]
     for unit in _SIZE_UNITS:
-        if value < 1000 or unit == _SIZE_UNITS[-1]:
+        # The value as it will be shown, so 999_999 is "1.00 MB", not "1000.0 kB"
+        shown = value if unit == "B" else round(value, 1)
+        if shown < 1000 or unit == _SIZE_UNITS[-1]:
             break
         value /= 1000
     if unit == "B":

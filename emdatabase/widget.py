@@ -330,8 +330,8 @@ def _make_card_class():
             elif action == "delete":
                 try:
                     self._dataset.delete(version=version)
-                except Exception:
-                    pass
+                except OSError as error:  # read-only dir, permissions, a vanished file
+                    warnings.warn(f"could not delete {self._name}: {error}", stacklevel=2)
                 self.refresh()
             elif action == "refresh":
                 self.refresh()

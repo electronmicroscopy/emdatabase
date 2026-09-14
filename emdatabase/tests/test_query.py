@@ -192,3 +192,10 @@ def test_public_names_survive_a_submodule_walk():
         assert not isinstance(exported, types.ModuleType) or name in ("data", "config"), (
             f"emdatabase.{name} was replaced by a submodule of the same name"
         )
+
+
+def test_filter_accepts_a_scalar_that_is_not_a_string():
+    voltage = set(names(emdatabase.filter(voltage="200 kV")))
+    assert voltage
+    assert set(names(emdatabase.filter(voltage=["200 kV"]))) == voltage
+    assert emdatabase.filter(voltage=200) == []  # a bare int matches nothing, but does not raise

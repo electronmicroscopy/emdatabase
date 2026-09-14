@@ -18,7 +18,7 @@ and the rule, which is where the two would otherwise drift apart.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from emdatabase import catalogue
@@ -146,7 +146,11 @@ def _value(ds: DownloadableDataset, row: dict, field: str) -> Any:
 def _matches(value: Any, wanted: Any) -> bool:
     if wanted is None or isinstance(wanted, bool):
         return value == wanted
-    wanted_values = [wanted] if isinstance(wanted, str) else list(wanted)
+    if isinstance(wanted, str) or not isinstance(wanted, Iterable):
+        # A scalar criterion: filter(voltage=200) asks the same as ["200"].
+        wanted_values = [wanted]
+    else:
+        wanted_values = list(wanted)
     if isinstance(value, (tuple, list, Mapping)):
         # technique, tags and authors: a dataset matches if it carries any one
         # of them.
