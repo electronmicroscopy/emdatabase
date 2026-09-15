@@ -10,7 +10,7 @@ def browse(**kwargs):
 
     Returns an `anywidget` widget listing every dataset grouped by technique,
     showing which are downloaded, revealing full metadata on hover, and
-    downloading on click with a live progress toast. Requires the optional
+    downloading on click with a live progress bar. Requires the optional
     `anywidget` dependency (`pip install emdatabase[widget]`).
 
     ``display(emdatabase)`` renders the same browser.

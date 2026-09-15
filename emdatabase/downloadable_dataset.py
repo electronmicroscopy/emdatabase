@@ -151,7 +151,7 @@ def _shutdown_executor() -> None:
 
     A transfer already streaming still runs to completion - there is no way to
     interrupt pooch mid-read from here - so this shortens the wait rather than
-    removing it. The widget's toast has a cancel button for that case.
+    removing it. The browser and a dataset's card have a cancel button for that case.
     """
     global _executor
     executor, _executor = _executor, None
@@ -257,6 +257,10 @@ class _TqdmProgress:
     up front would flash an empty one on every cached call; pooch assigns
     ``total`` exactly once, before streaming, which is the moment there is
     something worth showing.
+
+    A background download calls :meth:`open` up front instead, on the calling
+    thread. A pool thread does not carry the running cell, so a notebook bar
+    built there is shown in whichever cell ran last, or not at all.
     """
 
     def __init__(self, desc: str = "") -> None:
@@ -270,11 +274,18 @@ class _TqdmProgress:
 
     @total.setter
     def total(self, value: int) -> None:
+        self._total = int(value or 0)
+        if self._bar is None:
+            self.open()
+        else:
+            self._bar.reset(total=self._total or None)
+
+    def open(self) -> "_TqdmProgress":
+        """Show the bar now, before pooch has said how big the file is."""
         from tqdm.auto import tqdm
 
-        self._total = int(value or 0)
         self._bar = tqdm(
-            total=self._total,
+            total=self._total or None,
             desc=self._desc,
             unit="B",
             unit_scale=True,
@@ -282,6 +293,7 @@ class _TqdmProgress:
             ascii=sys.platform == "win32",
             leave=True,
         )
+        return self
 
     def update(self, n: int) -> None:
         self._bar.update(n)
@@ -543,20 +555,17 @@ class DownloadableDataset:
         # destination or a refresh asks for a fresh one.
         existing = None if destination is not None or refresh else self.filepath(version)
         target = existing or self._resolve_destination(destination) / self.filename(version)
-        # In Jupyter (with the widget installed) a background download pops a
-        # cancelable toast; the toast's monitor replaces the plain progress bar.
-        monitor = finish = None
-        if progressbar is True:  # a caller's own Progress is theirs to drive
-            from emdatabase.widget import _attach_toast
+        # A file that is really coming gets its bar now, from this thread (see
+        # _TqdmProgress); a caller's own Progress is theirs to drive.
+        if progressbar is True and (refresh or not target.exists()):
+            from emdatabase.widget import _in_notebook, _prepare_frontend
 
-            label = type(self).__name__ + (f"@{version}" if version else "")
-            monitor, finish = _attach_toast(label)
-        progress = monitor if monitor is not None else progressbar
+            if _in_notebook():
+                _prepare_frontend()  # quiets pooch's log lines, which repeat the bar in red
+            progressbar = _TqdmProgress(target.name).open()
         future = _get_executor().submit(
-            self._retrieve, destination, progress, chunk_size, version, refresh
+            self._retrieve, destination, progressbar, chunk_size, version, refresh
         )
-        if finish is not None:
-            future.add_done_callback(finish)
         return DatasetPath(target)._attach(future)
 
     def _retrieve(

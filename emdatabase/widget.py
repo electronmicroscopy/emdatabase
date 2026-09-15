@@ -3,8 +3,8 @@
 Renders every dataset grouped by technique, marks which are already downloaded
 (○ / ●), shows metadata on hover, and downloads on click. Each download runs on
 the shared background thread pool (so the kernel stays responsive) and reports
-progress through a toast card with a cancel button - the same idea as a desktop
-app's download manager, driven here through pooch's progress-bar hook.
+progress, with a cancel button, inside the widget through pooch's progress-bar
+hook.
 
 anywidget is an optional dependency; :func:`browse` raises a helpful error if it
 is not installed. Importing this module never imports anywidget at module load,
@@ -58,7 +58,7 @@ def _prepare_frontend():
     """Everything that should happen before a widget renders.
 
     pooch's "Downloading data from ..." INFO logs render as red output in
-    Jupyter, and the widget shows the same thing as a toast, so they are
+    Jupyter, and the widget or the progress bar shows the same thing, so they are
     silenced - once, so a level set afterwards is left alone. Warnings and
     errors still come through.
     """
@@ -70,12 +70,21 @@ def _prepare_frontend():
 
 
 def _label(name, version=None):
-    """What a download is called in a toast: ``Name`` or ``Name@260902``.
+    """What a download is called in the widget: ``Name`` or ``Name@260902``.
 
     The frontend splits on the ``@`` to find the entry a running download
     belongs to, so a dated download still marks its row.
     """
     return f"{name}@{version}" if version else name
+
+
+def _frontend(name):
+    """A widget's ``_esm``: ``common.js``, which both widgets share, then its own file.
+
+    anywidget loads ``_esm`` as a single module and there is no bundler, so the
+    shared code is put in front rather than imported.
+    """
+    return (_STATIC / "common.js").read_text("utf-8") + (_STATIC / name).read_text("utf-8")
 
 
 class DownloadCancelled(Exception):
@@ -153,12 +162,12 @@ def _delete_file(dataset, name, version):
 
 @functools.cache
 def _make_downloads_class():
-    """Build the base of the browser and the toasts widget, importing anywidget lazily.
+    """Build the base of the browser and the card, importing anywidget lazily.
 
     Both draw one toast per running download from ``downloads``, which maps a
     per-download token to ``{label, done, total}`` while it runs and to
-    ``{label, error}`` once it has failed, and both take the cancel and dismiss
-    commands those toasts send.
+    ``{label, error}`` once it has failed, and send the download, delete,
+    refresh, cancel and dismiss commands.
     """
     import anywidget
     import traitlets
@@ -183,12 +192,47 @@ def _make_downloads_class():
         # internal comm callback, and overriding it breaks all comm handling
         # (including trait sync). Commands arrive via the `_command` trait.
         def _on_command(self, change):
-            command = change.get("new") or {}
+            command = change["new"]
+            action = command.get("action")
+            name = str(command.get("name", ""))
+            version = command.get("version") or None
             token = str(command.get("token", ""))
-            if command.get("action") == "cancel":
+            if action == "download":
+                self._start_download(name, version)
+            elif action == "delete":
+                self._delete(name, version)
+            elif action == "refresh":
+                self.refresh()
+            elif action == "cancel":
                 self._cancel(token)
-            elif command.get("action") == "dismiss":
+            elif action == "dismiss":
                 self._clear_progress(token)
+
+        def refresh(self):
+            """Re-check which files are on disk."""
+            raise NotImplementedError
+
+        def _resolve(self, name):
+            return _catalogue.resolve(name)
+
+        def _delete(self, name, version=None):
+            """Delete a dataset's downloaded file and refresh its status."""
+            ds = self._resolve(name)
+            if ds is not None:
+                _delete_file(ds, name, version)
+                self.refresh()
+
+        def _start_download(self, name, version=None):
+            """Kick off a background download for ``name`` and show a toast."""
+            ds = self._resolve(name)
+            if ds is None:
+                return None
+            monitor, token = self.begin(_label(name, version))
+            future = _get_executor().submit(
+                ds.download, progressbar=monitor, background=False, version=version
+            )
+            future.add_done_callback(lambda f, tk=token: self.finish(tk, f))
+            return future
 
         def begin(self, label):
             """Register a new download; return its (monitor, token)."""
@@ -211,6 +255,7 @@ def _make_downloads_class():
                 self._set_error(token, label, str(error))
             else:
                 self._clear_progress(token)
+            self.refresh()
 
         def _cancel(self, token):
             with self._lock:
@@ -250,7 +295,7 @@ def _make_browser_class():
     class DatasetBrowser(_make_downloads_class()):
         """Interactive, hoverable list of the emdatabase datasets."""
 
-        _esm = _STATIC / "browser.js"
+        _esm = _frontend("browser.js")
 
         groups = traitlets.List().tag(sync=True)
         data_dir = traitlets.Unicode().tag(sync=True)
@@ -269,122 +314,31 @@ def _make_browser_class():
             self.n_downloaded = cat["n_downloaded"]
             self.n_total = cat["n_total"]
 
-        def _on_command(self, change):
-            command = change.get("new") or {}
-            action = command.get("action")
-            name = str(command.get("name", ""))
-            version = command.get("version") or None
-            if action == "download":
-                self._start_download(name, version)
-            elif action == "delete":
-                self._delete(name, version)
-            elif action == "refresh":
-                self.refresh()
-            else:
-                super()._on_command(change)
-
-        def _delete(self, name, version=None):
-            """Delete a dataset's downloaded file and refresh its status."""
-            ds = _catalogue.resolve(name)
-            if ds is not None:
-                _delete_file(ds, name, version)
-                self.refresh()
-
-        def _start_download(self, name, version=None):
-            """Kick off a background download for ``name`` and show a toast."""
-            ds = _catalogue.resolve(name)
-            if ds is None:
-                return None
-            monitor, token = self.begin(_label(name, version))
-            future = _get_executor().submit(
-                ds.download, progressbar=monitor, background=False, version=version
-            )
-            future.add_done_callback(lambda f, tk=token: self.finish(tk, f))
-            return future
-
-        def finish(self, token, future):
-            super().finish(token, future)
-            self.refresh()
-
     return DatasetBrowser
 
 
 @functools.cache
 def _make_card_class():
     """Build the ``DatasetCard`` class (one dataset), importing anywidget lazily."""
-    import anywidget
     import traitlets
 
-    class DatasetCard(anywidget.AnyWidget):
+    class DatasetCard(_make_downloads_class()):
         """An interactive card for a single dataset - what ``display(ds)`` shows."""
 
-        _esm = _STATIC / "card.js"
-        _css = _STATIC / "browser.css"
+        _esm = _frontend("card.js")
 
         info = traitlets.Dict().tag(sync=True)  # the catalogue entry() dict
-        download = traitlets.Dict().tag(sync=True)  # {label, done, total} | {} | {error}
-        _command = traitlets.Dict().tag(sync=True)
 
         def __init__(self, dataset, **kwargs):
             super().__init__(**kwargs)
             self._dataset = dataset
-            self._name = type(dataset).__name__
-            self._lock = threading.RLock()
-            self._cancel = None
-            self._counter = itertools.count()
             self.refresh()
-            self.observe(self._on_command, names="_command")
 
         def refresh(self):
-            self.info = _catalogue.entry(self._name, self._dataset)
+            self.info = _catalogue.entry(type(self._dataset).__name__, self._dataset)
 
-        def _on_command(self, change):
-            command = change.get("new") or {}
-            action = command.get("action")
-            version = command.get("version") or None
-            if action == "download":
-                self._start_download(version)
-            elif action == "cancel":
-                with self._lock:
-                    event = self._cancel
-                if event is not None:
-                    event.set()
-            elif action == "dismiss":
-                self.download = {}
-            elif action == "delete":
-                _delete_file(self._dataset, self._name, version)
-                self.refresh()
-            elif action == "refresh":
-                self.refresh()
-
-        def _start_download(self, version=None):
-            with self._lock:
-                if self._cancel is not None:
-                    return  # already downloading
-                self._cancel = threading.Event()
-            label = _label(self._name, version)
-            token = f"{label}-{next(self._counter)}"
-            self.download = {"label": label, "done": 0, "total": 0}
-            monitor = _WidgetProgress(self, token, label, self._cancel)
-            future = _get_executor().submit(
-                self._dataset.download, progressbar=monitor, background=False, version=version
-            )
-            future.add_done_callback(self._finish_download)
-            return future
-
-        def _finish_download(self, future):
-            with self._lock:
-                self._cancel = None
-            error = future.exception()
-            if error is not None and not isinstance(error, DownloadCancelled):
-                self.download = {"label": self._name, "error": str(error)}
-            else:
-                self.download = {}
-            self.refresh()
-
-        # Called from the worker thread by _WidgetProgress.
-        def _set_progress(self, token, label, done, total):
-            self.download = {"label": label, "done": int(done), "total": int(total)}
+        def _resolve(self, name):
+            return self._dataset
 
     return DatasetCard
 
@@ -424,26 +378,6 @@ def browse(**kwargs):
     return cls(**kwargs)
 
 
-# ---------------------------------------------------------------------------
-# Global toasts: a bare ``ds.download()`` in Jupyter pops a cancelable toast
-# ---------------------------------------------------------------------------
-
-
-@functools.cache
-def _make_toasts_class():
-    """Build the singleton ``DownloadToasts`` widget, importing anywidget lazily."""
-
-    class DownloadToasts(_make_downloads_class()):
-        """An invisible anchor that floats download toasts at the viewport corner."""
-
-        _esm = _STATIC / "toasts.js"
-
-    return DownloadToasts
-
-
-_toasts = None
-
-
 def _in_notebook():
     """True in a notebook frontend that can render widgets (Jupyter, Colab,
     VS Code, ...), False in plain Python or a terminal IPython."""
@@ -458,40 +392,3 @@ def _in_notebook():
         return ip.__class__.__name__ != "TerminalInteractiveShell"
     except Exception:
         return False
-
-
-def _get_toasts():
-    """Return the singleton toasts widget, or None if a toast can't be shown
-    (not in a notebook, or anywidget missing).
-
-    The widget is re-displayed on every call so it re-anchors in the current
-    cell: a widget view is tied to a cell's output, so clearing or re-running
-    that cell kills the view. Re-displaying gives a fresh, live view each time;
-    the views share one body-level toast root (see toasts.js), so re-anchoring
-    never duplicates the toasts.
-    """
-    global _toasts
-    if not _in_notebook():
-        return None
-    _prepare_frontend()
-    try:
-        if _toasts is None:
-            _toasts = _make_toasts_class()()
-        from IPython.display import display
-
-        display(_toasts)
-    except Exception:
-        return None
-    return _toasts
-
-
-def _attach_toast(label):
-    """If a toast can be shown, return (monitor, finish_callback) for a new
-    download; otherwise (None, None). The monitor is a pooch progress object
-    that also honors cancellation; finish_callback(future) clears the toast.
-    """
-    toasts = _get_toasts()
-    if toasts is None:
-        return None, None
-    monitor, token = toasts.begin(label)
-    return monitor, (lambda future, tk=token, tw=toasts: tw.finish(tk, future))

@@ -332,12 +332,13 @@ def test_shutdown_cancels_queued_downloads():
         release.set()
 
 
-def test_a_caller_s_progress_bar_is_not_replaced_by_the_toast(tmp_path, monkeypatch):
-    """The Jupyter toast stands in for the default bar, not for one passed in."""
-    import emdatabase.widget as widget_mod
-
+def test_a_background_download_builds_its_bar_on_the_calling_thread(tmp_path, monkeypatch):
+    """A notebook shows a bar in the cell that was running when it was built, which
+    a pool thread does not know. A file already on disk gets no bar, and a
+    caller's own Progress is passed through untouched."""
     dataset = getattr(data, TINY_DATASET)()
     seen = []
+    built_on = []
 
     def record(destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False):
         seen.append(progressbar)
@@ -345,11 +346,19 @@ def test_a_caller_s_progress_bar_is_not_replaced_by_the_toast(tmp_path, monkeypa
         target.write_bytes(b"payload")
         return str(target)
 
-    monitor = object()
+    class Bar:
+        def __init__(self, **kwargs):
+            built_on.append(threading.current_thread())
+
     monkeypatch.setattr(dataset, "_retrieve", record)
-    monkeypatch.setattr(widget_mod, "_attach_toast", lambda label: (monitor, None))
+    monkeypatch.setattr("tqdm.auto.tqdm", Bar)
+
+    dataset.download(destination=tmp_path).wait(2)
+    assert isinstance(seen[0], _TqdmProgress)
+    assert built_on == [threading.current_thread()]
 
     mine = object()
+    dataset.download(destination=tmp_path).wait(2)  # on disk now
     dataset.download(destination=tmp_path, progressbar=mine).wait(2)
-    dataset.download(destination=tmp_path, progressbar=True, refresh=True).wait(2)
-    assert seen == [mine, monitor]
+    assert seen[1:] == [True, mine]
+    assert len(built_on) == 1

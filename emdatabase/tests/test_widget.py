@@ -210,10 +210,13 @@ def test_dataset_card_is_populated_and_routes(monkeypatch):
     assert widget.info["name"] == TINY_DATASET
     assert widget.info["technique"] == ["STEM"]
     calls = []
-    monkeypatch.setattr(widget, "_start_download", lambda version=None: calls.append(version))
-    widget._command = {"action": "download", "nonce": 1}
-    widget._command = {"action": "download", "version": "260902", "nonce": 2}
+    monkeypatch.setattr(
+        widget, "_start_download", lambda name, version=None: calls.append(version)
+    )
+    widget._command = {"action": "download", "name": TINY_DATASET, "nonce": 1}
+    widget._command = {"action": "download", "name": TINY_DATASET, "version": "260902", "nonce": 2}
     assert calls == [None, "260902"]
+    assert widget._resolve(TINY_DATASET) is ds
 
 
 def test_dataset_display_is_a_widget_card():
@@ -240,41 +243,29 @@ def test_dataset_display_falls_back_without_anywidget(monkeypatch):
     assert "text/plain" in bundle
 
 
-def test_attach_toast_is_noop_outside_jupyter():
-    """Outside a Jupyter kernel there is no toast, so a bare download is
-    unaffected."""
-    import emdatabase.widget as widget_mod
-
-    monitor, finish = widget_mod._attach_toast("Foo")
-    assert monitor is None and finish is None
-
-
-def test_download_toasts_plumbing():
-    """The global toasts widget tracks a download and clears/errors/cancels it."""
-    pytest.importorskip("anywidget")
+def test_download_progress_plumbing():
+    """A download's progress is tracked, then cleared, errored or cancelled."""
     from concurrent.futures import Future
 
-    import emdatabase.widget as widget_mod
+    widget = _browser()
 
-    toasts = widget_mod._make_toasts_class()()
-
-    monitor, token = toasts.begin("Foo")
-    assert toasts.downloads[token] == {"label": "Foo", "done": 0, "total": 0}
+    monitor, token = widget.begin("Foo")
+    assert widget.downloads[token] == {"label": "Foo", "done": 0, "total": 0}
 
     ok = Future()
     ok.set_result("path")
-    toasts.finish(token, ok)  # success -> toast cleared
-    assert token not in toasts.downloads
+    widget.finish(token, ok)  # success -> progress cleared
+    assert token not in widget.downloads
 
-    monitor2, token2 = toasts.begin("Bar")  # cancel sets the event
-    toasts._command = {"action": "cancel", "token": token2, "nonce": 1}
+    monitor2, token2 = widget.begin("Bar")  # cancel sets the event
+    widget._command = {"action": "cancel", "token": token2, "nonce": 1}
     assert monitor2._cancel.is_set()
 
     bad = Future()
     bad.set_exception(RuntimeError("boom"))
-    _, token3 = toasts.begin("Baz")
-    toasts.finish(token3, bad)  # failure -> error toast
-    assert toasts.downloads[token3]["error"] == "boom"
+    _, token3 = widget.begin("Baz")
+    widget.finish(token3, bad)  # failure -> error shown
+    assert widget.downloads[token3]["error"] == "boom"
 
 
 @pytest.mark.slow
@@ -308,7 +299,7 @@ def test_a_card_delete_that_fails_warns_rather_than_claiming_success(monkeypatch
     monkeypatch.setattr(ds, "delete", boom)
     widget = widget_mod.card(ds)
     with pytest.warns(UserWarning, match="could not delete"):
-        widget._on_command({"new": {"action": "delete", "nonce": 1}})
+        widget._on_command({"new": {"action": "delete", "name": TINY_DATASET, "nonce": 1}})
 
 
 def test_module_display_reports_a_real_error_rather_than_install_advice(monkeypatch):
