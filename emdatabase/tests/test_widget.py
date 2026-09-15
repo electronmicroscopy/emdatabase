@@ -302,6 +302,12 @@ def test_a_card_delete_that_fails_warns_rather_than_claiming_success(monkeypatch
         widget._on_command({"new": {"action": "delete", "name": TINY_DATASET, "nonce": 1}})
 
 
+def _module_repr():
+    # The repr comes from reassigning the module's __class__, which a type checker
+    # cannot follow; getattr still checks that the module really carries it.
+    return getattr(emdatabase, "_repr_mimebundle_")()
+
+
 def test_module_display_reports_a_real_error_rather_than_install_advice(monkeypatch):
     """A misconfigured locations key is not a missing anywidget."""
 
@@ -309,7 +315,7 @@ def test_module_display_reports_a_real_error_rather_than_install_advice(monkeypa
         raise TypeError("The locations config must be a mapping of name to directory")
 
     monkeypatch.setattr(emdatabase, "browse", _boom)
-    text = emdatabase._repr_mimebundle_()["text/plain"]
+    text = _module_repr()["text/plain"]
     assert "must be a mapping" in text
     assert "pip install" not in text
 
@@ -319,4 +325,4 @@ def test_module_display_still_advises_installing_the_widget(monkeypatch):
         raise ImportError("no anywidget")
 
     monkeypatch.setattr(emdatabase, "browse", _boom)
-    assert "pip install" in emdatabase._repr_mimebundle_()["text/plain"]
+    assert "pip install" in _module_repr()["text/plain"]

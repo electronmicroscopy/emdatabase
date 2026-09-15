@@ -17,4 +17,4 @@ for _entry in index_entries():
         },
     )
     globals()[_entry.class_name] = _new_class
-    __all__.append(_entry.class_name)
+    __all__.append(_entry.class_name)  # pyright: ignore[reportUnsupportedDunderAll] - see __init__.pyi
