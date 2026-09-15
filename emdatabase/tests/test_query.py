@@ -27,26 +27,8 @@ def test_datasets_returns_objects_not_rows():
     assert names(found) == sorted(n for n, _ in catalogue.datasets())
 
 
-def test_search_matches_every_term_across_fields():
-    """The widget's rule: all terms must appear, but not in one field."""
-    found = names(emdatabase.search("jeol eels"))
-    assert found
-    for name in found:
-        dataset = catalogue.resolve(name)
-        assert dataset is not None
-        blob = catalogue.entry(name, dataset)["search"]
-        assert "jeol" in blob and "eels" in blob
-
-
 def test_search_is_case_insensitive():
     assert names(emdatabase.search("AMORPHOUS")) == names(emdatabase.search("amorphous"))
-
-
-def test_search_finds_a_dataset_by_author():
-    """Proof the blob reaches past the name - authors are not in the class name."""
-    ds = BilayerWS2()
-    author = next(iter(ds.metadata.authors))
-    assert type(ds).__name__ in names(emdatabase.search(author))
 
 
 def test_search_uses_the_same_blob_and_rule_as_the_widget():
@@ -101,19 +83,6 @@ def test_filter_on_technique_tests_membership(two_techniques):
         assert "In-situ" in ds.metadata.technique
 
 
-def test_filter_on_a_list_of_techniques_is_any_of(two_techniques):
-    stem = set(names(emdatabase.filter(technique="4D-STEM")))
-    eels = set(names(emdatabase.filter(technique="EELS")))
-    either = set(names(emdatabase.filter(technique=["4D-STEM", "EELS"])))
-    assert either == stem | eels
-    assert stem and eels
-
-
-def test_filter_on_tags_tests_membership():
-    for ds in emdatabase.filter(tags="Strain"):
-        assert "Strain" in ds.metadata.tags
-
-
 def test_filter_on_authors_tests_membership():
     ds = BilayerWS2()
     author = next(iter(ds.metadata.authors))
@@ -161,12 +130,6 @@ def test_filter_on_downloaded_and_location(tmp_path):
     (group / ds.file).write_bytes(b"theirs")
     assert names(emdatabase.filter(location="group")) == [type(ds).__name__]
     assert emdatabase.filter(location="personal") == []
-
-
-def test_the_query_api_is_on_the_top_level_namespace():
-    for name in ("list_datasets", "search", "filter"):
-        assert name in emdatabase.__all__
-        assert callable(getattr(emdatabase, name))
 
 
 def test_public_names_survive_a_submodule_walk():

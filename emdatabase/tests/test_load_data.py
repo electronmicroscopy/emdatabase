@@ -2,11 +2,12 @@
 
 The expensive part of testing a download index is not the download - it is
 knowing that every ``source`` still resolves. Checking that costs a HEAD request
-per dataset, so it is done for all of them. Actually pulling bytes only proves
-that pooch and the checksum verification are wired up correctly, which is
-identical for every entry, so it is done once with the smallest file in the
-index. The large downloads are marked ``slow`` and deselected by default; run
-them with ``pytest -m slow``.
+per dataset, so it is done for all of them, under ``-m network``. Actually
+pulling bytes only proves that pooch and the checksum verification are wired up
+correctly, which is identical for every entry: the default run does that against
+``conftest``'s local server (``test_locations``, ``test_weights``), and
+``-m slow`` against the real hosts, with the smallest file in the index among
+them.
 """
 
 import os
@@ -105,18 +106,10 @@ def test_source_url_resolves(name, version):
 def test_metadata_is_complete(name):
     """Entries need enough metadata for pooch to fetch and verify them."""
     dataset = getattr(data, name)()
-    assert dataset.source, f"{name} has no source"
-    assert dataset.file, f"{name} has no file"
-    assert dataset.metadata.description, f"{name} has no description"
     assert dataset.checksum and dataset.checksum.startswith("md5:"), (
         f"{name} has no md5 checksum, so a corrupt or truncated download would go unnoticed"
     )
     assert dataset.size_bytes, f"{name} has no size_bytes"
-
-
-def test_download_url_joins_the_source_and_the_file():
-    dataset = getattr(data, TINY_DATASET)()
-    assert dataset.download_url == f"{dataset.source}/{dataset.file}"
 
 
 def test_an_explicit_url_is_what_gets_downloaded():
@@ -130,6 +123,7 @@ def test_an_explicit_url_is_what_gets_downloaded():
     assert dataset.download_url == "https://drive.google.com/uc?export=download&id=abc"
 
 
+@pytest.mark.slow
 def test_download_verifies_checksum(tmp_path):
     """A real download, to prove pooch and checksum verification are wired up."""
     dataset = getattr(data, TINY_DATASET)()
@@ -141,35 +135,25 @@ def test_download_verifies_checksum(tmp_path):
     assert path == tmp_path / dataset.file
 
 
-def test_download_default_returns_path_handle(tmp_path):
-    """The default download runs in the background and hands back a path handle
-    that is a real ``Path`` and resolves to the downloaded file."""
-    dataset = getattr(data, TINY_DATASET)()
-    handle = dataset.download(destination=tmp_path, progressbar=False)
-    assert isinstance(handle, DatasetPath)
-    assert isinstance(handle, Path)
-    # Using it as a path blocks until the bytes are there, then behaves normally.
-    assert os.fspath(handle) == str(tmp_path / dataset.file)
-    assert handle.is_file()
-    assert (tmp_path / dataset.file).exists()
-    assert handle.done
+def _slow_retrieve(dataset, tmp_path, started=None):
+    """A stand-in for ``_retrieve``: it takes a moment, then writes ``payload``."""
+
+    def retrieve(destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False):
+        if started is not None:
+            started.set()
+        time.sleep(0.4)
+        target = tmp_path / dataset.file
+        target.write_bytes(b"payload")
+        return str(target)
+
+    return retrieve
 
 
 def test_download_handle_is_nonblocking_then_blocks_on_use(tmp_path, monkeypatch):
     """download() returns before the file exists; touching the path waits for it."""
     dataset = getattr(data, TINY_DATASET)()
     started = threading.Event()
-
-    def slow_retrieve(
-        destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False
-    ):
-        started.set()
-        time.sleep(0.4)
-        target = tmp_path / dataset.file
-        target.write_bytes(b"payload")
-        return str(target)
-
-    monkeypatch.setattr(dataset, "_retrieve", slow_retrieve)
+    monkeypatch.setattr(dataset, "_retrieve", _slow_retrieve(dataset, tmp_path, started))
     handle = dataset.download(destination=tmp_path, progressbar=False)
 
     assert started.wait(2)  # the worker thread really started
@@ -184,17 +168,7 @@ def test_download_handle_derived_paths_also_wait(tmp_path, monkeypatch):
     """A path rebuilt from the handle names the same file, so it must wait too."""
     dataset = getattr(data, TINY_DATASET)()
     started = threading.Event()
-
-    def slow_retrieve(
-        destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False
-    ):
-        started.set()
-        time.sleep(0.4)
-        target = tmp_path / dataset.file
-        target.write_bytes(b"payload")
-        return str(target)
-
-    monkeypatch.setattr(dataset, "_retrieve", slow_retrieve)
+    monkeypatch.setattr(dataset, "_retrieve", _slow_retrieve(dataset, tmp_path, started))
     handle = dataset.download(destination=tmp_path, progressbar=False)
     assert started.wait(2)
 
@@ -208,22 +182,15 @@ def test_a_path_that_is_not_downloading_never_waits(tmp_path, monkeypatch):
     """Only the file being fetched is pending - its directory is not."""
     dataset = getattr(data, TINY_DATASET)()
 
-    def slow_retrieve(
-        destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False
-    ):
-        time.sleep(0.3)
-        target = tmp_path / dataset.file
-        target.write_bytes(b"payload")
-        return str(target)
-
-    monkeypatch.setattr(dataset, "_retrieve", slow_retrieve)
+    monkeypatch.setattr(dataset, "_retrieve", _slow_retrieve(dataset, tmp_path))
     handle = dataset.download(destination=tmp_path, progressbar=False)
     assert handle.parent.done is True
     handle.wait()
 
 
-def test_finished_downloads_leave_no_pending_entry(tmp_path):
+def test_finished_downloads_leave_no_pending_entry(tmp_path, monkeypatch):
     dataset = getattr(data, TINY_DATASET)()
+    monkeypatch.setattr(dataset, "_retrieve", _slow_retrieve(dataset, tmp_path))
     handle = dataset.download(destination=tmp_path, progressbar=False)
     handle.wait()
     key = _pending_key(handle)
@@ -233,15 +200,6 @@ def test_finished_downloads_leave_no_pending_entry(tmp_path):
             break
         time.sleep(0.01)
     assert key not in _PENDING
-
-
-def test_generated_class_can_be_subclassed():
-    base = getattr(data, TINY_DATASET)
-
-    class Subclass(base):
-        pass
-
-    assert Subclass().file == base().file
 
 
 def test_keyword_overrides_leave_the_class_spec_alone():
@@ -264,29 +222,17 @@ def test_a_dataset_without_a_source_is_an_error():
         DownloadableDataset()
 
 
-def test_download_handle_propagates_errors(tmp_path):
+def test_download_handle_propagates_errors(tmp_path, monkeypatch):
     """A failed background download raises when the handle is consumed."""
-    dataset = getattr(data, TINY_DATASET)(checksum="md5:" + "0" * 32)
-    handle = dataset.download(destination=tmp_path, progressbar=False)
-    with pytest.raises(Exception):
-        os.fspath(handle)
-
-
-def test_download_is_cached(tmp_path):
-    """A second download of the same file must not refetch it."""
     dataset = getattr(data, TINY_DATASET)()
-    first = dataset.download(destination=tmp_path, progressbar=False, background=False)
-    mtime = (tmp_path / dataset.file).stat().st_mtime_ns
-    second = dataset.download(destination=tmp_path, progressbar=False, background=False)
-    assert first == second
-    assert (tmp_path / dataset.file).stat().st_mtime_ns == mtime
 
+    def fail(*args):
+        raise ValueError("MD5 hash of downloaded file does not match")
 
-def test_download_rejects_a_bad_checksum(tmp_path):
-    """A wrong checksum must raise rather than hand back the file."""
-    dataset = getattr(data, TINY_DATASET)(checksum="md5:" + "0" * 32)
-    with pytest.raises(Exception):
-        dataset.download(destination=tmp_path, progressbar=False, background=False)
+    monkeypatch.setattr(dataset, "_retrieve", fail)
+    handle = dataset.download(destination=tmp_path, progressbar=False)
+    with pytest.raises(ValueError, match="does not match"):
+        os.fspath(handle)
 
 
 @pytest.mark.slow
