@@ -1,8 +1,8 @@
-// common.js - what browser.js and card.js share.
+// common.js - what browser.js, card.js and the docs site's browser share.
 //
 // anywidget loads each widget's `_esm` as a single module and there is no
-// bundler, so widget.py puts this file in front of each widget's own file
-// rather than having them import it.
+// bundler, so widget.py (and docs/source/_build_docs.py) put this file in front
+// of each one rather than having them import it.
 
 const MB = 1e6;
 
@@ -159,7 +159,59 @@ function drawToasts(stack, view) {
   }
 }
 
+// --- tabs and list -----------------------------------------------------
+
+// "All", then a tab per entry of `tabs`; picking one sets `state.tab` and
+// calls `onPick`.
+function fillTabs(tabsEl, tabs, state, onPick) {
+  tabsEl.innerHTML = "";
+  for (const tab of ["All", ...tabs]) {
+    const btn = el("button", "emdb-tab" + (state.tab === tab ? " active" : ""), esc(tab));
+    btn.addEventListener("click", () => {
+      state.tab = tab;
+      fillTabs(tabsEl, tabs, state, onPick);
+      onPick();
+    });
+    tabsEl.appendChild(btn);
+  }
+}
+
+// `drawRow(item)` for each entry of `groups` in `state.tab` that matches
+// `state.search`, under a heading per group in the All view, or `empty`.
+//
+// `item.search` is a lowercased blob of every field (name, description,
+// detector, microscope, tags, authors + affiliations, license, …), so a query
+// like "Carter Francis" matches on author, not just the name.
+// emdatabase.search() matches this same blob by this same rule; matching stays
+// here rather than in the kernel so typing never waits on a round trip.
+function fillList(listEl, groups, state, drawRow, empty) {
+  listEl.innerHTML = "";
+  const terms = state.search.toLowerCase().split(/\s+/);
+  // A dataset with several techniques is in several groups, so the All view
+  // lists it under the first one and skips it after that.
+  const drawn = new Set();
+  for (const group of groups) {
+    if (state.tab !== "All" && group.technique !== state.tab) continue;
+    const items = group.items.filter(
+      (it) => !drawn.has(it.name) && terms.every((term) => it.search.includes(term)));
+    if (!items.length) continue;
+    if (state.tab === "All") {
+      listEl.appendChild(el("div", "emdb-group-head", esc(group.technique)));
+      for (const item of items) drawn.add(item.name);
+    }
+    for (const item of items) listEl.appendChild(drawRow(item));
+  }
+  if (!listEl.children.length) listEl.appendChild(el("div", "emdb-empty", empty));
+}
+
 // --- one catalogue row -------------------------------------------------
+
+// Which version of `item` is shown: "" is latest, and is all a dataset (or a
+// family whose chosen version has gone away) ever has.
+function shownVersion(item, view) {
+  const chosen = view.versions[item.name];
+  return item.versions.some((v) => v.version === chosen) ? chosen : "";
+}
 
 // The download state of one version: an item's own fields describe latest, so
 // the same reads work for the item or for one of its `versions`.
@@ -189,21 +241,15 @@ function copyRow(text, variant) {
   return row;
 }
 
-// Draw `item` into `parent`: what the browser's details panel and a dataset's
-// card both show. A weights family gets a version picker - `latest`, then the
-// dated snapshots, ● on those on disk - and the status, the path and the load
-// snippet all follow it. `toasts`, if given, goes under the status line.
-function drawEntry(parent, item, view, toasts) {
-  const chosen = view.versions[item.name];
-  const version = item.versions.some((v) => v.version === chosen) ? chosen : "";
-  const where = versionState(item, version);
-  parent.innerHTML = "";
-
+// The title and the line under it. A weights family's title has a version
+// picker - `latest`, then the dated snapshots, ● on those on disk - which
+// records the choice in `view.versions` and redraws.
+function drawHead(parent, item, version, view) {
   const title = el("div", "emdb-d-title", esc(item.name));
   if (item.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
   if (item.versions.length) {
     const select = el("select", "emdb-version");
-    select.title = "Which version to download, delete or load";
+    select.title = "Which version to show";
     for (const value of ["", ...item.versions.map((v) => v.version)]) {
       const option = document.createElement("option");
       option.value = value;
@@ -217,9 +263,41 @@ function drawEntry(parent, item, view, toasts) {
     });
     title.appendChild(select);
   }
-  parent.appendChild(title);
   const sub = [item.technique.join(", "), item.size].filter(Boolean).join("  ·  ");
-  parent.appendChild(el("div", "emdb-d-sub", esc(sub)));
+  parent.append(title, el("div", "emdb-d-sub", esc(sub)));
+}
+
+// The metadata as label/value rows, then any `extra` pairs; empty values are
+// left out.
+function drawMeta(item, extra = []) {
+  const meta = el("div", "emdb-d-meta");
+  const pairs = [
+    ["Detector", item.detector], ["Microscope", item.microscope], ["Voltage", item.voltage],
+    ["Tags", item.tags.join(", ")], ["Authors", item.authors.join(", ")],
+    ["License", item.license], ["File", item.file], ["DOI", item.doi],
+    ["Versions", item.versions.map((v) => v.version).join(", ")],
+    ["Model", item.model_class], ["Framework", item.model_framework],
+    ["quantem", item.model_quantem],
+    ...extra,
+  ];
+  for (const [key, value] of pairs) {
+    if (!value) continue;
+    const kv = el("div", "emdb-kv");
+    kv.appendChild(el("span", "emdb-k", key));
+    kv.appendChild(el("span", "emdb-v", esc(value)));
+    meta.appendChild(kv);
+  }
+  return meta;
+}
+
+// Draw `item` into `parent`: what the browser's details panel and a dataset's
+// card both show. The status, the path and the load snippet follow the version
+// picked. `toasts`, if given, goes under the status line.
+function drawEntry(parent, item, view, toasts) {
+  const version = shownVersion(item, view);
+  const where = versionState(item, version);
+  parent.innerHTML = "";
+  drawHead(parent, item, version, view);
 
   const status = el("div", "emdb-d-status");
   const deleteButton = (text, tooltip) => {
@@ -257,24 +335,7 @@ function drawEntry(parent, item, view, toasts) {
     + (version ? `version="${version}"` : "") + ")"));
   if (where.path) main.appendChild(copyRow(where.path, "path"));
 
-  const meta = el("div", "emdb-d-meta");
-  const pairs = [
-    ["Detector", item.detector], ["Microscope", item.microscope], ["Voltage", item.voltage],
-    ["Tags", item.tags.join(", ")], ["Authors", item.authors.join(", ")],
-    ["License", item.license], ["File", item.file], ["DOI", item.doi],
-    ["Versions", item.versions.map((v) => v.version).join(", ")],
-    ["Model", item.model_class], ["Framework", item.model_framework],
-    ["quantem", item.model_quantem],
-  ];
-  for (const [key, value] of pairs) {
-    if (!value) continue;
-    const kv = el("div", "emdb-kv");
-    kv.appendChild(el("span", "emdb-k", key));
-    kv.appendChild(el("span", "emdb-v", esc(value)));
-    meta.appendChild(kv);
-  }
-
   const cols = el("div", "emdb-d-cols");
-  cols.append(main, meta);
+  cols.append(main, drawMeta(item));
   parent.appendChild(cols);
 }

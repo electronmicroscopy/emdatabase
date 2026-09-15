@@ -10,7 +10,4 @@ and fetched with ``download(version="260902")``.
 
 .. note::
 
-   This page is rendered as a self-contained, widget-styled browser during the
-   build (see ``build-finished`` in ``conf.py``); this text is a fallback that
-   only shows if that generation step fails. See :doc:`Contributing a Dataset
-   <contributing>` for what a weights entry has to declare.
+   The build replaces this page with a generated one (see ``conf.py``).

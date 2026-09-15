@@ -42,41 +42,14 @@ function render({ model, el: root }) {
   }
 
   function drawTabs() {
-    tabsEl.innerHTML = "";
-    for (const tab of ["All", ...model.get("groups").map((g) => g.technique)]) {
-      const btn = el("button", "emdb-tab" + (state.tab === tab ? " active" : ""), esc(tab));
-      btn.addEventListener("click", () => { state.tab = tab; drawTabs(); drawList(); });
-      tabsEl.appendChild(btn);
-    }
-  }
-
-  // `item.search` is a lowercased blob of every field (name, description,
-  // detector, microscope, tags, authors + affiliations, license, …), so a
-  // query like "Carter Francis" matches on author, not just the name.
-  // emdatabase.search() matches this same blob by this same rule; matching
-  // stays here rather than in the kernel so typing never waits on a round trip.
-  function matchesSearch(item) {
-    return state.search.toLowerCase().split(/\s+/).every((term) => item.search.includes(term));
+    fillTabs(tabsEl, model.get("groups").map((g) => g.technique), state, drawList);
   }
 
   function drawList() {
     // A row is marked whichever version of it is running.
     const active = new Set([...activeLabels(view)].map((label) => label.split("@")[0]));
-    listEl.innerHTML = "";
-    // A dataset with several techniques is in several groups, so the All view
-    // lists it under the first one and skips it after that.
-    const drawn = new Set();
-    for (const group of model.get("groups")) {
-      if (state.tab !== "All" && group.technique !== state.tab) continue;
-      const items = group.items.filter((it) => matchesSearch(it) && !drawn.has(it.name));
-      if (!items.length) continue;
-      if (state.tab === "All") {
-        listEl.appendChild(el("div", "emdb-group-head", esc(group.technique)));
-        for (const item of items) drawn.add(item.name);
-      }
-      for (const item of items) listEl.appendChild(drawRow(item, active.has(item.name)));
-    }
-    if (!listEl.children.length) listEl.appendChild(el("div", "emdb-empty", "No datasets match."));
+    fillList(listEl, model.get("groups"), state, (item) => drawRow(item, active.has(item.name)),
+      "No datasets match.");
     state.selected ??= allItems()[0]?.name;
     drawDetails();
   }

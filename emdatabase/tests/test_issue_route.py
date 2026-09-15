@@ -5,10 +5,9 @@ document it produces goes through :func:`~emdatabase.metadata.validate_document`
 and its keys are compared against ``new_dataset.FIELD_ORDER``. One test runs the
 same entry through both routes and compares the bytes.
 
-The docs site's datasets table is built from the same YAML by the same module,
-so its tab grouping is checked here too, along with the Add Dataset page, which
-is now an explainer pointing at the issue form and the CLI rather than a form of
-its own.
+The docs site's Add Dataset page, which points at the issue form and the CLI,
+is checked here too, along with the rule that no generated page loads anything
+from outside.
 
 The issue script lives in ``.github/scripts`` rather than in the package and is
 loaded from its path. Nothing here touches the network: the calls that would are
@@ -446,40 +445,7 @@ def test_add_dataset_page_points_at_the_issue_form_and_the_cli(build_docs):
 
 def test_generated_pages_load_nothing_from_outside(build_docs):
     """Every page is self-contained; the only external host left is a link target."""
-    for generate in (
-        build_docs.generate_add_dataset_html,
-        build_docs.generate_landing_html,
-        build_docs.generate_all_data_html,
-        build_docs.generate_weights_html,
-    ):
+    for generate in build_docs.PAGES.values():
         html = generate()
         assert "<script src=" not in html
         assert "<link rel=" not in html
-
-
-# -- the docs datasets table -------------------------------------------------
-
-
-def test_docs_table_lists_a_two_technique_dataset_under_each(build_docs, tmp_path):
-    """One row, both tabs: the tabs filter on the row's whole technique list."""
-    (tmp_path / "TwoTechniques.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "TwoTechniques": {
-                    "description": "An in-situ 4D-STEM dataset.",
-                    "source": "https://zenodo.org/records/0000000/files",
-                    "file": "TwoTechniques.zspy",
-                    "technique": ["4D-STEM", "In-situ"],
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    by_technique = build_docs.parse_datasets(tmp_path)
-    assert sorted(by_technique) == ["4D-STEM", "In-situ"]
-    assert [d["name"] for d in by_technique["4D-STEM"]] == ["TwoTechniques"]
-    assert [d["name"] for d in by_technique["In-situ"]] == ["TwoTechniques"]
-
-    html = build_docs.generate_html_table(by_technique)
-    assert html.count("<strong>TwoTechniques</strong>") == 1
-    assert 'data-technique="4D-STEM, In-situ"' in html
