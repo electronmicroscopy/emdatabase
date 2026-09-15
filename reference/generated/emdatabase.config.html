@@ -1,0 +1,448 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" data-theme="dark">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>emdatabase.config &#8212; emdatabase 0.5.0.dev0 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "dark";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "dark";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=cb8930eaaf36d9849b67" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=cb8930eaaf36d9849b67" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery.css?v=fd6457a4" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=60a4c9d5" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../_static/scripts/fontawesome.js?digest=cb8930eaaf36d9849b67"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=cb8930eaaf36d9849b67" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=cb8930eaaf36d9849b67" />
+
+    <script src="../../_static/documentation_options.js?v=be1c004d"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'reference/generated/emdatabase.config';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="emdatabase.data" href="emdatabase.data.html" />
+    <link rel="prev" title="emdatabase" href="emdatabase.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="../../_static/searchtools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <script src="../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="dark">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<nav class="app-nav">
+  <a class="app-brand" href="../../index.html">EM-Database</a>
+  <a class="app-navlink" href="../../examples/index.html">Examples</a>
+  <a class="app-navlink active" href="../index.html">API</a>
+  <a class="app-navlink" href="../../all_data.html">All Data</a>
+  <a class="app-navlink" href="../../add_dataset.html">Add Dataset</a>
+</nav>
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../index.html">
+    API
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../all_data.html">
+    All Data
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../weights.html">
+    Model Weights
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../add_dataset.html">
+    Add Dataset
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/electronmicroscopy/emdatabase" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Reference</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">emdatabase.config</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="module-emdatabase.config">
+<span id="emdatabase-config"></span><h1>emdatabase.config<a class="headerlink" href="#module-emdatabase.config" title="Link to this heading">#</a></h1>
+<p>Configuration for emdatabase, in the style of dask’s (and quantem’s) config.</p>
+<p>Two keys are shipped, in <code class="docutils literal notranslate"><span class="pre">emdatabase/emdatabase.yaml</span></code>. <code class="docutils literal notranslate"><span class="pre">locations</span></code> is a
+mapping of name to directory: <code class="docutils literal notranslate"><span class="pre">personal</span></code> is the reserved name for the one
+writable location, where downloads go (<code class="docutils literal notranslate"><span class="pre">null</span></code> means pooch’s cache directory);
+every other entry is a read-only directory, searched before it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">locations</span><span class="p">:</span>
+  <span class="n">example_data</span><span class="p">:</span> <span class="o">/</span><span class="n">group</span><span class="o">/</span><span class="n">example_data</span>
+  <span class="n">personal</span><span class="p">:</span> <span class="o">/</span><span class="n">big</span><span class="o">/</span><span class="n">disk</span><span class="o">/</span><span class="n">emdatabase</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">check_updates</span></code> (true by default) is whether downloading a weights family’s
+<code class="docutils literal notranslate"><span class="pre">latest</span></code> asks the index on the project’s <code class="docutils literal notranslate"><span class="pre">main</span></code> branch whether newer
+weights have been published, and warns if they have.</p>
+<p>Add and remove entries with <code class="xref py py-func docutils literal notranslate"><span class="pre">add_location()</span></code>, <code class="xref py py-func docutils literal notranslate"><span class="pre">locations()</span></code> and
+<code class="xref py py-func docutils literal notranslate"><span class="pre">remove_location()</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">emdatabase</span><span class="w"> </span><span class="kn">import</span> <span class="n">config</span>
+
+<span class="n">config</span><span class="o">.</span><span class="n">add_location</span><span class="p">(</span><span class="s2">"/group/example_data"</span><span class="p">)</span>                       <span class="c1"># read-only</span>
+<span class="n">config</span><span class="o">.</span><span class="n">add_location</span><span class="p">(</span><span class="s2">"/big/disk/emdatabase"</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"personal"</span><span class="p">)</span>     <span class="c1"># downloads</span>
+<span class="n">config</span><span class="o">.</span><span class="n">locations</span><span class="p">()</span>                                               <span class="c1"># search order</span>
+<span class="n">config</span><span class="o">.</span><span class="n">remove_location</span><span class="p">(</span><span class="s2">"example_data"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Each of those persists to the config file unless called with <code class="docutils literal notranslate"><span class="pre">persist=False</span></code>.
+A location’s name is also what a download writes into, which is how a shared
+location is seeded: <code class="docutils literal notranslate"><span class="pre">data.CuZnHAADF().download(destination=&quot;example_data&quot;)</span></code>.</p>
+<p>Or read and write the key directly:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"locations"</span><span class="p">)</span>
+<span class="n">config</span><span class="o">.</span><span class="n">set</span><span class="p">({</span><span class="s2">"locations.personal"</span><span class="p">:</span> <span class="s2">"/big/disk/emdatabase"</span><span class="p">})</span>  <span class="c1"># for this process</span>
+<span class="k">with</span> <span class="n">config</span><span class="o">.</span><span class="n">set</span><span class="p">({</span><span class="s2">"locations.personal"</span><span class="p">:</span> <span class="s2">"/scratch"</span><span class="p">}):</span>        <span class="c1"># or for a block</span>
+    <span class="o">...</span>
+<span class="n">config</span><span class="o">.</span><span class="n">write</span><span class="p">()</span>                                              <span class="c1"># persist to the yaml</span>
+</pre></div>
+</div>
+<p>Or from the environment, prefix <code class="docutils literal notranslate"><span class="pre">EMDATABASE_</span></code>, double underscore to nest:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">EMDATABASE_LOCATIONS__PERSONAL</span><span class="o">=/</span><span class="n">scratch</span><span class="o">/</span><span class="n">data</span>
+<span class="n">EMDATABASE_LOCATIONS__GROUP</span><span class="o">=/</span><span class="n">wigeon</span><span class="o">/</span><span class="n">shared</span><span class="o">/</span><span class="n">example_data</span>
+</pre></div>
+</div>
+<p>Files live in <code class="docutils literal notranslate"><span class="pre">~/.config/emdatabase</span></code> (or wherever <code class="docutils literal notranslate"><span class="pre">EMDATABASE_CONFIG</span></code>
+points); every <code class="docutils literal notranslate"><span class="pre">*.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">*.yml</span></code> in that directory is merged, in name
+order. Precedence, lowest first: shipped defaults, config files, environment
+variables, <code class="xref py py-class docutils literal notranslate"><span class="pre">set</span></code>.</p>
+<p class="rubric">Functions</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_location</span></code>(path[, name, persist])</p></td>
+<td><p>Add a location, or repoint one that is already configured.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">canonical_name</span></code>(k, config)</p></td>
+<td><p>Return the canonical name for a key.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">check_key_val</span></code>(key, val[, deprecations])</p></td>
+<td><p>Check whether a key has been renamed, removed, or is not one we ship</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">collect</span></code>([path, env])</p></td>
+<td><p>Collect configuration from the config directory and the environment</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">collect_env</span></code>([env])</p></td>
+<td><p>Collect config from environment variables</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">collect_yaml</span></code>(path)</p></td>
+<td><p>Collect configuration from the yaml files in a directory</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">data_dir</span></code>()</p></td>
+<td><p>The directory downloads are written to.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">data_search_dirs</span></code>()</p></td>
+<td><p>Everywhere to look for an existing dataset: the shared locations, then <code class="xref py py-func docutils literal notranslate"><span class="pre">data_dir()</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">first_run_notice</span></code>([directory])</p></td>
+<td><p>Say where downloads will go, once per process.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get</span></code>(key[, default, config, override_with])</p></td>
+<td><p>Get elements from global config</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">interpret_value</span></code>(value)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">locations</span></code>()</p></td>
+<td><p>Every configured location, in search order.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">merge</span></code>(*dicts)</p></td>
+<td><p>Update a sequence of nested dictionaries</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">refresh</span></code>([config, defaults])</p></td>
+<td><p>Update configuration by re-reading yaml files and env variables</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">remove_location</span></code>(name_or_path[, persist])</p></td>
+<td><p>Remove a location, or reset <code class="docutils literal notranslate"><span class="pre">personal</span></code> to the cache directory.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">resolve_destination</span></code>(destination)</p></td>
+<td><p>The directory a <code class="docutils literal notranslate"><span class="pre">destination=</span></code> argument names, or None.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">update</span></code>(old, new[, priority, defaults, check])</p></td>
+<td><p>Update a nested dictionary with values from another</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">update_defaults</span></code>(new[, config, defaults])</p></td>
+<td><p>Add a new set of defaults to the configuration</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">write</span></code>([path])</p></td>
+<td><p>Write the current configuration to a yaml file.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="rubric">Classes</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">Location</span></code>(name, path, kind)</p></td>
+<td><p>One place datasets are looked for.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">set</span></code>([arg, config])</p></td>
+<td><p>Temporarily set configuration values within a context manager</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=cb8930eaaf36d9849b67"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=cb8930eaaf36d9849b67"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Carter Francis.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+</div>
+
+  </footer>
+  </body>
+</html>
