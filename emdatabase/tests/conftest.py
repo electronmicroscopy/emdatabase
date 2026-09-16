@@ -77,6 +77,11 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
     both do. ``/uc?export=download&id=<name>`` is the Google Drive shape: a link
     that names no file, redirecting to bytes that name themselves in a
     ``Content-Disposition`` header.
+
+    A plain path answers a ``Range`` header with ``206`` and that slice, which is
+    what reading one member out of a remote zip needs. ``/attached/`` keeps
+    ignoring ``Range`` and answering ``200``, standing in for a host that does
+    not do ranges at all.
     """
 
     def send_head(self):
@@ -101,7 +106,23 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Disposition", f'attachment; filename="{name}"')
             self.end_headers()
             return io.BytesIO(body)
+        if "Range" in self.headers:
+            return self._send_range()
         return super().send_head()
+
+    def _send_range(self):
+        """``206`` with the requested slice, for ``bytes=<first>-[<last>]``."""
+        body = Path(self.translate_path(self.path)).read_bytes()
+        first, _, last = self.headers["Range"].partition("=")[2].partition("-")
+        start = int(first)
+        end = int(last) if last else len(body) - 1
+        chunk = body[start : end + 1]
+        self.send_response(206)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(len(chunk)))
+        self.send_header("Content-Range", f"bytes {start}-{end}/{len(body)}")
+        self.end_headers()
+        return io.BytesIO(chunk)
 
     def log_message(self, format, *args):
         pass

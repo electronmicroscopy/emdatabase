@@ -94,6 +94,10 @@ class _Resolved:
     ``pinned`` is False only for a weights family's ``latest``, where the
     checksum describes what the link served when the index was written rather
     than what it has to serve now.
+
+    ``member`` is set when ``url`` is an archive the file has to be taken out
+    of, rather than the file itself; ``checksum`` and ``size_bytes`` describe
+    the member either way, because that is what the caller ends up with.
     """
 
     url: str
@@ -101,6 +105,7 @@ class _Resolved:
     size_bytes: int | None
     file: str
     pinned: bool
+    member: str | None = None
 
 
 class Progress(Protocol):
@@ -354,17 +359,21 @@ class DownloadableDataset:
         A dataset is a single pinned file and takes no version. A weights entry
         is a family: with no version it is the ``latest`` link, which is not
         pinned, and with one it is that dated snapshot, which is.
+
+        A dataset naming an ``archive`` resolves to that archive's link and the
+        member inside it, since the archive is the only thing there is a link to.
         """
         md = self.metadata
         if md.kind != "weights":
             if version is not None:
                 raise ValueError(f"{type(self).__name__} is a dataset and has no versions")
             return _Resolved(
-                url=md.url or f"{md.source}/{md.file}",
+                url=md.archive.url if md.archive else (md.url or f"{md.source}/{md.file}"),
                 checksum=md.checksum,
                 size_bytes=md.size_bytes,
                 file=md.file,
                 pinned=True,
+                member=md.archive.member if md.archive else None,
             )
         if version is None:
             if md.latest is None:
@@ -399,6 +408,9 @@ class DownloadableDataset:
         link. Where it is not - a Google Drive link, or anything else with a
         query string - the entry gives the whole link as ``url`` instead, and a
         weights entry gives one link per version.
+
+        For an entry whose file lives inside an archive this is the archive:
+        the member has no link of its own.
         """
         return self._resolve(None).url
 
@@ -595,11 +607,19 @@ class DownloadableDataset:
             if shared is not None:
                 return shared
         destination = self._resolve_destination(destination)
-        downloader = pooch.HTTPDownloader(
-            progressbar=progressbar,  # pyright: ignore[reportArgumentType]
-            chunk_size=chunk_size,
-            headers={"User-Agent": USER_AGENT},
-        )
+        downloader: Any
+        if resolved.member is None:
+            downloader = pooch.HTTPDownloader(
+                progressbar=progressbar,  # pyright: ignore[reportArgumentType]
+                chunk_size=chunk_size,
+                headers={"User-Agent": USER_AGENT},
+            )
+        else:
+            # Imported here, not at the top, because _archive imports this
+            # module for USER_AGENT and the progress protocol.
+            from emdatabase._archive import ArchiveMemberDownloader
+
+            downloader = ArchiveMemberDownloader(resolved.member, progressbar, chunk_size)
         try:
             if refresh:
                 # pooch keeps a file whose hash it was not given anything to

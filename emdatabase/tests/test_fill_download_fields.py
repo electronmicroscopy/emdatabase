@@ -24,6 +24,8 @@ SCRIPT = Path(__file__).resolve().parents[2] / ".github" / "scripts" / "fill_dow
 FILE = "MyData.zspy"
 CONTENT = b"a small 4D-STEM dataset, allegedly" * 100
 MD5 = f"md5:{hashlib.md5(CONTENT).hexdigest()}"
+# Deliberately unreachable: an archive entry must never be downloaded here.
+ARCHIVE = {"url": "https://example.invalid/Figures.zip", "member": "Fig/Panel/scan.raw"}
 
 
 @pytest.fixture(scope="module")
@@ -83,6 +85,29 @@ def test_a_blank_entry_is_filled_in_and_written(script, index, tmp_path):
     # Rewritten through build_document, so the filled-in fields land in order.
     assert list(entry) == [key for key in FIELD_ORDER if key in entry]
     assert MD5 in summary and str(path) in summary
+
+
+def test_an_archive_entry_with_blank_fields_is_refused(script, index, tmp_path):
+    """Following the link would hash the whole zip, not the member inside it."""
+    _, directory, write = index
+    path = write(archive=ARCHIVE)
+    before = path.read_text(encoding="utf-8")
+
+    code, summary = _run(script, directory, tmp_path)
+    assert code == 1
+    assert "by hand" in summary
+    assert path.read_text(encoding="utf-8") == before  # nothing guessed, nothing written
+
+
+def test_a_complete_archive_entry_is_not_downloaded(script, index, tmp_path):
+    """The archive URL does not resolve, so getting here at all means it was left alone."""
+    _, directory, write = index
+    path = write(checksum=MD5, size_bytes=len(CONTENT), archive=ARCHIVE)
+    before = path.read_text(encoding="utf-8")
+
+    code, _ = _run(script, directory, tmp_path)
+    assert code == 0
+    assert path.read_text(encoding="utf-8") == before
 
 
 def test_a_complete_index_is_not_rewritten(script, index, tmp_path):

@@ -88,7 +88,11 @@ _DOCS_BROWSER_JS = r"""
     link.href = pin.url;
     link.target = "_blank";
     link.rel = "noopener";
-    link.textContent = `⤓ Download ${pin.file}`;
+    // An archive entry's only link is the zip the file lives inside, so the
+    // label names the archive rather than a file the link does not serve.
+    link.textContent = item.archive
+      ? `⤓ Download ${pin.url.split("/").pop()} (archive holding ${item.archive})`
+      : `⤓ Download ${pin.file}`;
     const wrap = el("div", "emdb-dl-link");
     wrap.appendChild(link);
     detailsEl.appendChild(wrap);

@@ -16,6 +16,8 @@ import yaml
 
 from emdatabase.metadata import validate_file
 from emdatabase.new_dataset import (
+    FIELD_ORDER,
+    build_document,
     default_name,
     fill_download_fields,
     main,
@@ -467,6 +469,24 @@ def test_keep_leaves_the_temporary_download(server, tmp_path, monkeypatch):
     kept = list((tmp_path / "scratch").glob("emdatabase-*/MyData.zspy"))
     assert len(kept) == 1
     assert kept[0].read_bytes() == CONTENT
+
+
+def test_build_document_keeps_the_archive_block():
+    """A key missing from FIELD_ORDER is dropped, silently, from every entry the
+    CLI, the issue route and both CI scripts rewrite."""
+    entry = {
+        "description": "One headerless raw file inside a zip.",
+        "source": "https://zenodo.org/records/1/files",
+        "file": "scan.raw",
+        "archive": {
+            "url": "https://zenodo.org/records/1/files/Fig_01.zip",
+            "member": "Fig_01/Panel/scan.raw",
+        },
+    }
+    written = build_document("Archived", entry)["Archived"]
+
+    assert written["archive"] == entry["archive"]
+    assert list(written) == [key for key in FIELD_ORDER if key in written]
 
 
 def test_write_document_matches_the_hand_written_style(tmp_path):

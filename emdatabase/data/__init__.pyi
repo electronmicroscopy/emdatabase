@@ -329,6 +329,21 @@ class TutorialUNet(DownloadableDataset):
     """
     ...
 
+class TwistedBilayerWSe2Themis(DownloadableDataset):
+    """
+    TwistedBilayerWSe2Themis
+
+    Electron ptychography of a twisted bilayer WSe2, acquired at 80 kV on an uncorrected Thermo Fisher Themis with an EMPAD. From the record for "Achieving sub-0.5-Angstrom resolution ptychography in an uncorrected electron microscope", which reaches 0.44 Angstrom without an aberration corrector (Science 384, adl2029). The file is one member of the record's 1.9 GB Fig_01.zip and is fetched out of it directly, without downloading the archive. It is a headerless raw: a 128 x 128 scan of 128 x 130 little-endian float32 frames, each frame the 128 x 128 detector followed by two rows of EMPAD metadata. Read it with numpy.fromfile(path, dtype="<f4").reshape(128, 128, 130, 128)[..., :128, :]. The same archive holds a Talos acquisition of the same scan under Fig_01/Panel_c-d_Talos/, so the member path matters.
+
+    DOI: 10.5281/zenodo.10431683
+
+    You can download this dataset here:
+    https://zenodo.org/records/10431683/files
+
+
+    """
+    ...
+
 class ZrNbPrecipitate(DownloadableDataset):
     """
     ZrNbPrecipitate
@@ -344,4 +359,4 @@ class ZrNbPrecipitate(DownloadableDataset):
     """
     ...
 
-__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'PeakDetectionPolymers', 'SPEDAg', 'TutorialUNet', 'ZrNbPrecipitate']
+__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'PeakDetectionPolymers', 'SPEDAg', 'TutorialUNet', 'TwistedBilayerWSe2Themis', 'ZrNbPrecipitate']

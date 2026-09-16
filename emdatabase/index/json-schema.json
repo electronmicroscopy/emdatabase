@@ -30,6 +30,9 @@
           "type": "integer",
           "minimum": 0
         },
+        "archive": {
+          "$ref": "#/$defs/archiveMember"
+        },
         "detector_manufacturer": {
           "type": "string"
         },
@@ -194,6 +197,13 @@
                 "size_bytes"
               ]
             }
+          },
+          {
+            "not": {
+              "required": [
+                "archive"
+              ]
+            }
           }
         ]
       },
@@ -245,6 +255,32 @@
       "required": [
         "url",
         "checksum"
+      ],
+      "additionalProperties": false
+    },
+    "archiveMember": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "member": {
+          "type": "string",
+          "minLength": 1
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^md5:[A-Fa-f0-9]{32}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "url",
+        "member"
       ],
       "additionalProperties": false
     }
