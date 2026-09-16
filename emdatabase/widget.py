@@ -365,7 +365,7 @@ def browse(**kwargs):
 
     Requires anywidget (``pip install emdatabase[widget]``). The widget lists
     every dataset grouped by technique, shows which are downloaded, reveals full
-    metadata on hover, and downloads on click with a live progress toast.
+    metadata on hover, and downloads on click with a live progress bar.
     """
     _prepare_frontend()
     try:

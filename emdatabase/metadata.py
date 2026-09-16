@@ -15,7 +15,7 @@ called on disk.
 This module also owns the small amount of shared knowledge about where the
 dataset files live - :func:`dataset_files`, :func:`index_entries`,
 :func:`load_schema`, :func:`load_vendors`, :func:`techniques` - so the loader,
-the stub generator, the docs form and the tests all read the same directory and
+the stub generator, the docs pages and the tests all read the same directory and
 the same technique vocabulary the same way, and the one check a candidate file has to pass -
 :func:`validate_document`, :func:`validate_file` - so the test suite, the
 issue-form workflow and ``emdatabase.new_dataset`` accept and reject exactly the

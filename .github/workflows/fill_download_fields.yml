@@ -1,8 +1,8 @@
 name: fill download fields
 
-# The docs form and the issue form both let the checksum and the size be blank,
-# because a contributor cannot be asked to md5 a 100 GB file by hand, while the
-# test suite requires both on every entry. This job downloads whatever a pull
+# The issue form lets the checksum and the size be blank, because a contributor
+# cannot be asked to md5 a 100 GB file by hand, while the test suite requires
+# both on every entry. This job downloads whatever a pull
 # request left blank, fills it in and pushes the result back to the branch. A
 # fork's branch cannot be pushed to, so a pull request from one is failed with
 # the values it would have written instead.
