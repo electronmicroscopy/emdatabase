@@ -1,10 +1,7 @@
-### Example datasets ###
 from emdatabase import config, data
 from emdatabase.config import LocationName, add_location, locations, remove_location
 from emdatabase.downloadable_dataset import DownloadableDataset
 from emdatabase.query import filter, list_datasets, list_weights, search  # noqa: A004
-
-__all__ = []
 
 
 def browse(**kwargs):
@@ -13,7 +10,7 @@ def browse(**kwargs):
 
     Returns an `anywidget` widget listing every dataset grouped by technique,
     showing which are downloaded, revealing full metadata on hover, and
-    downloading on click with a live progress toast. Requires the optional
+    downloading on click with a live progress bar. Requires the optional
     `anywidget` dependency (`pip install emdatabase[widget]`).
 
     ``display(emdatabase)`` renders the same browser.
@@ -50,7 +47,7 @@ class _EmDatabaseModule(_ModuleType):
     def _repr_mimebundle_(self, include=None, exclude=None, **kwargs):
         try:
             widget = browse()
-        except Exception:
+        except ImportError:
             return {
                 "text/plain": (
                     "emdatabase — install the interactive browser with "
@@ -58,6 +55,10 @@ class _EmDatabaseModule(_ModuleType):
                     "emdatabase.browse()."
                 )
             }
+        except Exception as error:
+            # Anything else is a real problem - a misconfigured locations key,
+            # say - and its message is the only thing that explains the repr.
+            return {"text/plain": f"emdatabase — the browser could not be built: {error}"}
         return widget._repr_mimebundle_(**kwargs)
 
 

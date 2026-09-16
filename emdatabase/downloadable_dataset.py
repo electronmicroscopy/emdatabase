@@ -31,7 +31,6 @@ UPSTREAM_INDEX = (
 # repeating. A failed fetch caches as None, so an offline session pays the
 # timeout once.
 _UPSTREAM_CACHE: dict[str, dict[str, Any] | None] = {}
-_UPSTREAM_LOCK = threading.Lock()
 _WARNED_STALE: set[str] = set()
 
 
@@ -42,8 +41,7 @@ class StaleIndexWarning(UserWarning):
 
 def _clear_upstream_cache() -> None:
     """Forget the fetched index documents and which families have warned."""
-    with _UPSTREAM_LOCK:
-        _UPSTREAM_CACHE.clear()
+    _UPSTREAM_CACHE.clear()
     _WARNED_STALE.clear()
 
 
@@ -54,23 +52,17 @@ def _upstream_document(origin_filename: str) -> dict[str, Any] | None:
     YAML - is the same answer: nothing to compare against. An update check is
     not worth an exception in the middle of a download.
     """
-    with _UPSTREAM_LOCK:
-        if origin_filename in _UPSTREAM_CACHE:
-            return _UPSTREAM_CACHE[origin_filename]
-    document: dict[str, Any] | None = None
-    try:
-        request = urllib.request.Request(
-            UPSTREAM_INDEX + origin_filename, headers={"User-Agent": USER_AGENT}
-        )
-        with urllib.request.urlopen(request, timeout=3) as response:
-            parsed = yaml.safe_load(response.read())
-        if isinstance(parsed, dict):
-            document = parsed
-    except Exception:
-        document = None
-    with _UPSTREAM_LOCK:
-        _UPSTREAM_CACHE[origin_filename] = document
-    return document
+    if origin_filename not in _UPSTREAM_CACHE:
+        try:
+            request = urllib.request.Request(
+                UPSTREAM_INDEX + origin_filename, headers={"User-Agent": USER_AGENT}
+            )
+            with urllib.request.urlopen(request, timeout=3) as response:
+                parsed = yaml.safe_load(response.read())
+        except Exception:
+            parsed = None
+        _UPSTREAM_CACHE[origin_filename] = parsed if isinstance(parsed, dict) else None
+    return _UPSTREAM_CACHE[origin_filename]
 
 
 def upstream_metadata(name: str, origin_filename: str) -> DatasetMetadata | None:
@@ -82,13 +74,11 @@ def upstream_metadata(name: str, origin_filename: str) -> DatasetMetadata | None
     document = _upstream_document(origin_filename)
     if document is None:
         return None
-    spec = document.get(name)
-    if spec is None:
-        # The class name is the YAML key with its spaces and hyphens replaced.
-        spec = next(
-            (v for k, v in document.items() if str(k).replace(" ", "_").replace("-", "_") == name),
-            None,
-        )
+    # The class name is the YAML key with its spaces and hyphens replaced.
+    spec = next(
+        (v for k, v in document.items() if str(k).replace(" ", "_").replace("-", "_") == name),
+        None,
+    )
     if not isinstance(spec, Mapping):
         return None
     try:
@@ -161,7 +151,7 @@ def _shutdown_executor() -> None:
 
     A transfer already streaming still runs to completion - there is no way to
     interrupt pooch mid-read from here - so this shortens the wait rather than
-    removing it. The widget's toast has a cancel button for that case.
+    removing it. The browser and a dataset's card have a cancel button for that case.
     """
     global _executor
     executor, _executor = _executor, None
@@ -267,6 +257,10 @@ class _TqdmProgress:
     up front would flash an empty one on every cached call; pooch assigns
     ``total`` exactly once, before streaming, which is the moment there is
     something worth showing.
+
+    A background download calls :meth:`open` up front instead, on the calling
+    thread. A pool thread does not carry the running cell, so a notebook bar
+    built there is shown in whichever cell ran last, or not at all.
     """
 
     def __init__(self, desc: str = "") -> None:
@@ -280,31 +274,35 @@ class _TqdmProgress:
 
     @total.setter
     def total(self, value: int) -> None:
-        from tqdm.auto import tqdm
-
         self._total = int(value or 0)
         if self._bar is None:
-            self._bar = tqdm(
-                total=self._total,
-                desc=self._desc,
-                unit="B",
-                unit_scale=True,
-                # Windows terminals do not always have the box-drawing glyphs.
-                ascii=sys.platform == "win32",
-                leave=True,
-            )
+            self.open()
         else:
-            self._bar.reset(total=self._total)
+            self._bar.reset(total=self._total or None)
+
+    def open(self) -> "_TqdmProgress":
+        """Show the bar now, before pooch has said how big the file is."""
+        from tqdm.auto import tqdm
+
+        self._bar = tqdm(
+            total=self._total or None,
+            desc=self._desc,
+            unit="B",
+            unit_scale=True,
+            # Windows terminals do not always have the box-drawing glyphs.
+            ascii=sys.platform == "win32",
+            leave=True,
+        )
+        return self
 
     def update(self, n: int) -> None:
-        if self._bar is not None:
-            self._bar.update(n)
+        self._bar.update(n)
 
     def reset(self) -> None:
-        if self._bar is not None:
-            self._bar.reset(total=self._total)
+        self._bar.reset(total=self._total)
 
     def close(self) -> None:
+        # Called for a cached file too, where pooch never set a total.
         if self._bar is not None:
             self._bar.close()
             self._bar = None
@@ -319,8 +317,8 @@ class DownloadableDataset:
     Everything the YAML declares is on :attr:`metadata`
     (``ds.metadata.technique``). The fields the download machinery itself
     needs are also reachable directly, as :attr:`source`, :attr:`file`,
-    :attr:`url`, :attr:`checksum` and :attr:`size_bytes`; the link that is
-    actually fetched is :attr:`download_url`.
+    :attr:`checksum` and :attr:`size_bytes`; the link that is actually fetched
+    is :attr:`download_url`.
 
     A ``kind: weights`` entry is a family rather than a single file:
     :attr:`versions` lists the dated snapshots it can be pinned to, and the
@@ -349,10 +347,6 @@ class DownloadableDataset:
     @property
     def file(self) -> str:
         return self.metadata.file
-
-    @property
-    def url(self) -> str | None:
-        return self.metadata.url
 
     def _resolve(self, version: str | None = None) -> _Resolved:
         """The link, checksum and local name for one version of this entry.
@@ -424,11 +418,6 @@ class DownloadableDataset:
         """
         return tuple(sorted(self.metadata.versions, reverse=True))
 
-    @property
-    def latest_checksum(self) -> str | None:
-        """What the ``latest`` link served when the index was written."""
-        return self._resolve(None).checksum
-
     def filename(self, version: str | None = None) -> str:
         """The name the file is saved under locally.
 
@@ -446,9 +435,7 @@ class DownloadableDataset:
     def __repr__(self):
         # __class__ rather than its __name__ nested one set of angle brackets
         # inside another, which a list of results made unreadable.
-        techniques = ", ".join(self.metadata.technique)
-        headline = " · ".join(p for p in (self.file, techniques, self.size) if p)
-        return f"<{type(self).__name__} {headline}>"
+        return f"<{type(self).__name__} {self.metadata.headline}>"
 
     def _repr_mimebundle_(self, **kwargs):
         """Rich display in Jupyter: an interactive card with download/metadata.
@@ -564,32 +551,21 @@ class DownloadableDataset:
             return DatasetPath(
                 self._retrieve(destination, progressbar, chunk_size, version, refresh)
             )
-        # Resolve where the file will end up: an existing copy in a shared
-        # location or in the personal one, otherwise the personal one.
-        name = self.filename(version)
-        if destination is not None:
-            target = self._resolve_destination(destination) / name
-        elif refresh:
-            target = self._resolve_destination(None) / name
-        else:
-            target = self.filepath(version) or self._resolve_destination(None) / name
-        # In Jupyter (with the widget installed) a background download pops a
-        # cancelable toast; the toast's monitor replaces the plain progress bar.
-        monitor = finish = None
-        if progressbar:
-            try:
-                from emdatabase.widget import _attach_toast
+        # Where the file will end up: the copy the search order finds, unless a
+        # destination or a refresh asks for a fresh one.
+        existing = None if destination is not None or refresh else self.filepath(version)
+        target = existing or self._resolve_destination(destination) / self.filename(version)
+        # A file that is really coming gets its bar now, from this thread (see
+        # _TqdmProgress); a caller's own Progress is theirs to drive.
+        if progressbar is True and (refresh or not target.exists()):
+            from emdatabase.widget import _in_notebook, _prepare_frontend
 
-                label = type(self).__name__ + (f"@{version}" if version else "")
-                monitor, finish = _attach_toast(label)
-            except Exception:
-                monitor = finish = None
-        progress = monitor if monitor is not None else progressbar
+            if _in_notebook():
+                _prepare_frontend()  # quiets pooch's log lines, which repeat the bar in red
+            progressbar = _TqdmProgress(target.name).open()
         future = _get_executor().submit(
-            self._retrieve, destination, progress, chunk_size, version, refresh
+            self._retrieve, destination, progressbar, chunk_size, version, refresh
         )
-        if finish is not None:
-            future.add_done_callback(finish)
         return DatasetPath(target)._attach(future)
 
     def _retrieve(
@@ -611,53 +587,35 @@ class DownloadableDataset:
         resolved = self._resolve(version)
         newer = self._check_upstream(version, refresh)
         if progressbar is True:
-            try:
-                import tqdm  # noqa: F401
-            except ImportError:
-                print("`tqdm` is not installed, progress bar will be disabled.")
-                progressbar = False
-            else:
-                # Our own bar rather than pooch's; see _TqdmProgress.
-                progressbar = _TqdmProgress(resolved.file)
-        if destination is None:
-            # A refresh is about replacing your own copy, so it never reads and
-            # never writes a shared location.
-            shared = None if refresh else self._find_in_shared_locations(version)
+            progressbar = _TqdmProgress(resolved.file)  # our own bar rather than pooch's
+        # A refresh is about replacing your own copy, so it never reads and
+        # never writes a shared location.
+        if destination is None and not refresh:
+            shared = self._find_in_shared_locations(version)
             if shared is not None:
                 return shared
-            destination = self._resolve_destination(None)
-        else:
-            destination = self._resolve_destination(destination)
-        # Instantiate an Http downloader with a custom user agent
-        headers = {"User-Agent": USER_AGENT}
+        destination = self._resolve_destination(destination)
         downloader = pooch.HTTPDownloader(
             progressbar=progressbar,  # pyright: ignore[reportArgumentType]
             chunk_size=chunk_size,
-            headers=headers,
+            headers={"User-Agent": USER_AGENT},
         )
         try:
             if refresh:
                 # pooch keeps a file whose hash it was not given anything to
                 # check against, so the copy has to go before it will re-fetch.
-                (Path(destination) / resolved.file).unlink(missing_ok=True)
-            if newer is not None:
-                filepath = pooch.retrieve(
-                    url=newer.url,
-                    known_hash=newer.checksum,
-                    fname=resolved.file,
-                    path=destination,
-                    downloader=downloader,  # pyright: ignore[reportArgumentType]
-                )
-            elif resolved.pinned:
-                filepath = pooch.retrieve(
-                    url=resolved.url,
-                    known_hash=resolved.checksum,
-                    fname=resolved.file,
-                    path=destination,
-                    downloader=downloader,  # pyright: ignore[reportArgumentType]
-                )
+                (destination / resolved.file).unlink(missing_ok=True)
+            if newer is None and not resolved.pinned:
+                filepath = self._retrieve_latest(resolved, destination, downloader)
             else:
-                filepath = self._retrieve_latest(resolved, Path(destination), downloader)
+                pin = newer or resolved  # the newer link on main, if there is one
+                filepath = pooch.retrieve(
+                    url=pin.url,
+                    known_hash=pin.checksum,
+                    fname=resolved.file,
+                    path=destination,
+                    downloader=downloader,  # pyright: ignore[reportArgumentType]
+                )
         finally:
             # pooch only closes the bar on the happy path, so a failed or
             # cancelled download would leave it hanging open.
@@ -684,7 +642,7 @@ class DownloadableDataset:
             return None
         upstream = upstream_metadata(type(self).__name__, self._origin.name)
         latest = upstream.latest if upstream is not None else None
-        if upstream is None or latest is None or latest.checksum == self._resolve(None).checksum:
+        if upstream is None or latest is None or latest.checksum == self.checksum:
             return None
         if refresh:
             return latest
@@ -744,13 +702,8 @@ class DownloadableDataset:
         from emdatabase import config
 
         name = self.filename(version)
-        for location in config.locations():
-            if location.kind == "personal":
-                continue
-            candidate = location.path / name
-            if candidate.exists():
-                return candidate
-        return None
+        shared = (loc.path / name for loc in config.locations() if loc.kind != "personal")
+        return next((path for path in shared if path.exists()), None)
 
     def filepaths(self, version: str | None = None) -> list[Path]:
         """Every copy of the dataset on disk, in search order.

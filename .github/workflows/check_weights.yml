@@ -29,7 +29,7 @@ jobs:
 
       - name: Follow each latest link
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python .github/scripts/check_latest_weights.py \
             --summary changes.md --keep-dir oversize

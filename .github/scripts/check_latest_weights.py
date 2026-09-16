@@ -36,7 +36,6 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -51,7 +50,6 @@ import yaml
 
 from emdatabase.metadata import (
     INDEX_DIR,
-    NON_DATASET_FILES,
     DatasetMetadata,
     WeightsVersion,
     dataset_files,
@@ -75,11 +73,6 @@ ZENODO_FILE_PATH = re.compile(r"^/(?:api/)?records/(\d+)/files/([^?]+)")
 def asset_url(tag: str, asset: str) -> str:
     """Where an asset uploaded to the archive release is served from."""
     return f"{RELEASE_DOWNLOADS}/{tag}/{asset}"
-
-
-def is_archived(url: str, tag: str) -> bool:
-    """Whether a version's link already points into the archive release."""
-    return url.startswith(f"{RELEASE_DOWNLOADS}/{tag}/")
 
 
 @dataclass(frozen=True)
@@ -118,23 +111,9 @@ def fetch_json(url: str) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
-def index_files(index_dir: Path | None) -> list[Path]:
-    """Every dataset YAML to check, sorted by name."""
-    if index_dir is None:
-        return dataset_files()
-    return sorted(p for p in index_dir.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
-
-
 def run_gh(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
-    """Run one ``gh`` command; the only place this script shells out.
-
-    ``gh`` reads ``GH_TOKEN``, while a workflow hands the job ``GITHUB_TOKEN``.
-    """
-    env = os.environ.copy()
-    token = env.get("GH_TOKEN") or env.get("GITHUB_TOKEN")
-    if token:
-        env["GH_TOKEN"] = token
-    return subprocess.run(["gh", *args], check=check, capture_output=True, text=True, env=env)
+    """Run one ``gh`` command; the only place this script shells out."""
+    return subprocess.run(["gh", *args], check=check, capture_output=True, text=True)
 
 
 def upload_asset(tag: str, path: Path, asset: str) -> None:
@@ -212,9 +191,7 @@ def check_family(
     """Download one family's ``latest`` and update ``entry`` in place."""
     report = Report(lines=[f"### {name}"])
     latest = metadata.latest
-    if latest is None:
-        report.lines.append("- no `latest` link, so there is nothing to follow")
-        return report
+    assert latest is not None  # the schema requires one of every weights entry
 
     link = zenodo_link(latest.url)
     if link is not None:
@@ -250,19 +227,6 @@ def check_family(
     return report
 
 
-def _newest_record(link: ZenodoLink, record: dict[str, Any]) -> dict[str, Any]:
-    """The newest record of this concept.
-
-    ``links.latest`` is what Zenodo publishes for it; the concept record id is
-    the fallback, which the API resolves to the same place.
-    """
-    follow = (record.get("links") or {}).get("latest")
-    if not follow:
-        concept = record.get("conceptrecid")
-        follow = f"{link.api}/{concept}" if concept else None
-    return fetch_json(str(follow)) if follow else record
-
-
 def _record_file(record: dict[str, Any], key: str) -> dict[str, Any] | None:
     """The file entry named ``key``, or the only one when the name has changed."""
     files = [item for item in record.get("files") or [] if isinstance(item, dict)]
@@ -272,13 +236,18 @@ def _record_file(record: dict[str, Any], key: str) -> dict[str, Any] | None:
     return files[0] if len(files) == 1 else None
 
 
-def _record_date(record: dict[str, Any]) -> str:
-    """The record's publication date as ``YYMMDD``, or today's if it has none."""
-    published = str((record.get("metadata") or {}).get("publication_date", ""))
-    try:
-        return datetime.date.fromisoformat(published[:10]).strftime("%y%m%d")
-    except ValueError:
-        return version_date()
+def _date_taken(report: Report, metadata: DatasetMetadata, date: str, checksum: str) -> bool:
+    """Whether version ``date`` already holds a different file; a failure if it does."""
+    existing = metadata.versions.get(date)
+    if existing is None or existing.checksum == checksum:
+        return False
+    report.ok = False
+    report.lines.append(
+        f"- **version `{date}` already exists with `{existing.checksum}`**, and the newest file "
+        f"is `{checksum}`. Two states of this file share one date; refile the earlier one by "
+        "hand under the date it was published."
+    )
+    return True
 
 
 def _check_zenodo(
@@ -295,13 +264,15 @@ def _check_zenodo(
     version written for it points straight at that record.
     """
     try:
-        newest = _newest_record(link, fetch_json(f"{link.api}/{link.record_id}"))
-    except (OSError, ValueError) as error:
+        record = fetch_json(f"{link.api}/{link.record_id}")
+        newest = fetch_json(record["links"]["latest"])
+        new_id = str(newest["id"])
+        published = datetime.date.fromisoformat(newest["metadata"]["publication_date"][:10])
+    except (OSError, KeyError, ValueError) as error:
         report.ok = False
         report.lines.append(f"- **could not read the Zenodo API** for {latest.url}: {error}")
         return
 
-    new_id = str(newest.get("id", ""))
     served = _record_file(newest, link.key)
     if served is None:
         report.ok = False
@@ -326,15 +297,8 @@ def _check_zenodo(
         report.lines.append(f"- unchanged; Zenodo record {new_id} is still the latest version")
         return
 
-    date = _record_date(newest)
-    existing = metadata.versions.get(date)
-    if existing is not None and existing.checksum != checksum:
-        report.ok = False
-        report.lines.append(
-            f"- **version `{date}` already exists with `{existing.checksum}`**, and Zenodo record "
-            f"{new_id} serves `{checksum}`. Two states of this file share one date; file the "
-            "earlier one under the date it was published."
-        )
+    date = published.strftime("%y%m%d")
+    if _date_taken(report, metadata, date, checksum):
         return
     url = link.file_url(new_id, str(served.get("key") or link.key))
     report.lines.append(
@@ -342,12 +306,9 @@ def _check_zenodo(
         f"{link.record_id}, and the new record serves `{checksum}` "
         f"({format_size(size_bytes)}), filed as version `{date}`"
     )
-    entry["latest"] = {"url": url, "checksum": checksum, "size_bytes": size_bytes}
-    entry.setdefault("versions", {})[date] = {
-        "url": url,
-        "checksum": checksum,
-        "size_bytes": size_bytes,
-    }
+    pin = {"url": url, "checksum": checksum, "size_bytes": size_bytes}
+    entry["latest"] = pin
+    entry["versions"][date] = dict(pin)  # a copy, or the YAML would use an anchor
     report.changed = True
 
 
@@ -368,7 +329,7 @@ def _backfill(
         date
         for date, version in sorted(metadata.versions.items())
         if version.checksum == served.checksum
-        and not is_archived(version.url, options.archive_tag)
+        and not version.url.startswith(asset_url(options.archive_tag, ""))
         and zenodo_link(version.url) is None
     ]
     if not unarchived:
@@ -393,14 +354,7 @@ def _new_version(
 ) -> None:
     """Record what the link serves now as a version dated today."""
     date = version_date()
-    existing = metadata.versions.get(date)
-    if existing is not None and existing.checksum != served.checksum:
-        report.ok = False
-        report.lines.append(
-            f"- **version `{date}` already exists with `{existing.checksum}`**, and the link now "
-            f"serves `{served.checksum}`. Two states of this file share one date; archive the "
-            "earlier one by hand and file it under the date it was published."
-        )
+    if _date_taken(report, metadata, date, served.checksum):
         return
     report.lines.append(
         f"- the file changed: the index has `{latest.checksum}` and the link now serves "
@@ -410,7 +364,7 @@ def _new_version(
     _archive(report, options, served, asset)
     entry["latest"]["checksum"] = served.checksum
     entry["latest"]["size_bytes"] = served.size_bytes
-    entry.setdefault("versions", {})[date] = {
+    entry["versions"][date] = {
         "url": asset_url(options.archive_tag, asset),
         "checksum": served.checksum,
         "size_bytes": served.size_bytes,
@@ -464,6 +418,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--index",
         type=Path,
+        default=INDEX_DIR,
         help=f"directory of dataset YAML to check (default {INDEX_DIR})",
     )
     parser.add_argument("--summary", type=Path, help="write a markdown report of the run here")
@@ -490,12 +445,10 @@ def main(argv: list[str] | None = None) -> int:
 
     lines: list[str] = []
     ok = True
-    for path in index_files(args.index):
+    for path in dataset_files(args.index):
         report = check_file(path, options)
         ok &= report.ok
         lines += report.lines
-    if not lines:
-        lines = ["No weights families in the index."]
 
     summary = "\n".join(lines)
     print(summary)

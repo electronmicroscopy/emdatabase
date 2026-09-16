@@ -55,7 +55,7 @@ import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any
 
 import pooch
 import yaml
@@ -67,8 +67,7 @@ ENV_PREFIX = "EMDATABASE_"
 PATH = Path(os.getenv("EMDATABASE_CONFIG", "~/.config/emdatabase")).expanduser()
 
 config: dict = {}
-defaults: list[Mapping] = []
-deprecations: dict[str, str | None] = {}
+defaults: dict = yaml.safe_load(Path(__file__).with_name("emdatabase.yaml").read_text())
 
 
 def _config_dir() -> Path:
@@ -81,39 +80,21 @@ def _config_dir() -> Path:
 
 
 class set:
-    """Temporarily set configuration values within a context manager
+    """Set configuration values, for the process or, as a context manager, for a block
 
     Parameters
     ----------
-    arg : mapping or None, optional
-        A mapping of configuration key-value pairs to set.
-    **kwargs :
-        Additional key-value pairs to set. If ``arg`` is provided, values set
-        in ``arg`` will be applied before those in ``kwargs``.
-        Double-underscores (``__``) in keyword arguments will be replaced with
-        ``.``, allowing nested values to be easily set.
+    arg : mapping
+        Configuration key-value pairs to set. A dotted key such as
+        ``"locations.personal"`` sets a nested value.
     """
 
-    def __init__(
-        self,
-        arg: Union[Mapping, None] = None,
-        config: dict = config,
-        **kwargs,
-    ):
+    def __init__(self, arg: Mapping, config: dict = config):
         self.config: dict = config
         self._record: list[tuple[str, tuple[str, ...], Any]] = []
-
-        if arg is not None:
-            if not isinstance(arg, Mapping):
-                raise TypeError(f"arg must be a dictionary, got {type(arg).__name__}")
-            for key, value in arg.items():
-                key, value = check_key_val(key, value)
-                self._assign(key.split("."), value, config)
-        if kwargs:
-            for key, value in kwargs.items():
-                key = key.replace("__", ".")
-                key, value = check_key_val(key, value)
-                self._assign(key.split("."), value, config)
+        for key, value in arg.items():
+            _warn_if_unknown(key)
+            self._assign(key.split("."), value, config)
 
     def __enter__(self):
         return self.config
@@ -151,8 +132,7 @@ class set:
         record : bool, optional
             Whether this operation needs to be recorded to allow for rollback.
         """
-        key = canonical_name(keys[0], d)
-
+        key = keys[0]
         path = path + (key,)
 
         if len(keys) == 1:
@@ -163,222 +143,52 @@ class set:
                     self._record.append(("insert", path, None))
             d[key] = value
         else:
-            if key not in d:
+            if key not in d or not isinstance(d[key], dict):
                 if record:
-                    self._record.append(("insert", path, None))
+                    if key in d:
+                        self._record.append(("replace", path, d[key]))
+                    else:
+                        self._record.append(("insert", path, None))
                 d[key] = {}
                 record = False
             self._assign(keys[1:], value, d[key], path, record=record)
 
 
-def refresh(config: dict = config, defaults: list[Mapping] = defaults, **kwargs) -> None:
-    """
-    Update configuration by re-reading yaml files and env variables
-
-    This mutates the global emdatabase.config.config, or the config parameter if
-    passed in.
-
-    This goes through the following stages:
-
-    1.  Clearing out all old configuration
-    2.  Updating from the stored defaults (see update_defaults)
-    3.  Updating from yaml files and environment variables
-
-    See Also
-    --------
-    emdatabase.config.collect: for parameters
-    emdatabase.config.update_defaults
-    """
+def refresh() -> None:
+    """Re-read the configuration: the shipped defaults, then the config files,
+    then the environment. Anything changed with :class:`set` is dropped."""
     config.clear()
+    update(config, defaults)
+    for document in collect_yaml(_config_dir()):
+        for key in document:
+            _warn_if_unknown(key)
+        update(config, document)
+    update(config, collect_env())  # collect_env builds through set, which warns
 
-    for d in defaults:
-        update(config, d, priority="new")
 
-    update(config, collect(**kwargs))
-
-
-def get(
-    key: str,
-    default: Any = no_default,
-    config: dict = config,
-    override_with: Any = None,
-) -> Any:
-    """
-    Get elements from global config
-
-    If ``override_with`` is not None this value will be passed straight back.
-
-    Use '.' for nested access
-    """
-    if override_with is not None:
-        return override_with
-    keys = key.split(".")
+def get(key: str, default: Any = no_default) -> Any:
+    """Get a configuration value. Use '.' for nested access."""
     result = config
-    for k in keys:
-        k = canonical_name(k, result)
+    for k in key.split("."):
         try:
             result = result[k]
         except (TypeError, IndexError, KeyError):
             if default is not no_default:
                 return default
-            else:
-                raise
+            raise
     return result
 
 
-def update_defaults(new: dict, config: dict = config, defaults: list[Mapping] = defaults) -> None:
-    """Add a new set of defaults to the configuration
-
-    It does two things:
-
-    1.  Add the defaults to a global collection to be used by refresh later
-    2.  Updates the global config with the new configuration
-        prioritizing older values over newer ones
-    """
-    current_defaults = merge(*defaults)
-    # Registered before the keys are checked: they are what "known key" means.
-    defaults.append(new)
-
-    for key, value in list(new.items()):
-        key, nval = check_key_val(key, value)
-        new[key] = nval
-
-    update(config, new, priority="new-defaults", defaults=current_defaults)
-
-
-def _initialize() -> None:
-    fn = os.path.join(os.path.dirname(__file__), "emdatabase.yaml")
-
-    with open(fn) as f:
-        shipped = yaml.safe_load(f)
-
-    update_defaults(shipped)
-
-
-def canonical_name(k: str, config: dict) -> str:
-    """Return the canonical name for a key.
-
-    Handles user choice of '-' or '_' conventions by standardizing on whichever
-    version was set first. If a key already exists in either hyphen or
-    underscore form, the existing version is the canonical name. If neither
-    version exists the original key is used as is.
-    """
-    try:
-        if k in config:
-            return k
-    except TypeError:
-        # config is not a mapping, return the same name as provided
-        return k
-
-    altk = k.replace("_", "-") if "_" in k else k.replace("-", "_")
-
-    if altk in config:
-        return altk
-
-    return k
-
-
-def update(
-    old: dict,
-    new: Mapping,
-    priority: Literal["old", "new", "new-defaults"] = "new",
-    defaults: Mapping | None = None,
-    check: bool = True,
-) -> dict:
-    """Update a nested dictionary with values from another
-
-    This is like dict.update except that it smoothly merges nested values
-
-    This operates in-place and modifies old
-
-    Parameters
-    ----------
-    priority: string {'old', 'new', 'new-defaults'}
-        If new (default) then the new dictionary has preference.
-        Otherwise the old dictionary does.
-        If 'new-defaults', a mapping should be given of the current defaults.
-        Only if a value in ``old`` matches the current default, it will be
-        updated with ``new``.
-    check: bool
-        Whether to run the keys through :func:`check_key_val`. False on the
-        recursive call, because the unknown-key warning is about top-level keys
-        and a location's name is not one.
-
-    Examples
-    --------
-    >>> a = {'x': 1, 'y': {'a': 2}}
-    >>> b = {'x': 2, 'y': {'b': 3}}
-    >>> update(a, b)  # doctest: +SKIP
-    {'x': 2, 'y': {'a': 2, 'b': 3}}
-
-    >>> a = {'x': 1, 'y': {'a': 2}}
-    >>> b = {'x': 2, 'y': {'b': 3}}
-    >>> update(a, b, priority='old')  # doctest: +SKIP
-    {'x': 1, 'y': {'a': 2, 'b': 3}}
-
-    >>> d = {'x': 0, 'y': {'a': 2}}
-    >>> a = {'x': 1, 'y': {'a': 2}}
-    >>> b = {'x': 2, 'y': {'a': 3, 'b': 3}}
-    >>> update(a, b, priority='new-defaults', defaults=d)  # doctest: +SKIP
-    {'x': 1, 'y': {'a': 3, 'b': 3}}
-
-    """
+def update(old: dict, new: Mapping) -> None:
+    """Merge ``new`` into ``old`` in place; ``new`` wins, and a nested mapping is
+    merged key by key rather than replacing the one in ``old``."""
     for k, v in new.items():
-        if check:
-            k, v = check_key_val(k, v)
-        k = canonical_name(k, old)
-
         if isinstance(v, Mapping):
-            if k not in old or old[k] is None or not isinstance(old[k], dict):
+            if not isinstance(old.get(k), dict):
                 old[k] = {}
-            update(
-                old[k],
-                v,
-                priority=priority,
-                defaults=defaults.get(k) if defaults else None,
-                check=False,
-            )
+            update(old[k], v)
         else:
-            if (
-                priority == "new"
-                or k not in old
-                or (
-                    priority == "new-defaults"
-                    and defaults
-                    and k in defaults
-                    and defaults[k] == old[k]
-                )
-            ):
-                old[k] = v
-
-    return old
-
-
-def collect(path: Path | str | None = None, env: Mapping[str, str] | None = None) -> dict:
-    """
-    Collect configuration from the config directory and the environment
-
-    Parameters
-    ----------
-    path : Path or str, optional
-        Directory (or single file) to read yaml config from. Defaults to the
-        config directory, ``EMDATABASE_CONFIG`` or ``~/.config/emdatabase``.
-
-    env : Mapping[str, str]
-        The system environment variables
-
-    Returns
-    -------
-    config: dict
-
-    """
-    if path is None:
-        path = _config_dir()
-    if env is None:
-        env = os.environ
-
-    configs = [*collect_yaml(path=Path(path)), collect_env(env=env)]
-    return merge(*configs)
+            old[k] = v
 
 
 def collect_yaml(path: Path) -> Iterator[dict]:
@@ -387,29 +197,18 @@ def collect_yaml(path: Path) -> Iterator[dict]:
     Every ``*.yaml`` and ``*.yml`` in ``path`` is parsed, in name order; a path
     to a single file is read as itself.
     """
-    file_paths = []
-    if path.exists():
-        if path.is_dir():
-            try:
-                file_paths.extend(path.glob("*.yaml"))
-                file_paths.extend(path.glob("*.yml"))
-                file_paths = sorted(file_paths)
-            except OSError:
-                # Ignore permission errors
-                pass
-        else:
-            file_paths.append(path)
+    if not path.exists():
+        return
+    file_paths = sorted([*path.glob("*.yaml"), *path.glob("*.yml")]) if path.is_dir() else [path]
     for p in file_paths:
-        loaded = _load_config_file(p)
-        if loaded is not None:
-            yield loaded
+        yield _load_config_file(p)
 
 
 def collect_env(env: Mapping[str, str] | None = None) -> dict:
     """Collect config from environment variables
 
     This grabs environment variables of the form "EMDATABASE_FOO__BAR_BAZ=123"
-    and turns these into config variables of the form ``{"foo": {"bar-baz":
+    and turns these into config variables of the form ``{"foo": {"bar_baz":
     123}}``. It transforms the key and value in the following way:
 
     -  Strips the ``EMDATABASE_`` prefix and lower-cases the rest
@@ -445,82 +244,37 @@ def interpret_value(value: str) -> Any:
     return hardcoded_map.get(value.lower(), value)
 
 
-def merge(*dicts: Mapping) -> dict:
-    """Update a sequence of nested dictionaries
+def _load_config_file(path: Path) -> dict:
+    """Parse a config file, which has to hold a mapping or nothing.
 
-    This prefers the values in the latter dictionaries to those in the former
-
-    Examples
-    --------
-    >>> a = {'x': 1, 'y': {'a': 2}}
-    >>> b = {'y': {'b': 3}}
-    >>> merge(a, b)  # doctest: +SKIP
-    {'x': 1, 'y': {'a': 2, 'b': 3}}
+    A yaml syntax error already names the file and line, given the open file.
     """
-    result: dict = {}
-    for d in dicts:
-        update(result, d, check=False)
-    return result
-
-
-def _load_config_file(path: Path) -> dict | None:
-    """A helper for loading a config file from a path, and erroring
-    appropriately if the file is malformed."""
-    try:
-        with open(path) as f:
-            loaded = yaml.safe_load(f.read())
-    except OSError:
-        # Ignore permission errors
-        return None
-    except Exception as exc:
-        raise ValueError(
-            f"An emdatabase config file at {str(path)!r} is malformed, original error "
-            f"message:\n\n{exc}"
-        ) from None
+    with open(path) as f:
+        loaded = yaml.safe_load(f)
     if loaded is not None and not isinstance(loaded, dict):
         raise ValueError(
             f"An emdatabase config file at {str(path)!r} is malformed - config files must "
             f"have a dict as the top level object, got a {type(loaded).__name__} instead"
         )
-    return loaded
+    return loaded or {}
 
 
-def check_key_val(key: str, val: Any, deprecations: dict = deprecations) -> tuple[str, Any]:
-    """Check whether a key has been renamed, removed, or is not one we ship
+def _warn_if_unknown(key: str) -> None:
+    """Warn about a key whose top level is none of the shipped ones.
 
-    A key that is none of the shipped defaults warns and is still set: config is
-    not a schema, and refusing an unknown key would break anything that stores
-    its own.
-
-    Parameters
-    ----------
-    key : str
-        The configuration key to check. May be dotted, in which case only the
-        part before the first '.' is checked.
-    deprecations : Dict[str, str]
-        The mapping of aliases
-
-    Returns
-    -------
-    new: str
-        The proper key, whether the original (if no deprecation) or the aliased
-        value
+    It is still set: config is not a schema, and refusing an unknown key would
+    break anything that stores its own.
     """
-    if key in deprecations:
-        new = deprecations[key]
-        if new:
-            warnings.warn(f'Configuration key "{key}" has been deprecated. Please use "{new}" ')
-        else:
-            raise ValueError(f'Configuration value "{key}" has been removed')
-
-    top = key.split(".")[0]
-    # The top-level keys of the registered defaults, not merge(*defaults):
-    # merge() goes through update(), which calls back into here.
-    known = {k for d in defaults for k in d}
-    if top not in known and top not in deprecations:
+    if key.split(".")[0] not in defaults:
         warnings.warn(f'Unknown configuration key "{key}"')
 
-    return key, val
+
+def _dump(document: Mapping, path: Path | str | None = None) -> None:
+    """Write ``document`` to a yaml file, creating the config directory."""
+    path = Path(path) if path is not None else _config_dir() / "config.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        yaml.dump(dict(document), f)
 
 
 def write(path: Path | str | None = None) -> None:
@@ -532,11 +286,26 @@ def write(path: Path | str | None = None) -> None:
         Path to write the yaml file to. Defaults to ``config.yaml`` in the
         config directory.
     """
-    path = Path(path) if path is not None else _config_dir() / "config.yaml"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    _dump(config, path)
 
-    with open(path, "w") as f:
-        yaml.dump(config, f)
+
+def _persist_locations(updates: Mapping[str, str | None], remove: str | None = None) -> None:
+    """Merge these ``locations`` entries into the config file, and only these.
+
+    Writing the whole live mapping would bake whatever the environment or an
+    open :class:`set` block is supplying into the file alongside the change the
+    caller asked for.
+    """
+    path = _config_dir() / "config.yaml"
+    document = _load_config_file(path) if path.exists() else {}
+    configured = document.get("locations")
+    if not isinstance(configured, dict):
+        configured = {}
+    if remove is not None:
+        configured.pop(remove, None)
+    configured.update(updates)
+    document["locations"] = configured
+    _dump(document, path)
 
 
 # ---------------------------------------------------------------------------
@@ -575,6 +344,13 @@ def _configured() -> dict[str, Path | None]:
     yaml could leave any other entry empty the same way.
     """
     configured = get("locations", None) or {}
+    if not isinstance(configured, Mapping):
+        raise TypeError(
+            f"The locations config must be a mapping of name to directory, not "
+            f"{configured!r}. Set one entry at a time: "
+            f"{ENV_PREFIX}LOCATIONS__PERSONAL=/scratch, or "
+            'config.set({"locations.personal": "/scratch"}).'
+        )
     return {
         str(name): (Path(str(path)).expanduser() if path else None)
         for name, path in configured.items()
@@ -712,7 +488,7 @@ def add_location(path: Path | str, name: str | None = None, persist: bool = True
     set({"locations": updated})
 
     if persist:
-        write()
+        _persist_locations({name: str(expanded)})
     return expanded
 
 
@@ -755,21 +531,15 @@ def remove_location(name_or_path: Path | str, persist: bool = True) -> None:
                 f"{[(loc.name, str(loc.path)) for loc in locations()]}"
             )
 
-    updated: dict[str, str | None] = {}
-    for n, p in current.items():
-        if n == name:
-            if n == "personal":
-                updated[n] = None
-            continue
-        updated[n] = str(p) if p is not None else None
+    updated = {n: (str(p) if p is not None else None) for n, p in current.items() if n != name}
     if name == "personal":
-        updated.setdefault("personal", None)
+        updated["personal"] = None
     set({"locations": updated})
     if persist:
-        write()
+        _persist_locations({"personal": None} if name == "personal" else {}, remove=name)
 
 
-def first_run_notice(directory: Path | None = None) -> None:
+def first_run_notice(directory: Path) -> None:
     """Say where downloads will go, once per process.
 
     Called from :func:`data_dir` when nothing is configured and the default
@@ -780,8 +550,6 @@ def first_run_notice(directory: Path | None = None) -> None:
         return
     _NOTICE_SHOWN = True
 
-    if directory is None:
-        directory = Path(pooch.os_cache("emdatabase"))
     lines = [
         f"emdatabase will download datasets to {directory}.",
         'Change it with emdatabase.add_location("/somewhere/else", name="personal") or by '
@@ -810,5 +578,4 @@ def first_run_notice(directory: Path | None = None) -> None:
         logging.getLogger("emdatabase").info(" ".join(lines))
 
 
-_initialize()
 refresh()

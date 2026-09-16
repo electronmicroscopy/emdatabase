@@ -11,6 +11,4 @@ computing the checksum locally; see :doc:`Contributing a Dataset <contributing>`
 
 .. note::
 
-   This page is rendered as a self-contained page during the build (see
-   ``build-finished`` in ``conf.py``); this text is a fallback that only shows if
-   that generation step fails.
+   The build replaces this page with a generated one (see ``conf.py``).

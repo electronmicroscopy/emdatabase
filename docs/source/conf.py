@@ -9,18 +9,8 @@ from pathlib import Path
 # Sphinx no longer puts the config directory on sys.path, and the script that
 # generates the app pages is a sibling of this file.
 sys.path.insert(0, str(Path(__file__).parent))
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from _build_docs import (  # noqa: E402
-    generate_add_dataset_html,
-    generate_all_data_html,
-    generate_browser_html,
-    generate_html_table,
-    generate_landing_html,
-    generate_weights_html,
-    parse_datasets,
-)
+from _build_docs import _NAV_LINKS, PAGES  # noqa: E402
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -28,7 +18,7 @@ from _build_docs import (  # noqa: E402
 project = "emdatabase"
 copyright = "2026, Carter Francis"
 author = "Carter Francis"
-release = "0.5.0.dev0"
+release = "0.4.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -43,10 +33,6 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-# intro.rst / datasets.rst are superseded by the generated landing + All Data
-# app pages; keep the files but leave them out of the build so they don't warn
-# about being orphaned.
-exclude_patterns = ["intro.rst", "datasets.rst"]
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -57,8 +43,23 @@ html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 master_doc = "index"
 
-# Dark Catppuccin-Mocha by default, to match the generated app pages.
-html_context = {"default_mode": "dark"}
+
+def _nav_entry(label: str, url: str) -> dict:
+    """One top-bar link for _templates/sections/header.html.
+
+    ``doc`` is what pathto() takes; ``prefix`` is what a page under it starts
+    with, so a gallery page lights up the Examples pill.
+    """
+    doc = url.removesuffix(".html")
+    return {"label": label, "doc": doc, "prefix": doc.removesuffix("/index")}
+
+
+# Dark Catppuccin-Mocha by default, to match the generated app pages; the top
+# bar is built from the same list the generated pages use.
+html_context = {
+    "default_mode": "dark",
+    "app_nav": [_nav_entry(label, url) for label, url in _NAV_LINKS],
+}
 
 # Top navigation: Examples / API / All Data / Model Weights / Add Dataset.
 # Examples and API are Sphinx-generated (sphinx-gallery + autodoc); the rest are
@@ -89,51 +90,21 @@ html_theme_options = {
 
 # No left sidebar anywhere - keep every page a single, full-width column.
 html_sidebars = {"**": []}
-_unused_sidebars = {
-    "index": [],
-    "all_data": [],
-    "add_dataset": [],
-    "weights": [],
-    "datasets": [],
-}
 
 
-def build_datasets_html(app, exception):
-    """Generate datasets.html during Sphinx build"""
-    if exception is not None:
-        print(f"Build exception: {exception}")
-    datasets_path = Path(__file__).parent.parent.parent / "emdatabase" / "index"
-    datasets = parse_datasets(datasets_path)
-    print(f"Found {len(datasets)} technique groups for documentation.")
-    html_output = generate_html_table(datasets)
+def write_app_pages(app, exception):
+    """Write the generated app pages over the Sphinx pages of the same name.
 
-    output_path = Path(app.outdir) / "datasets_db.html"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        f.write(html_output)
-
-    # Generated, self-contained Catppuccin "app" pages. Each is written into the
-    # build output (overwriting the Sphinx-rendered page where names collide:
-    # index.html, all_data.html, weights.html, add_dataset.html) so the site looks like
-    # emdatabase.browse(). Each is guarded so a failure never kills the build.
-    outdir = Path(app.outdir)
-    pages = {
-        "index.html": generate_landing_html,
-        "all_data.html": generate_all_data_html,
-        "add_dataset.html": generate_add_dataset_html,
-        "weights.html": generate_weights_html,
-        "datasets_browser.html": generate_browser_html,
-    }
-    for filename, generator in pages.items():
-        try:
-            (outdir / filename).write_text(generator(), encoding="utf-8")
-            print(f"Wrote {filename}")
-        except Exception as e:  # pragma: no cover - keep the build alive
-            print(f"Could not build {filename}: {e}")
+    A page that fails to generate fails the build, rather than publishing the
+    placeholder text Sphinx rendered in its place.
+    """
+    if exception is None:
+        for filename, generate in PAGES.items():
+            (Path(app.outdir) / filename).write_text(generate(), encoding="utf-8")
 
 
 def setup(app):
-    app.connect("build-finished", build_datasets_html)
+    app.connect("build-finished", write_app_pages)
 
 
 # sphinx_gallery
@@ -145,11 +116,6 @@ sphinx_gallery_conf = {
     "gallery_dirs": "examples",
     "filename_pattern": "^((?!sgskip).)*$",
     "ignore_pattern": "_sgskip.py",
-    "backreferences_dir": "api",
-    "doc_module": ("deapi",),
-    "reference_url": {
-        "deapi": None,
-    },
     # The examples download from Zenodo, which has outages; a failed example
     # then costs its output, not the whole site.
     "only_warn_on_example_error": True,

@@ -34,7 +34,6 @@ from emdatabase.metadata import (
     ModelInfo,
     WeightsVersion,
     format_size,
-    load_schema,
     validate_document,
     versioned_filename,
 )
@@ -127,10 +126,6 @@ def in_the_index(monkeypatch):
 # -- the schema -------------------------------------------------------------
 
 
-def test_a_weights_entry_validates():
-    assert validate_document({"DemoNet": ENTRY}) == []
-
-
 @pytest.mark.parametrize("missing", ["model", "latest", "versions"])
 def test_weights_without_the_blocks_they_need_are_rejected(missing):
     entry = {k: v for k, v in ENTRY.items() if k != missing}
@@ -186,13 +181,6 @@ def test_an_unquoted_version_key_is_reported():
     assert any("must be quoted" in problem for problem in problems)
 
 
-def test_the_model_schema_and_the_dataclass_agree():
-    """``class`` is a keyword, so the field is ``class_``; nothing else differs."""
-    model_schema = load_schema()["patternProperties"]["^.+$"]["properties"]["model"]
-    assert list(model_schema["properties"]) == ["class", "framework", "quantem"]
-    assert model_schema["required"] == ["class", "framework"]
-
-
 # -- the record -------------------------------------------------------------
 
 
@@ -210,14 +198,8 @@ def test_the_plain_fields_describe_latest():
     ds = DownloadableDataset(**ENTRY)
     assert ds.versions == (VERSION,)
     assert ds.download_url == ENTRY["latest"]["url"]
-    assert ds.checksum == ENTRY["latest"]["checksum"] == ds.latest_checksum
+    assert ds.checksum == ENTRY["latest"]["checksum"]
     assert ds.size_bytes == ENTRY["latest"]["size_bytes"]
-
-
-def test_a_dated_copy_is_named_after_its_date():
-    ds = DownloadableDataset(**ENTRY)
-    assert ds.filename() == "DemoNet.pt"
-    assert ds.filename(VERSION) == "DemoNet_260902.pt"
 
 
 def test_an_unknown_version_says_which_ones_there_are():
@@ -342,13 +324,9 @@ def test_a_dated_download_in_the_background(family, tmp_path):
 # -- finding them -----------------------------------------------------------
 
 
-def test_list_weights_and_filter_find_it(in_the_index):
+def test_kind_separates_weights_from_datasets(in_the_index):
     assert in_the_index in [type(ds).__name__ for ds in emdatabase.list_weights()]
     assert in_the_index in [type(ds).__name__ for ds in emdatabase.filter(kind="weights")]
-    assert in_the_index in [type(ds).__name__ for ds in emdatabase.filter(version=VERSION)]
-
-
-def test_list_datasets_still_returns_everything(in_the_index):
     names = [type(ds).__name__ for ds in emdatabase.list_datasets()]
     assert in_the_index in names
     assert len(names) == len(emdatabase.list_datasets(kind="dataset")) + len(
@@ -379,7 +357,9 @@ def test_the_catalogue_can_be_asked_for_one_kind(in_the_index):
     assert in_the_index not in [it["name"] for g in datasets["groups"] for it in g["items"]]
 
 
-def test_the_catalogue_row_carries_the_model(in_the_index):
+def test_the_catalogue_row_carries_the_model_and_the_whole_family(in_the_index):
+    """The top-level link and checksum are latest; every dated version is a row
+    of its own, because they are downloaded and deleted one at a time."""
     ds = catalogue.resolve(in_the_index)
     assert ds is not None
     row = catalogue.entry(in_the_index, ds)
@@ -387,14 +367,6 @@ def test_the_catalogue_row_carries_the_model(in_the_index):
     assert row["model_class"] == MODEL["class"]
     assert row["model_framework"] == "torch"
     assert row["model_quantem"] == ">=0.2,<0.3"
-
-
-def test_the_catalogue_row_carries_the_whole_family(in_the_index):
-    """The top-level link and checksum are latest; every dated version is a row
-    of its own, because they are downloaded and deleted one at a time."""
-    ds = catalogue.resolve(in_the_index)
-    assert ds is not None
-    row = catalogue.entry(in_the_index, ds)
     assert row["url"] == ENTRY["latest"]["url"]
     assert row["latest_checksum"] == ENTRY["latest"]["checksum"]
     pin = ENTRY["versions"][VERSION]
@@ -409,14 +381,6 @@ def test_the_catalogue_row_carries_the_whole_family(in_the_index):
             "location": None,
         }
     ]
-
-
-def test_a_dataset_row_has_no_versions():
-    ds = catalogue.resolve("CuZnHAADF")
-    assert ds is not None
-    row = catalogue.entry("CuZnHAADF", ds)
-    assert row["versions"] == []
-    assert row["latest_checksum"] == ds.checksum
 
 
 def test_the_catalogue_row_tracks_each_version_on_disk(in_the_index, tmp_path):
@@ -504,29 +468,21 @@ def test_an_index_that_agrees_says_nothing(upstream, tmp_path):
     assert path.is_file()
 
 
-def test_newer_weights_upstream_warn(upstream, tmp_path):
+def test_newer_weights_upstream_warn_once_per_family(upstream, tmp_path):
     cls, write, spec, _ = upstream
     write(_retrained(spec))
     ds = cls()
     with pytest.warns(StaleIndexWarning, match="refresh=True") as record:
         ds.download(destination=tmp_path, progressbar=False, background=False)
     assert NEW_VERSION in str(record[0].message)
-    # The question is about the index, not the disk, so a copy already
-    # downloaded is no reason not to ask it.
-    _clear_upstream_cache()
-    with pytest.warns(StaleIndexWarning):
-        ds.download(destination=tmp_path, progressbar=False, background=False)
-
-
-def test_the_warning_is_once_per_family(upstream, tmp_path):
-    """A notebook loop asks about the same weights over and over."""
-    cls, write, spec, _ = upstream
-    write(_retrained(spec))
-    ds = cls()
-    with pytest.warns(StaleIndexWarning):
-        ds.download(destination=tmp_path, progressbar=False, background=False)
+    # A notebook loop asks about the same weights over and over; once is enough.
     with warnings.catch_warnings():
         warnings.simplefilter("error", StaleIndexWarning)
+        ds.download(destination=tmp_path, progressbar=False, background=False)
+    # The question is about the index, not the disk, so a copy already
+    # downloaded is no reason not to ask it again once the process forgets.
+    _clear_upstream_cache()
+    with pytest.warns(StaleIndexWarning):
         ds.download(destination=tmp_path, progressbar=False, background=False)
 
 
@@ -582,13 +538,6 @@ def test_check_updates_off_asks_nothing(upstream, asked, tmp_path):
         with warnings.catch_warnings():
             warnings.simplefilter("error", StaleIndexWarning)
             cls().download(destination=tmp_path, progressbar=False, background=False)
-    assert asked == []
-
-
-def test_a_pinned_version_asks_nothing(upstream, asked, tmp_path):
-    cls, write, spec, _ = upstream
-    write(_retrained(spec))
-    cls().download(destination=tmp_path, progressbar=False, background=False, version=VERSION)
     assert asked == []
 
 

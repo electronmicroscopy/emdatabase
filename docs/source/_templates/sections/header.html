@@ -1,11 +1,10 @@
 {# Override pydata's header so the Sphinx pages (Examples / API) get the exact
-   same top bar as the generated app pages (see _top_nav in _build_docs.py).
-   Links use pathto() so they resolve from any page depth; the active pill is
-   chosen from the current pagename. #}
+   same top bar as the generated app pages. The links are _NAV_LINKS from
+   _build_docs.py, handed over as `app_nav` by conf.py, so the two cannot drift;
+   pathto() resolves them from any page depth. #}
 <nav class="app-nav">
   <a class="app-brand" href="{{ pathto('index') }}">EM-Database</a>
-  <a class="app-navlink{% if pagename.startswith('examples') %} active{% endif %}" href="{{ pathto('examples/index') }}">Examples</a>
-  <a class="app-navlink{% if pagename.startswith('reference') %} active{% endif %}" href="{{ pathto('reference/index') }}">API</a>
-  <a class="app-navlink" href="{{ pathto('all_data') }}">All Data</a>
-  <a class="app-navlink" href="{{ pathto('add_dataset') }}">Add Dataset</a>
+  {%- for item in app_nav %}
+  <a class="app-navlink{% if pagename == item.doc or pagename.startswith(item.prefix + '/') %} active{% endif %}" href="{{ pathto(item.doc) }}">{{ item.label }}</a>
+  {%- endfor %}
 </nav>

@@ -3,8 +3,9 @@
   "$id": "https://example.com/schemas/em-dataset.collection.schema.json",
   "title": "EM Dataset Collection",
   "type": "object",
+  "additionalProperties": false,
   "patternProperties": {
-    "^.+$": {
+    "^[A-Za-z_][A-Za-z0-9_ -]*$": {
       "type": "object",
       "properties": {
         "description": {

@@ -48,16 +48,17 @@ jobs:
               sys.exit("json-schema.json missing from the wheel")
           PY
 
-      - name: Check the version matches the release tag
-        if: github.event_name == 'release'
+      - name: Check the version is a release, and matches the tag
         run: |
           python - <<'PY'
-          import os, sys, tomllib
+          import os, re, sys, tomllib
           with open("pyproject.toml", "rb") as f:
               version = tomllib.load(f)["project"]["version"]
           tag = os.environ["TAG"].lstrip("v")
           print(f"pyproject version {version!r}, release tag {tag!r}")
-          if version != tag:
+          if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+              sys.exit(f"{version} is not a release version, and PyPI never frees one up again")
+          if tag and version != tag:
               sys.exit(f"version mismatch: pyproject says {version}, tag says {tag}")
           PY
         env:

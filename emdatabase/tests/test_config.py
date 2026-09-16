@@ -96,6 +96,19 @@ def test_a_nested_key_under_a_known_one_does_not_warn(recwarn):
     assert config.resolve_destination("other") == Path("/other")
 
 
+def test_location_names_differing_by_hyphen_and_underscore_stay_separate(tmp_path):
+    _write_yaml(tmp_path, locations={"example-data": "/a", "example_data": "/b"})
+    config.refresh()
+    config.set({"locations.group-one": "/c", "locations.group_one": "/d"})
+    assert config.get("locations") == {
+        "personal": None,
+        "example-data": "/a",
+        "example_data": "/b",
+        "group-one": "/c",
+        "group_one": "/d",
+    }
+
+
 def test_write_round_trips(tmp_path):
     config.set({"locations": {"group": "/group", "personal": str(tmp_path / "written")}})
     path = tmp_path / "config" / "config.yaml"
@@ -309,3 +322,38 @@ def test_the_top_level_re_exports_are_the_config_functions():
     assert emdatabase.add_location is config.add_location
     assert emdatabase.remove_location is config.remove_location
     assert emdatabase.locations is config.locations
+
+
+def test_set_replaces_a_nested_key_whose_parent_is_empty(tmp_path):
+    # A bare "locations:" in the yaml parses to None, which a nested set has to
+    # stand in a dict for rather than trip over.
+    _write_yaml(tmp_path, locations=None)
+    config.refresh()
+    with config.set({"locations.personal": str(tmp_path / "scratch")}):
+        assert config.data_dir() == tmp_path / "scratch"
+    assert config.get("locations") is None  # rolled back to what the file said
+
+
+def test_locations_that_is_not_a_mapping_says_so(monkeypatch):
+    monkeypatch.setenv("EMDATABASE_LOCATIONS", "/one/directory")
+    config.refresh()
+    with pytest.raises(TypeError, match="must be a mapping"):
+        config.locations()
+
+
+def test_add_location_persists_only_its_own_change(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMDATABASE_LOCATIONS__PERSONAL", str(tmp_path / "from-env"))
+    config.refresh()
+    config.add_location(_dir(tmp_path, "example_data"))
+    written = yaml.safe_load((tmp_path / "config" / "config.yaml").read_text())
+    assert written["locations"] == {"example_data": str(tmp_path / "example_data")}
+
+
+def test_add_location_keeps_the_entries_already_in_the_file(tmp_path):
+    config.add_location(_dir(tmp_path, "first"))
+    config.add_location(_dir(tmp_path, "second"))
+    written = yaml.safe_load((tmp_path / "config" / "config.yaml").read_text())
+    assert written["locations"] == {
+        "first": str(tmp_path / "first"),
+        "second": str(tmp_path / "second"),
+    }

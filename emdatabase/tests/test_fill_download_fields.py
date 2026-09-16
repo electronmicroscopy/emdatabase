@@ -97,13 +97,13 @@ def test_a_complete_index_is_not_rewritten(script, index, tmp_path):
 
 
 def test_only_the_files_named_are_looked_at(script, index, tmp_path):
-    """The workflow passes the files a pull request changed."""
+    """The workflow passes the files a pull request changed, a deleted one included."""
     _, directory, write = index
     path = write()
     other = directory / "Other.yaml"
     other.write_text(path.read_text(encoding="utf-8").replace("MyData:", "Other:"), "utf-8")
 
-    code, _ = _run(script, directory, tmp_path, str(path))
+    code, _ = _run(script, directory, tmp_path, str(path), str(directory / "Removed.yaml"))
     assert code == 0
     assert "checksum" in path.read_text(encoding="utf-8")
     assert "checksum" not in other.read_text(encoding="utf-8")
@@ -140,15 +140,3 @@ def test_an_entry_that_will_not_validate_is_not_written(script, index, tmp_path)
     assert code == 1
     assert path.read_text(encoding="utf-8") == before
     assert "Tomograhy" in summary
-
-
-def test_a_file_the_pull_request_deleted_is_skipped(script, index, tmp_path):
-    """A removed entry is named by the diff but is not there to read."""
-    _, directory, write = index
-    path = write()
-    gone = directory / "Removed.yaml"
-
-    code, _ = _run(script, directory, tmp_path, str(path), str(gone))
-    assert code == 0
-    assert "checksum" in path.read_text(encoding="utf-8")
-    assert not gone.exists()

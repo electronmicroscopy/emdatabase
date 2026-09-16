@@ -38,7 +38,7 @@ jobs:
         run: python -m emdatabase._create_stubs --check
 
   build-with-pip:
-    name: ${{ matrix.os }}-py${{ matrix.python-version }}${{ matrix.LABEL }}
+    name: ${{ matrix.os }}-py${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -47,34 +47,17 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Get the number of CPUs
-        id: cpus
-        run: |
-          import os, platform
-          num_cpus = os.cpu_count()
-          print(f"Number of CPU: {num_cpus}")
-          print(f"Architecture: {platform.machine()}")
-          output_file = os.environ["GITHUB_OUTPUT"]
-          with open(output_file, "a", encoding="utf-8") as output_stream:
-              output_stream.write(f"count={num_cpus}\n")
-        shell: python
 
       - name: Install dependencies and package
         shell: bash
         run: |
           pip install -U -e .'[tests]'
-
-      - name: Install oldest supported versions
-        if: contains(matrix.LABEL, 'oldest')
-        run: |
-          pip install ${{ matrix.DEPENDENCIES }}
 
       - name: Display Python, pip and package versions
         run: |
@@ -83,7 +66,6 @@ jobs:
           pip list
 
       - name: Run docstring tests
-        continue-on-error: true
         run: |
           pytest --doctest-modules --doctest-continue-on-failure --ignore-glob=emdatabase/tests emdatabase
 
