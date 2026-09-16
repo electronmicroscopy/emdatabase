@@ -10,7 +10,7 @@ from pathlib import Path
 # generates the app pages is a sibling of this file.
 sys.path.insert(0, str(Path(__file__).parent))
 
-from _build_docs import PAGES  # noqa: E402
+from _build_docs import _NAV_LINKS, PAGES  # noqa: E402
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -43,8 +43,23 @@ html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 master_doc = "index"
 
-# Dark Catppuccin-Mocha by default, to match the generated app pages.
-html_context = {"default_mode": "dark"}
+
+def _nav_entry(label: str, url: str) -> dict:
+    """One top-bar link for _templates/sections/header.html.
+
+    ``doc`` is what pathto() takes; ``prefix`` is what a page under it starts
+    with, so a gallery page lights up the Examples pill.
+    """
+    doc = url.removesuffix(".html")
+    return {"label": label, "doc": doc, "prefix": doc.removesuffix("/index")}
+
+
+# Dark Catppuccin-Mocha by default, to match the generated app pages; the top
+# bar is built from the same list the generated pages use.
+html_context = {
+    "default_mode": "dark",
+    "app_nav": [_nav_entry(label, url) for label, url in _NAV_LINKS],
+}
 
 # Top navigation: Examples / API / All Data / Model Weights / Add Dataset.
 # Examples and API are Sphinx-generated (sphinx-gallery + autodoc); the rest are
@@ -101,11 +116,6 @@ sphinx_gallery_conf = {
     "gallery_dirs": "examples",
     "filename_pattern": "^((?!sgskip).)*$",
     "ignore_pattern": "_sgskip.py",
-    "backreferences_dir": "api",
-    "doc_module": ("deapi",),
-    "reference_url": {
-        "deapi": None,
-    },
     # The examples download from Zenodo, which has outages; a failed example
     # then costs its output, not the whole site.
     "only_warn_on_example_error": True,
