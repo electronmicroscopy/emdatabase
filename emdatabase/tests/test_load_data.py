@@ -10,16 +10,19 @@ correctly, which is identical for every entry: the default run does that against
 them.
 """
 
+import io
 import os
 import threading
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
 
 import pytest
 
 import emdatabase.data as data
+from emdatabase._archive import _HTTPRangeFile
 from emdatabase.data import MgONanoCrystals, NiEBSDLarge
 from emdatabase.downloadable_dataset import (
     _PENDING,
@@ -67,6 +70,17 @@ def _head(url, timeout=60):
     return urllib.request.urlopen(request, timeout=timeout)
 
 
+def _archive_member(url, member):
+    """The directory entry for one member of a remote zip.
+
+    A few small range requests rather than the whole archive, which is the
+    reason an entry names a member in the first place.
+    """
+    with io.BufferedReader(_HTTPRangeFile(url), buffer_size=1 << 20) as stream:
+        with zipfile.ZipFile(stream) as archive:
+            return archive.getinfo(member)
+
+
 @pytest.mark.network
 @pytest.mark.parametrize(
     ("name", "version"),
@@ -82,7 +96,8 @@ def test_source_url_resolves(name, version):
     of the push matrix meant 120 of them per push. The weekly check_sources
     workflow runs it instead.
     """
-    resolved = getattr(data, name)()._resolve(version)
+    dataset = getattr(data, name)()
+    resolved = dataset._resolve(version)
     url = resolved.url
     try:
         response = _head(url)
@@ -95,10 +110,22 @@ def test_source_url_resolves(name, version):
     # source file being replaced, which is otherwise invisible until someone's
     # checksum fails. A weights family's `latest` link is meant to serve new
     # bytes, so only a pinned link is held to its declared size.
+    # An archive entry's link is the zip, so the length to compare is the
+    # archive's; the entry's own size_bytes describes the member inside it.
+    archive = dataset.metadata.archive
+    declared = archive.size_bytes if archive else resolved.size_bytes
     length = response.headers.get("Content-Length")
-    if resolved.pinned and length is not None and resolved.size_bytes is not None:
-        assert int(length) == resolved.size_bytes, (
-            f"{name}: {url} is {int(length)} bytes, but the YAML declares {resolved.size_bytes}"
+    if resolved.pinned and length is not None and declared is not None:
+        assert int(length) == declared, (
+            f"{name}: {url} is {int(length)} bytes, but the YAML declares {declared}"
+        )
+    if archive is not None:
+        # What rots for an archive entry is the member being renamed or moved
+        # inside a zip whose own size never changes.
+        info = _archive_member(url, archive.member)
+        assert info.file_size == resolved.size_bytes, (
+            f"{name}: {archive.member} is {info.file_size} bytes inside {url}, "
+            f"but the YAML declares {resolved.size_bytes}"
         )
 
 

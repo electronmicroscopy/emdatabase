@@ -113,6 +113,9 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         "source": md.source,
         "file": md.file,
         "url": ds.download_url,
+        # For an entry fetched out of a zip, `url` is the archive rather than
+        # the file; this is the member inside it, and "" for everything else.
+        "archive": md.archive.member if md.archive else "",
         "latest_checksum": ds.checksum or "",
         "versions": _versions(ds),
         "model_class": md.model.class_ if md.model else "",

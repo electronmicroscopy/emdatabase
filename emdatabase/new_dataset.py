@@ -62,6 +62,7 @@ FIELD_ORDER = (
     "checksum",
     "file",
     "size_bytes",
+    "archive",
     "detector_manufacturer",
     "detector",
     "microscope_vendor",
@@ -332,6 +333,10 @@ def fill_download_fields(document: dict[str, Any]) -> list[str]:
     the top level, so ``latest`` and each dated version is followed on its own
     link. An entry that already has both is not downloaded.
 
+    An entry naming an ``archive`` is refused rather than filled: its two fields
+    describe one member inside the zip, and the only thing there is to download
+    is the whole archive.
+
     The document is filled in place and nothing is written - the caller decides
     where the result goes. The lines returned say what was filled, and are empty
     when nothing was.
@@ -347,6 +352,16 @@ def fill_download_fields(document: dict[str, Any]) -> list[str]:
             for label, pin in pins:
                 if pin:
                     lines += _fill_pin(label, pin, pin.get("url", ""))
+        elif entry.get("archive"):
+            # The entry's checksum and size_bytes describe the member inside the
+            # archive. Following the link here would hash the whole zip and
+            # write a value that is wrong in a way nothing downstream notices.
+            if not (entry.get("checksum") and entry.get("size_bytes")):
+                raise ValueError(
+                    f"{name}: checksum and size_bytes describe the member inside the "
+                    "archive, which is not something this can download. Fill them in "
+                    "by hand."
+                )
         else:
             url = entry.get("url") or f"{entry.get('source', '')}/{entry.get('file', '')}"
             lines += _fill_pin(name, entry, url)

@@ -12,6 +12,11 @@ A ``kind: weights`` entry is a family rather than a single file: it declares a
 :class:`WeightsVersion`, and :func:`versioned_filename` is what a dated copy is
 called on disk.
 
+An entry whose data is one file inside a zip on a record that cannot be
+re-published names that archive as an :class:`ArchiveMember`. The entry's own
+``file``, ``checksum`` and ``size_bytes`` go on describing the member, which is
+all a caller ever receives.
+
 This module also owns the small amount of shared knowledge about where the
 dataset files live - :func:`dataset_files`, :func:`index_entries`,
 :func:`load_schema`, :func:`load_vendors`, :func:`techniques` - so the loader,
@@ -315,6 +320,26 @@ class WeightsVersion:
     size_bytes: int | None = None
 
 
+@dataclass(frozen=True)
+class ArchiveMember:
+    """One file inside a zip on someone else's record.
+
+    An entry names this when the data worth shipping is a single member of a
+    multi-gigabyte archive that cannot be re-published. ``download()`` fetches
+    only that member, with HTTP range requests; the entry's ``file``,
+    ``checksum`` and ``size_bytes`` go on describing the file the user ends up
+    with, and the two here describe the archive they come out of.
+
+    ``member`` is the complete path inside the zip: one file name can appear in
+    several directories of the same archive.
+    """
+
+    url: str
+    member: str
+    checksum: str | None = None
+    size_bytes: int | None = None
+
+
 @dataclass(frozen=True, repr=False)
 class DatasetMetadata:
     """Everything a dataset YAML entry declares.
@@ -334,6 +359,7 @@ class DatasetMetadata:
     url: str | None = None
     checksum: str | None = None
     size_bytes: int | None = None
+    archive: ArchiveMember | None = None
     detector_manufacturer: str | None = None
     detector: str | None = None
     microscope_vendor: str | None = None
@@ -382,6 +408,8 @@ class DatasetMetadata:
                         for key, value in model.items()
                     }
                 )
+            if values.get("archive") is not None:
+                values["archive"] = ArchiveMember(**values["archive"])
             if values.get("latest") is not None:
                 values["latest"] = WeightsVersion(**values["latest"])
             values["versions"] = {
@@ -428,6 +456,8 @@ class DatasetMetadata:
                 value = ", ".join(value)
             elif entry.name == "model":
                 value = " · ".join(p for p in (value.class_, value.framework, value.quantem) if p)
+            elif entry.name == "archive":
+                value = f"{value.member} in {value.url}"
             elif entry.name == "latest":
                 value = " · ".join(p for p in (value.checksum, value.url) if p)
             elif entry.name == "versions":

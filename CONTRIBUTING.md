@@ -21,4 +21,8 @@ Neither route needs the checksum or the size: an entry missing either one has th
 downloaded on GitHub and the fields filled in for it, unless the pull request comes from
 a fork, whose branch cannot be pushed to.
 
+A dataset that is one file inside a zip on a record nobody can re-publish is written by
+hand instead, with an `archive` block naming the zip and the member inside it.
+`download()` then fetches only that member, and never the whole archive.
+
 Full instructions, including what to do by hand and what CI checks: <https://electronmicroscopy.github.io/emdatabase/contributing.html>.

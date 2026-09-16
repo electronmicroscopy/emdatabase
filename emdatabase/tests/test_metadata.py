@@ -13,6 +13,7 @@ import yaml
 
 from emdatabase.metadata import (
     TEMPLATE_PATH,
+    ArchiveMember,
     Author,
     DatasetMetadata,
     WeightsVersion,
@@ -107,6 +108,14 @@ def test_weights_file_schema_and_dataclass_agree():
     assert list(weights_file["properties"]) == [f.name for f in dataclasses.fields(WeightsVersion)]
     assert weights_file["required"] == ["url", "checksum"]
     assert ENTRY_SCHEMA["properties"]["latest"] == {"$ref": "#/$defs/weightsFile"}
+
+
+def test_archive_member_schema_and_dataclass_agree():
+    """The archive a member is fetched out of is the same four fields, in two files."""
+    archive = SCHEMA["$defs"]["archiveMember"]
+    assert list(archive["properties"]) == [f.name for f in dataclasses.fields(ArchiveMember)]
+    assert archive["required"] == ["url", "member"]
+    assert ENTRY_SCHEMA["properties"]["archive"] == {"$ref": "#/$defs/archiveMember"}
 
 
 @pytest.mark.parametrize(

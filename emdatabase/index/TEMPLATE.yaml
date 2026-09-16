@@ -23,6 +23,19 @@ MyDatasetName:
   file: MyDatasetName.zspy
   # The file's Content-Length in bytes; the weekly CI check compares it to the server.
   size_bytes: 1000000
+  # Only for a file that lives inside a zip on a record you cannot re-publish,
+  # where downloading the whole archive to get one file is not reasonable.
+  # `download()` fetches just this member, with HTTP range requests, and hands
+  # back a path like any other entry. `url`, `checksum` and `size_bytes` here
+  # describe the archive and are what `download_url` points at; `file`,
+  # `checksum` and `size_bytes` above go on describing the member, the file you
+  # end up with. Give the complete path inside the zip: the same file name can
+  # appear in several of its directories. Not allowed on a `kind: weights` entry.
+  # archive:
+  #   url: https://zenodo.org/records/0000000/files/Figures.zip
+  #   member: Figure_01/Panel_a/scan_x128_y128.raw
+  #   checksum: md5:0123456789abcdef0123456789abcdef
+  #   size_bytes: 2000000
   # Who made the detector. See vendors.yaml for the names already in use.
   detector_manufacturer: Direct Electron
   # The detector model.

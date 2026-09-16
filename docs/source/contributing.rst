@@ -82,6 +82,38 @@ on its format and whether it is required, and fill it in. Then check it:
 That prints one line per problem and exits non-zero, or prints ``valid``.
 :func:`emdatabase.metadata.validate_file` is the same check from Python.
 
+A file inside an archive
+------------------------
+
+Some data worth shipping is one file inside a multi-gigabyte zip on a record
+nobody can re-publish, where downloading all of it to get one file is not
+reasonable. Such an entry adds an ``archive`` block naming the zip and the
+member inside it:
+
+.. code-block:: yaml
+
+   archive:
+     url: https://zenodo.org/records/0000000/files/Figures.zip
+     member: Figure_01/Panel_a/scan_x128_y128.raw
+
+``download()`` then fetches only that member, over HTTP range requests: a few
+requests read the zip's directory, and the member costs its own compressed bytes
+rather than the whole archive. What comes back is a path, as for any other entry.
+
+The entry's own ``file``, ``checksum`` and ``size_bytes`` go on describing the
+member, which is the file you end up with; ``checksum`` and ``size_bytes``
+inside the block describe the archive instead, and are optional. Give ``member``
+as the complete path inside the zip - one file name can appear in several of its
+directories, so a basename alone is ambiguous.
+
+These entries are written by hand. The two fields CI otherwise fills in would be
+taken from the archive rather than from the member, so a pull request leaving
+them blank is refused rather than guessed at. ``download_url``, and the download
+link on the docs site, point at the archive: the member has no link of its own.
+
+A host that ignores ``Range`` and answers with the whole archive fails loudly,
+naming the host, rather than quietly pulling gigabytes.
+
 Contributing model weights
 --------------------------
 
@@ -151,13 +183,18 @@ a dataset with one, fail as well.
 files. It downloads the file behind each changed entry that is missing its
 ``checksum`` or ``size_bytes`` - a weights family's ``latest`` and each dated
 version on their own links - fills the fields in and pushes the result back to
-the branch. A fork's branch cannot be pushed to, so a pull request from one
+the branch. An entry naming an ``archive`` is refused instead: its ``checksum``
+and ``size_bytes`` describe the member inside the zip, and the only thing there
+is to download is the whole archive, so those two are filled in by hand. A
+fork's branch cannot be pushed to, so a pull request from one
 fails instead and prints the values to paste in. An entry coming in through the
 issue form is filled in the same way before its pull request is opened, so it
 arrives complete.
 
 ``check_sources.yml`` runs weekly and asks each source server whether the file
-is still there and still the size the entry claims.
+is still there and still the size the entry claims. For an entry fetched out of
+an archive it reads the archive's directory too, over a few range requests, and
+checks the member is still there at the size the entry declares.
 
 ``check_weights.yml`` runs weekly as well, and what it does depends on where
 the family is hosted.
