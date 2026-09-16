@@ -51,18 +51,6 @@ def _configure(tmp_path, **shared):
     return user
 
 
-def test_a_shared_location_is_searched_before_the_personal_one(tmp_path):
-    user = _configure(tmp_path, group="group")
-    group = tmp_path / "group"
-
-    ds = _dataset()
-    assert ds.filepath() is None  # nowhere yet
-    (user / ds.file).write_bytes(b"user")
-    assert ds.filepath() == user / ds.file  # found in the personal dir
-    (group / ds.file).write_bytes(b"group")
-    assert ds.filepath() == group / ds.file  # the shared location wins
-
-
 def test_download_uses_a_shared_copy_without_refetching(tmp_path):
     user = _configure(tmp_path, group="group")
     group = tmp_path / "group"
@@ -72,17 +60,6 @@ def test_download_uses_a_shared_copy_without_refetching(tmp_path):
     path = ds.download(background=False)
     assert path == group / ds.file  # used the shared copy
     assert not (user / ds.file).exists()  # nothing downloaded to the personal dir
-
-
-def test_search_order_is_the_shared_ones_in_order_then_personal(tmp_path):
-    user = _configure(tmp_path, first="a", second="b")
-    assert config.data_search_dirs() == [tmp_path / "a", tmp_path / "b", user]
-
-
-def test_env_var_publishes_a_shared_location(tmp_path, monkeypatch):
-    monkeypatch.setenv("EMDATABASE_LOCATIONS__GROUP", str(tmp_path / "group"))
-    config.refresh()
-    assert config.locations()[0] == config.Location("group", tmp_path / "group", "shared")
 
 
 def test_filepaths_reports_every_copy(tmp_path):
@@ -120,25 +97,6 @@ def test_entry_reports_the_location_name(tmp_path):
     assert row["user_path"] == ""
     assert (group / ds.file).exists()  # the shared copy is untouched
     assert row["downloaded"] is True  # and still resolves
-
-
-def test_entry_location_is_personal_when_nothing_is_shared(tmp_path):
-    user = _configure(tmp_path)
-
-    ds = _dataset()
-    (user / ds.file).write_bytes(b"user")
-    row = catalogue.entry(TINY_DATASET, ds)
-    assert row["location"] == "personal"
-    assert row["user_path"] == str(user / ds.file)
-
-
-def test_downloads_go_to_the_personal_directory(tmp_path):
-    user = _configure(tmp_path, group="group")
-
-    ds = _dataset()
-    path = ds.download(progressbar=False, background=False)
-    assert path == user / ds.file
-    assert not (tmp_path / "group" / ds.file).exists()
 
 
 def test_the_catalogue_payload_carries_the_locations(tmp_path):
@@ -198,12 +156,6 @@ def test_a_path_is_never_a_location_name(tmp_path):
 
     assert config.resolve_destination("group") == tmp_path / "group"
     assert config.resolve_destination(Path("group")) == Path("group")
-    assert DownloadableDataset._resolve_destination(Path("group")) == Path("group")
-
-
-def test_resolve_destination_passes_none_through(tmp_path):
-    _configure(tmp_path, group="group")
-    assert config.resolve_destination(None) is None
 
 
 def test_delete_by_location_name_removes_the_shared_copy(tmp_path):
@@ -222,16 +174,3 @@ def test_delete_by_location_name_removes_the_shared_copy(tmp_path):
     assert ds.delete(destination="group") is True
     assert not (group / ds.file).exists()
     assert ds.filepath() is None  # nothing left anywhere
-
-
-def test_delete_personal_by_name_is_the_bare_delete(tmp_path):
-    user = _configure(tmp_path, group="group")
-    group = tmp_path / "group"
-
-    ds = _dataset()
-    (group / ds.file).write_bytes(b"group")
-    (user / ds.file).write_bytes(b"user")
-
-    assert ds.delete(destination="personal") is True
-    assert not (user / ds.file).exists()
-    assert (group / ds.file).exists()

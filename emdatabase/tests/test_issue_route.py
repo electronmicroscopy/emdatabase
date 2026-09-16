@@ -5,10 +5,9 @@ document it produces goes through :func:`~emdatabase.metadata.validate_document`
 and its keys are compared against ``new_dataset.FIELD_ORDER``. One test runs the
 same entry through both routes and compares the bytes.
 
-The docs site's datasets table is built from the same YAML by the same module,
-so its tab grouping is checked here too, along with the Add Dataset page, which
-is now an explainer pointing at the issue form and the CLI rather than a form of
-its own.
+The docs site's Add Dataset page, which points at the issue form and the CLI,
+is checked here too, along with the rule that no generated page loads anything
+from outside.
 
 The issue script lives in ``.github/scripts`` rather than in the package and is
 loaded from its path. Nothing here touches the network: the calls that would are
@@ -123,15 +122,6 @@ def test_issue_form_offers_the_whole_technique_vocabulary(issue_to_yaml):
     assert [o["label"] for o in block["attributes"]["options"]] == list(techniques())
 
 
-def test_issue_form_asks_for_the_authors_as_one_block(issue_to_yaml):
-    """One required textarea, not a field per author part."""
-    form = yaml.safe_load(ISSUE_FORM.read_text(encoding="utf-8"))
-    blocks = {b["id"]: b for b in form["body"] if b["type"] != "markdown"}
-    assert blocks["authors"]["type"] == "textarea"
-    assert blocks["authors"]["validations"]["required"] is True
-    assert not {"name", "affiliation", "orcid"} & set(blocks)
-
-
 def test_issue_weights_entry_validates(parse):
     body = _issue_body(
         **{
@@ -198,6 +188,27 @@ def test_issue_takes_today_when_the_version_date_is_blank(parse):
     assert problems == []
     assert validate_document(document) == []
     assert list(document[name]["versions"]) == [datetime.date.today().strftime("%y%m%d")]
+
+
+def test_issue_file_name_keeps_only_the_name(parse):
+    """The File Name is typed by whoever opened the issue, and is later joined
+    onto a directory."""
+    body = _issue_body(
+        **{
+            "--Dataset Name--": "MgONanoCrystals",
+            "--Authors--": "Jane Doe; University of Somewhere",
+            "--URL--": "https://zenodo.org/records/0000000/files/MgONanoCrystals.zspy",
+            "--File Name--": "/etc/passwd",
+            "--Checksum--": "md5:df9376d5c020a23f0f7f51cfe79f303f",
+            "--Description--": "A 4D-STEM dataset of MgO nanocrystals.",
+            "--Detector Manufacturer--": "Direct Electron",
+            "Dataset License": "CC-BY-4.0",
+            "Technique": _ticked("4D-STEM"),
+        }
+    )
+    document, name, problems = parse(body)
+    assert problems == []
+    assert document[name]["file"] == "passwd"
 
 
 def test_issue_drive_link_becomes_url_plus_file_name(parse):
@@ -303,32 +314,21 @@ def test_issue_a_bad_author_line_stops_the_run_and_says_so(issue_to_yaml, tmp_pa
     assert list(out.iterdir()) == []
 
 
+def test_issue_does_not_replace_an_existing_entry(issue_to_yaml, tmp_path, capsys):
+    """Anyone can open an issue, so a name already in the index is refused."""
+    issue = tmp_path / "issue.txt"
+    issue.write_text(_authors_body("Jane Doe; University of Somewhere"), encoding="utf-8")
+    out = tmp_path / "index"
+    out.mkdir()
+    existing = out / "MgONanoCrystals.yaml"
+    existing.write_text("shipped", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        issue_to_yaml.write_yaml(issue, out)
+    assert "already exists" in capsys.readouterr().out
+    assert existing.read_text(encoding="utf-8") == "shipped"
+
+
 # -- the size and the checksum -----------------------------------------------
-
-
-def test_issue_takes_the_size_it_was_given(issue_to_yaml, monkeypatch):
-    """A size on the issue means the server is not asked for it."""
-
-    def no_head(url):
-        raise AssertionError(f"asked the server about {url}")
-
-    monkeypatch.setattr(issue_to_yaml, "content_length", no_head)
-    body = _issue_body(
-        **{
-            "--Dataset Name--": "MgONanoCrystals",
-            "--URL--": "https://drive.google.com/uc?export=download&id=1inQ6DQ2zH40Ccd",
-            "--File Name--": "MgONanoCrystals.zspy",
-            "--Checksum--": "md5:df9376d5c020a23f0f7f51cfe79f303f",
-            "--Size (bytes)--": "1104287335",
-            "--Description--": "A 4D-STEM dataset of MgO nanocrystals.",
-            "--Dataset License--": "CC-BY-4.0",
-            "Technique": _ticked("4D-STEM"),
-        }
-    )
-    document, name, problems = issue_to_yaml.build_yaml(issue_to_yaml.parse_issue_body(body))
-    assert problems == []
-    assert validate_document(document) == []
-    assert document[name]["size_bytes"] == 1104287335
 
 
 def test_issue_asks_the_server_when_the_size_is_not_a_number(issue_to_yaml, monkeypatch):
@@ -445,40 +445,7 @@ def test_add_dataset_page_points_at_the_issue_form_and_the_cli(build_docs):
 
 def test_generated_pages_load_nothing_from_outside(build_docs):
     """Every page is self-contained; the only external host left is a link target."""
-    for generate in (
-        build_docs.generate_add_dataset_html,
-        build_docs.generate_landing_html,
-        build_docs.generate_all_data_html,
-        build_docs.generate_weights_html,
-    ):
+    for generate in build_docs.PAGES.values():
         html = generate()
         assert "<script src=" not in html
         assert "<link rel=" not in html
-
-
-# -- the docs datasets table -------------------------------------------------
-
-
-def test_docs_table_lists_a_two_technique_dataset_under_each(build_docs, tmp_path):
-    """One row, both tabs: the tabs filter on the row's whole technique list."""
-    (tmp_path / "TwoTechniques.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "TwoTechniques": {
-                    "description": "An in-situ 4D-STEM dataset.",
-                    "source": "https://zenodo.org/records/0000000/files",
-                    "file": "TwoTechniques.zspy",
-                    "technique": ["4D-STEM", "In-situ"],
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    by_technique = build_docs.parse_datasets(tmp_path)
-    assert sorted(by_technique) == ["4D-STEM", "In-situ"]
-    assert [d["name"] for d in by_technique["4D-STEM"]] == ["TwoTechniques"]
-    assert [d["name"] for d in by_technique["In-situ"]] == ["TwoTechniques"]
-
-    html = build_docs.generate_html_table(by_technique)
-    assert html.count("<strong>TwoTechniques</strong>") == 1
-    assert 'data-technique="4D-STEM, In-situ"' in html

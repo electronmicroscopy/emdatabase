@@ -10,13 +10,11 @@ is a single ``Path.exists`` per dataset).
 
 from __future__ import annotations
 
-import inspect
-import warnings
 from collections.abc import Iterable
 from pathlib import Path
 
 from emdatabase.downloadable_dataset import DownloadableDataset
-from emdatabase.metadata import DatasetMetadata, format_size
+from emdatabase.metadata import format_size
 
 # Model weights are grouped under one heading of their own rather than by
 # technique, and it goes after every technique.
@@ -24,48 +22,19 @@ WEIGHTS_GROUP = "Model weights"
 
 
 def datasets() -> list[tuple[str, DownloadableDataset]]:
-    """``(name, dataset)`` for every dataset ``emdatabase.data`` exposes.
-
-    Filtered by ``issubclass`` so the base class and incidental imports in the
-    module namespace stay out; sorted by name for a stable order.
-    """
+    """``(name, dataset)`` for every entry ``emdatabase.data`` exposes, sorted by name."""
     import emdatabase.data as data
 
-    out: list[tuple[str, DownloadableDataset]] = []
-    for name in getattr(data, "__all__", None) or dir(data):
-        if name.startswith("_"):
-            continue
-        obj = getattr(data, name, None)
-        if (
-            not inspect.isclass(obj)
-            or obj is DownloadableDataset
-            or not issubclass(obj, DownloadableDataset)
-        ):
-            continue
-        try:
-            out.append((name, obj()))
-        except TypeError as error:
-            # from_spec rejects a malformed entry. emdatabase.data validates at
-            # import so this should be unreachable, but a dataset silently
-            # missing from the browser is the wrong way to find out otherwise.
-            warnings.warn(f"skipping dataset {name!r}: {error}", stacklevel=2)
-    return sorted(out, key=lambda kv: kv[0].lower())
+    return sorted(
+        ((name, getattr(data, name)()) for name in data.__all__), key=lambda kv: kv[0].lower()
+    )
 
 
 def resolve(name: str) -> DownloadableDataset | None:
-    """The dataset instance for a catalogue name, or ``None``."""
+    """The dataset instance for a catalogue name, or ``None`` if there is no such entry."""
     import emdatabase.data as data
 
-    obj = getattr(data, str(name), None)
-    if not inspect.isclass(obj) or not issubclass(obj, DownloadableDataset):
-        return None
-    return obj()
-
-
-def _techniques(md: DatasetMetadata) -> list[str]:
-    """Every technique the entry declares, or ``["Other"]`` if it declares none."""
-    found = [t.strip() for t in md.technique if t.strip()]
-    return found or ["Other"]
+    return getattr(data, name)() if name in data.__all__ else None
 
 
 def _join(*parts) -> str:
@@ -96,11 +65,7 @@ def _versions(ds: DownloadableDataset) -> list[dict]:
     rows = []
     for version in ds.versions:
         pin = ds.metadata.versions[version]
-        try:
-            found = ds.filepaths(version)
-        except Exception:
-            found = []
-        path = found[0] if found else None
+        path = ds.filepath(version)
         rows.append(
             {
                 "version": version,
@@ -122,10 +87,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
     describe ``latest``; ``versions`` holds the dated snapshots.
     """
     md = ds.metadata
-    try:
-        found = ds.filepaths()
-    except Exception:
-        found = []
+    found = ds.filepaths()
     path = found[0] if found else None
     # The copy in the user's own directory, which may sit behind a shared one
     # in the search order. It is the only copy delete() will touch, so the
@@ -134,7 +96,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
     row = {
         "name": name,
         "kind": md.kind,
-        "technique": _techniques(md),
+        "technique": list(md.technique) or ["Other"],
         "size": md.size,
         "downloaded": path is not None,
         "location": _location(path),
@@ -151,7 +113,7 @@ def entry(name: str, ds: DownloadableDataset) -> dict:
         "source": md.source,
         "file": md.file,
         "url": ds.download_url,
-        "latest_checksum": ds.latest_checksum or "",
+        "latest_checksum": ds.checksum or "",
         "versions": _versions(ds),
         "model_class": md.model.class_ if md.model else "",
         "model_framework": md.model.framework if md.model else "",
@@ -199,12 +161,6 @@ def ordered_groups(names: Iterable[str]) -> list[str]:
     return sorted(set(names), key=_order)
 
 
-def _groups(row: dict) -> list[str]:
-    """The groups a row belongs to - every technique it declares, or, for a
-    weights family, the one weights heading instead."""
-    return [WEIGHTS_GROUP] if row["kind"] == "weights" else list(row["technique"])
-
-
 def catalogue(kind: str | None = None) -> dict:
     """The whole browser payload, grouped by technique.
 
@@ -229,7 +185,8 @@ def catalogue(kind: str | None = None) -> dict:
         items = [it for it in items if it["kind"] == kind]
     by_group: dict[str, list[dict]] = {}
     for it in items:
-        for group in _groups(it):
+        # Every technique a row declares, or for a weights family the one heading.
+        for group in [WEIGHTS_GROUP] if it["kind"] == "weights" else it["technique"]:
             by_group.setdefault(group, []).append(it)
     groups = [{"technique": g, "items": by_group[g]} for g in ordered_groups(by_group)]
     return {

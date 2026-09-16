@@ -4,7 +4,8 @@
 ``additionalProperties: false``, so an entry is a fixed set of fields rather
 than an open bag. :class:`DatasetMetadata` is that set, and
 :meth:`DatasetMetadata.from_spec` is the only way one is built: it turns a
-parsed YAML mapping into the record and refuses anything the schema would.
+parsed YAML mapping into the record. What checks an entry is the schema,
+through :func:`validate_document`.
 
 A ``kind: weights`` entry is a family rather than a single file: it declares a
 ``latest`` link and a dated version for each state that link has served, both as
@@ -12,10 +13,10 @@ A ``kind: weights`` entry is a family rather than a single file: it declares a
 called on disk.
 
 This module also owns the small amount of shared knowledge about where the
-dataset files live - :func:`dataset_files`, :func:`load_schema`,
-:func:`load_vendors`, :func:`techniques` - so the loader, the stub generator,
-the docs form and the tests all read the same directory and the same technique
-vocabulary the same way, and the one check a candidate file has to pass -
+dataset files live - :func:`dataset_files`, :func:`index_entries`,
+:func:`load_schema`, :func:`load_vendors`, :func:`techniques` - so the loader,
+the stub generator, the docs pages and the tests all read the same directory and
+the same technique vocabulary the same way, and the one check a candidate file has to pass -
 :func:`validate_document`, :func:`validate_file` - so the test suite, the
 issue-form workflow and ``emdatabase.new_dataset`` accept and reject exactly the
 same files.
@@ -26,10 +27,10 @@ from __future__ import annotations
 import difflib
 import textwrap
 import warnings
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import yaml
 
@@ -42,15 +43,41 @@ TEMPLATE_PATH = INDEX_DIR / "TEMPLATE.yaml"
 # Files in index/ that are not dataset collections.
 NON_DATASET_FILES = frozenset({VENDORS_PATH.name, TECHNIQUES_PATH.name, TEMPLATE_PATH.name})
 
-REQUIRED_FIELDS = ("description", "source", "file")
-
 # Wrap width for __str__; narrow enough to stay readable in a notebook cell.
 _STR_WIDTH = 88
 
 
-def dataset_files() -> list[Path]:
-    """Every dataset collection YAML, sorted by name."""
-    return sorted(p for p in INDEX_DIR.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
+def dataset_files(directory: Path = INDEX_DIR) -> list[Path]:
+    """Every dataset collection YAML in ``directory``, sorted by name."""
+    return sorted(p for p in directory.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
+
+
+class IndexEntry(NamedTuple):
+    """One usable entry from the index, as :func:`index_entries` yields it."""
+
+    name: str
+    class_name: str
+    spec: dict[str, Any]
+    origin: Path
+    metadata: DatasetMetadata
+
+
+def index_entries() -> Iterator[IndexEntry]:
+    """Every entry in the index files, in file then declaration order.
+
+    The one place that decides which entries exist, so the classes
+    :mod:`emdatabase.data` builds and the stub generated for them cannot
+    disagree about the set. The files ship with the package and CI validates
+    all of them, so a malformed one raises here rather than being skipped: that
+    is a broken release, not something a user can cause or fix.
+    """
+    for path in dataset_files():
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for name, spec in document.items():
+            class_name = str(name).replace(" ", "_").replace("-", "_")
+            yield IndexEntry(
+                str(name), class_name, spec, path, DatasetMetadata.from_spec(spec, path)
+            )
 
 
 def load_schema() -> dict[str, Any]:
@@ -78,11 +105,6 @@ def acquisition_techniques() -> tuple[str, ...]:
     return tuple(load_techniques()["acquisition"])
 
 
-def ml_tasks() -> tuple[str, ...]:
-    """What a model does - what a ``kind: weights`` entry declares as well."""
-    return tuple(load_techniques()["ml_task"])
-
-
 def techniques() -> tuple[str, ...]:
     """The whole vocabulary, acquisition first, each in the order of the file."""
     vocabulary = load_techniques()
@@ -104,26 +126,8 @@ def check_vendor(value: str, known: Iterable[str], cutoff: float = 0.8) -> tuple
     return _check_known(value, known, "vendors.yaml", "vendor", cutoff)
 
 
-def check_technique(
-    value: str, known: Iterable[str] | None = None, cutoff: float = 0.8
-) -> tuple[str, str] | None:
-    """``(level, message)`` for a technique string, or ``None`` if it is known.
-
-    The same rule as :func:`check_vendor`: a near-miss of a vocabulary entry is
-    a misspelling and an ``"error"``, and anything else is a ``"warning"``
-    asking for it to be added to ``techniques.yaml``.
-    """
-    return _check_known(
-        value,
-        techniques() if known is None else known,
-        "techniques.yaml",
-        "technique",
-        cutoff,
-    )
-
-
 def _check_known(
-    value: str, known: Iterable[str], source: str, noun: str, cutoff: float
+    value: str, known: Iterable[str], source: str, noun: str, cutoff: float = 0.8
 ) -> tuple[str, str] | None:
     known = list(known)
     if not value or value in known:
@@ -167,12 +171,15 @@ def validate_document(
     decides whether a problem is a failed test, a comment on an issue or a
     non-zero exit.
     """
-    try:
-        from jsonschema.validators import validator_for
-    except ImportError as error:  # pragma: no cover - depends on the environment
-        raise ImportError(
-            "validating a dataset YAML needs jsonschema: pip install emdatabase[dev]"
-        ) from error
+    from jsonschema.validators import validator_for
+
+    if not isinstance(document, Mapping):
+        got = "nothing" if document is None else f"a {type(document).__name__}"
+        return [
+            f"{_where(origin)}: document: expected a mapping of entry name to entry, got {got}"
+        ]
+    if not document:
+        return [f"{_where(origin)}: document: no entries"]
 
     schema = load_schema()
     validator = validator_for(schema)(schema)
@@ -183,9 +190,8 @@ def validate_document(
     ]
 
     vendors = load_vendors()
-    vocabulary = load_techniques()
-    known_techniques = list(vocabulary["acquisition"]) + list(vocabulary["ml_task"])
-    ml_task_names = set(vocabulary["ml_task"])
+    known_techniques = techniques()
+    ml_task_names = set(load_techniques()["ml_task"])
     for name, spec in document.items():
         if not isinstance(spec, Mapping):
             continue
@@ -199,27 +205,21 @@ def validate_document(
                 for label in versions
                 if not isinstance(label, str)
             ]
-        for name_field, known in (
-            ("detector_manufacturer", vendors["detector_manufacturer"]),
-            ("microscope_vendor", vendors["microscope_vendor"]),
-        ):
-            result = check_vendor(spec.get(name_field) or "", known)
+        declared = _declared_techniques(spec)
+        # (field, value, the names it should be one of, the file they are in, what one is)
+        names = [
+            (f, spec.get(f) or "", vendors[f], "vendors.yaml", "vendor")
+            for f in ("detector_manufacturer", "microscope_vendor")
+        ]
+        names += [
+            ("technique", t, known_techniques, "techniques.yaml", "technique") for t in declared
+        ]
+        for name_field, value, known, source, noun in names:
+            result = _check_known(value, known, source, noun)
             if result is None:
                 continue
             level, message = result
             line = f"{_where(origin)}: {name}: {name_field}: {message}"
-            if level == "error":
-                problems.append(line)
-            else:
-                warnings.warn(line, stacklevel=2)
-
-        declared = _declared_techniques(spec)
-        for value in declared:
-            result = check_technique(value, known_techniques)
-            if result is None:
-                continue
-            level, message = result
-            line = f"{_where(origin)}: {name}: technique: {message}"
             if level == "error":
                 problems.append(line)
             else:
@@ -256,7 +256,9 @@ def format_size(size_bytes: int | None) -> str:
     value = float(size_bytes)
     unit = _SIZE_UNITS[0]
     for unit in _SIZE_UNITS:
-        if value < 1000 or unit == _SIZE_UNITS[-1]:
+        # The value as it will be shown, so 999_999 is "1.00 MB", not "1000.0 kB"
+        shown = value if unit == "B" else round(value, 1)
+        if shown < 1000 or unit == _SIZE_UNITS[-1]:
             break
         value /= 1000
     if unit == "B":
@@ -283,54 +285,19 @@ class Author:
     affiliation: str
     orcid: str | None = None
 
-    @classmethod
-    def from_spec(
-        cls, name: str, spec: Mapping[str, Any], origin: Path | str | None = None
-    ) -> Author:
-        allowed = {f.name for f in fields(cls)}
-        unknown = sorted(set(spec) - allowed)
-        if unknown:
-            raise TypeError(
-                f"{_where(origin)}: author {name!r} has unknown field(s) "
-                f"{', '.join(repr(k) for k in unknown)}; allowed: {', '.join(sorted(allowed))}"
-            )
-        if "affiliation" not in spec:
-            raise TypeError(f"{_where(origin)}: author {name!r} is missing 'affiliation'")
-        return cls(affiliation=str(spec["affiliation"]), orcid=spec.get("orcid"))
-
 
 @dataclass(frozen=True)
 class ModelInfo:
     """The model a ``kind: weights`` entry is a checkpoint for.
 
     ``class_`` carries the YAML's ``class`` key, which is a Python keyword and
-    so cannot be a field name; :meth:`from_spec` is where the two are tied
-    together.
+    so cannot be a field name; :meth:`DatasetMetadata.from_spec` is where the two
+    are tied together.
     """
 
     class_: str
     framework: str
     quantem: str | None = None
-
-    @classmethod
-    def from_spec(cls, spec: Mapping[str, Any], origin: Path | str | None = None) -> ModelInfo:
-        allowed = ("class", "framework", "quantem")
-        unknown = sorted(set(spec) - set(allowed))
-        if unknown:
-            raise TypeError(
-                f"{_where(origin)}: model has unknown field(s) "
-                f"{', '.join(repr(k) for k in unknown)}; allowed: {', '.join(allowed)}"
-            )
-        missing = [name for name in ("class", "framework") if not spec.get(name)]
-        if missing:
-            raise TypeError(
-                f"{_where(origin)}: model is missing {', '.join(repr(k) for k in missing)}"
-            )
-        return cls(
-            class_=str(spec["class"]),
-            framework=str(spec["framework"]),
-            quantem=spec.get("quantem"),
-        )
 
 
 @dataclass(frozen=True)
@@ -346,26 +313,6 @@ class WeightsVersion:
     url: str
     checksum: str | None = None
     size_bytes: int | None = None
-
-    @classmethod
-    def from_spec(
-        cls, label: str, spec: Mapping[str, Any], origin: Path | str | None = None
-    ) -> WeightsVersion:
-        allowed = {f.name for f in fields(cls)}
-        unknown = sorted(set(spec) - allowed)
-        if unknown:
-            raise TypeError(
-                f"{_where(origin)}: {label} has unknown field(s) "
-                f"{', '.join(repr(k) for k in unknown)}; allowed: {', '.join(sorted(allowed))}"
-            )
-        if not spec.get("url"):
-            raise TypeError(f"{_where(origin)}: {label} is missing 'url'")
-        size_bytes = spec.get("size_bytes")
-        return cls(
-            url=str(spec["url"]),
-            checksum=spec.get("checksum"),
-            size_bytes=None if size_bytes is None else int(size_bytes),
-        )
 
 
 @dataclass(frozen=True, repr=False)
@@ -409,63 +356,60 @@ class DatasetMetadata:
     ) -> DatasetMetadata:
         """Build a record from a parsed YAML entry.
 
-        ``origin`` is the file the entry came from; it only appears in error
-        messages, where it is the difference between a useful complaint and a
-        ``TypeError`` from somewhere inside an import.
+        Checking the entry is :func:`validate_document`'s job, against the
+        schema. Building the dataclasses still refuses an unknown or a missing
+        field, as a ``TypeError`` that starts with ``origin``, the file the entry
+        came from: the difference between a useful complaint and one from
+        somewhere inside an import.
         """
-        allowed = {f.name for f in fields(cls)}
-        unknown = sorted(set(spec) - allowed)
-        if unknown:
-            raise TypeError(
-                f"{_where(origin)}: unknown field(s) {', '.join(repr(k) for k in unknown)}; "
-                f"allowed: {', '.join(sorted(allowed))}"
-            )
-        missing = [name for name in REQUIRED_FIELDS if spec.get(name) is None]
-        if missing:
-            raise TypeError(
-                f"{_where(origin)}: missing required field(s) "
-                f"{', '.join(repr(k) for k in missing)}"
-            )
         values = dict(spec)
-        size_bytes = values.get("size_bytes")
-        values["size_bytes"] = None if size_bytes is None else int(size_bytes)
         technique = values.get("technique") or ()
-        values["technique"] = (
-            (str(technique),) if isinstance(technique, str) else tuple(str(t) for t in technique)
-        )
-        values["tags"] = tuple(str(t) for t in values.get("tags") or ())
-        values["authors"] = {
-            str(name): Author.from_spec(str(name), entry or {}, origin)
-            for name, entry in (values.get("authors") or {}).items()
-        }
-        values["kind"] = str(values.get("kind") or "dataset")
-        model = values.get("model")
-        values["model"] = None if model is None else ModelInfo.from_spec(model, origin)
-        latest = values.get("latest")
-        values["latest"] = (
-            None if latest is None else WeightsVersion.from_spec("latest", latest, origin)
-        )
-        values["versions"] = {
-            str(label): WeightsVersion.from_spec(str(label), spec or {}, origin)
-            for label, spec in (values.get("versions") or {}).items()
-        }
-        return cls(**values)
+        values["technique"] = (technique,) if isinstance(technique, str) else tuple(technique)
+        values["tags"] = tuple(values.get("tags") or ())
+        values["kind"] = values.get("kind") or "dataset"
+        try:
+            values["authors"] = {}
+            for name, entry in (spec.get("authors") or {}).items():
+                try:
+                    values["authors"][name] = Author(**(entry or {}))
+                except TypeError as error:  # say which author, of however many
+                    raise TypeError(f"author {name!r}: {error}") from None
+            model = values.get("model")
+            if model is not None:  # `class` is a keyword, so the field is `class_`
+                values["model"] = ModelInfo(
+                    **{
+                        ("class_" if key == "class" else key): value
+                        for key, value in model.items()
+                    }
+                )
+            if values.get("latest") is not None:
+                values["latest"] = WeightsVersion(**values["latest"])
+            values["versions"] = {
+                str(label): WeightsVersion(**pin)
+                for label, pin in (values.get("versions") or {}).items()
+            }
+            return cls(**values)
+        except TypeError as error:
+            raise TypeError(f"{_where(origin)}: {error}") from None
 
     @property
     def size(self) -> str:
         """:attr:`size_bytes` formatted for display, or ``""`` if unknown."""
         return format_size(self.size_bytes)
 
+    @property
+    def headline(self) -> str:
+        """The file, what it is and how big, in one line: ``d.zspy · 4D-STEM · 12.5 MB``."""
+        return " · ".join(p for p in (self.file, ", ".join(self.technique), self.size) if p)
+
     def __repr__(self) -> str:
         """One line naming the file, what it is and how big: enough to tell two
         records apart in a list without printing a paragraph of description."""
-        headline = " · ".join(p for p in (self.file, ", ".join(self.technique), self.size) if p)
-        return f"<{type(self).__name__} {headline}>"
+        return f"<{type(self).__name__} {self.headline}>"
 
     def __str__(self) -> str:
         """The whole record, wrapped, with the empty fields left out."""
-        headline = " · ".join(p for p in (self.file, ", ".join(self.technique), self.size) if p)
-        head = [headline]
+        head = [self.headline]
         if self.description:
             head.append(textwrap.fill(self.description, width=_STR_WIDTH))
 

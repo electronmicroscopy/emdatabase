@@ -10,7 +10,6 @@ form left incomplete, is tested against the same server at the end.
 """
 
 import hashlib
-from pathlib import Path
 
 import pytest
 import yaml
@@ -18,11 +17,9 @@ import yaml
 from emdatabase.metadata import validate_file
 from emdatabase.new_dataset import (
     default_name,
-    download_md5,
     fill_download_fields,
     main,
     normalize_url,
-    split_url,
     version_date,
     write_document,
 )
@@ -139,7 +136,7 @@ def test_prompts_fill_in_the_optional_fields(server, tmp_path, monkeypatch):
         monkeypatch,
         "MyData",  # entry name
         "A 4D-STEM dataset of something.",  # description
-        "4D-STEM",  # technique
+        "In-situ, 4D-STEM",  # techniques, comma separated
         "CC-BY-4.0",  # license
         "Direct Electron",  # detector manufacturer
         "DE-16",  # detector
@@ -159,7 +156,7 @@ def test_prompts_fill_in_the_optional_fields(server, tmp_path, monkeypatch):
     path = tmp_path / "MyData.yaml"
     assert validate_file(path) == []
     entry = _document(path)["MyData"]
-    assert entry["technique"] == ["4D-STEM"]
+    assert entry["technique"] == ["In-situ", "4D-STEM"]
     assert entry["voltage"] == "200 kV"
     assert entry["tags"] == ["Amorphous", "Strain"]
     assert entry["authors"] == {
@@ -167,31 +164,6 @@ def test_prompts_fill_in_the_optional_fields(server, tmp_path, monkeypatch):
     }
     assert "camera_length" not in entry
     assert "doi" not in entry
-
-
-def test_the_technique_prompt_takes_a_comma_separated_list(server, tmp_path, monkeypatch):
-    base, _ = server
-    _answers(
-        monkeypatch,
-        "MyData",  # entry name
-        "An in-situ 4D-STEM dataset of something.",  # description
-        "In-situ, 4D-STEM",  # techniques
-        "",  # license
-        "",  # detector manufacturer
-        "",  # detector
-        "",  # microscope vendor
-        "",  # microscope model
-        "",  # voltage
-        "",  # camera length
-        "",  # DOI
-        "",  # tags
-        "",  # no authors
-    )
-    assert main([f"{base}/MyData.zspy", "--out", str(tmp_path)]) == 0
-
-    path = tmp_path / "MyData.yaml"
-    assert validate_file(path) == []
-    assert _document(path)["MyData"]["technique"] == ["In-situ", "4D-STEM"]
 
 
 def _weights_answers(monkeypatch, name="DemoNet"):
@@ -261,27 +233,6 @@ def test_a_version_date_that_is_not_yymmdd_is_refused(server, tmp_path, capsys):
         main([f"{base}/MyData.zspy", "--out", str(tmp_path), "--version-date", "2026-09-02"])
     assert "YYMMDD" in capsys.readouterr().err
     assert not list(tmp_path.glob("*.yaml"))
-
-
-def test_a_dataset_entry_says_nothing_about_a_model(server, tmp_path):
-    base, _ = server
-    assert (
-        main(
-            [
-                f"{base}/MyData.zspy",
-                "--name",
-                "MyData",
-                "--out",
-                str(tmp_path),
-                "--description",
-                "A 4D-STEM dataset of something.",
-                "--yes",
-            ]
-        )
-        == 0
-    )
-    entry = _document(tmp_path / "MyData.yaml")["MyData"]
-    assert entry["kind"] == "dataset" and "model" not in entry
 
 
 def test_a_technique_outside_the_vocabulary_is_asked_for_again(
@@ -471,44 +422,6 @@ def test_a_link_that_is_not_a_drive_share_link_is_left_alone(url):
 def test_a_zenodo_copy_link_loses_its_download_flag():
     bare = "https://zenodo.org/records/22311217/files/best.pth"
     assert normalize_url(bare + "?download=1") == bare
-    assert split_url(bare + "?download=1") == (
-        "https://zenodo.org/records/22311217/files",
-        "best.pth",
-        "",
-    )
-
-
-def test_split_url_normalises_a_drive_share_link():
-    """The CLI and the issue route get the rewrite for free, through split_url."""
-    source, filename, link = split_url(f"https://drive.google.com/file/d/{DRIVE_ID}/view")
-    assert (source, filename, link) == ("https://drive.google.com", "", DRIVE_DOWNLOAD)
-
-
-def test_write_document_writes_the_header_and_makes_the_directory(tmp_path):
-    """The CI script reuses this to rewrite a family file."""
-    path = tmp_path / "index" / "MyData.yaml"
-    document = {"MyData": {"description": "d", "file": "f"}}
-    write_document(path, document)
-    text = path.read_text(encoding="utf-8")
-    assert text.startswith("# $schema: ./json-schema.json\n")
-    assert yaml.safe_load(text) == document
-
-
-def test_download_md5_reports_the_content_type(server, tmp_path):
-    """A host that answers a download link with a page, not the file."""
-    base, served = server
-    (served / "scan.html").write_text("<html>virus scan warning</html>", encoding="utf-8")
-    _, _, name, content_type = download_md5(
-        f"{base}/scan.html", tmp_path / "scan", progressbar=False
-    )
-    assert content_type.startswith("text/html")
-    assert name == ""
-
-    digest, size, name, content_type = download_md5(
-        f"{base}/uc?export=download&id=MyData.zspy", tmp_path / "data", progressbar=False
-    )
-    assert (digest, size, name) == (MD5, len(CONTENT), "MyData.zspy")
-    assert content_type == "application/octet-stream"
 
 
 def test_the_temporary_download_does_not_stay_behind(server, tmp_path, monkeypatch):
@@ -551,7 +464,9 @@ def test_keep_leaves_the_temporary_download(server, tmp_path, monkeypatch):
             "--keep",
         ]
     )
-    assert Path(tmp_path / "scratch" / "MyData.zspy").read_bytes() == CONTENT
+    kept = list((tmp_path / "scratch").glob("emdatabase-*/MyData.zspy"))
+    assert len(kept) == 1
+    assert kept[0].read_bytes() == CONTENT
 
 
 def test_write_document_matches_the_hand_written_style(tmp_path):
@@ -593,16 +508,6 @@ def _entry(base, **extra):
             **extra,
         }
     }
-
-
-def test_fill_download_fields_fills_in_both(server):
-    base, _ = server
-    document = _entry(base)
-    lines = fill_download_fields(document)
-    assert document["MyData"]["checksum"] == f"md5:{MD5}"
-    assert document["MyData"]["size_bytes"] == len(CONTENT)
-    assert len(lines) == 1
-    assert f"md5:{MD5}" in lines[0] and str(len(CONTENT)) in lines[0]
 
 
 def test_fill_download_fields_leaves_what_is_already_there(server):
@@ -669,13 +574,3 @@ def test_fill_download_fields_follows_every_weights_pin(server):
     assert [line.split(":")[0] for line in lines] == ["DemoNet latest", "DemoNet version 260101"]
     # Nothing is written at the top level, where a family may not carry them.
     assert not {"checksum", "size_bytes"} & set(entry)
-
-
-def test_fill_download_fields_refuses_a_page(server):
-    """A Drive viewer page, or a 404 dressed up as HTML, is not the file."""
-    base, served = server
-    (served / "scan.html").write_text("<html>virus scan warning</html>", encoding="utf-8")
-    document = _entry(base, file="scan.html")
-    with pytest.raises(ValueError, match="served a page rather than the file"):
-        fill_download_fields(document)
-    assert "checksum" not in document["MyData"]

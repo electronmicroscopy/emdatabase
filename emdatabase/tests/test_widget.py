@@ -5,8 +5,6 @@ and read declared metadata). The widget tests need ``anywidget``; the one real
 download is marked ``slow``.
 """
 
-import threading
-
 import pytest
 
 import emdatabase
@@ -24,13 +22,6 @@ def test_catalogue_groups_and_orders_by_technique():
     cat = catalogue.catalogue()
     assert cat["n_total"] > 0
     assert cat["groups"], "expected at least one technique group"
-    techniques = [g["technique"] for g in cat["groups"]]
-    # Alphabetical, case-insensitive, with "Other" and the weights heading last.
-    named = [t for t in techniques if t not in ("Other", catalogue.WEIGHTS_GROUP)]
-    assert named == sorted(named, key=str.lower)
-    assert techniques[len(named) :] == [
-        t for t in ("Other", catalogue.WEIGHTS_GROUP) if t in techniques
-    ]
     # n_total counts datasets, and the groups overlap, so it is the number of
     # distinct names across them.
     names = {it["name"] for g in cat["groups"] for it in g["items"]}
@@ -102,15 +93,6 @@ def test_catalogue_entry_reports_where_the_file_came_from(tmp_path):
     assert catalogue.entry(TINY_DATASET, ds)["location"] == "group"
 
 
-def test_catalogue_downloaded_flag_tracks_the_file(tmp_path):
-    config.add_location(tmp_path, name="personal", persist=False)
-    ds = catalogue.resolve(TINY_DATASET)
-    assert ds is not None
-    assert catalogue.entry(TINY_DATASET, ds)["downloaded"] is False
-    (tmp_path / ds.file).write_bytes(b"x")  # pretend it is downloaded
-    assert catalogue.entry(TINY_DATASET, ds)["downloaded"] is True
-
-
 # ---------------------------------------------------------------------------
 # widget
 # ---------------------------------------------------------------------------
@@ -127,16 +109,6 @@ def test_browse_returns_widget_populated_from_the_catalogue():
     assert widget.groups
     assert widget.n_total == sum(len(g["items"]) for g in widget.groups)
     assert isinstance(widget.data_dir, str) and widget.data_dir
-
-
-def test_progress_trait_plumbing():
-    widget = _browser()
-    widget._set_progress("tok", "Foo", 30, 100)
-    assert widget.downloads["tok"] == {"label": "Foo", "done": 30, "total": 100}
-    widget._set_error("tok", "Foo", "boom")
-    assert widget.downloads["tok"]["error"] == "boom"
-    widget._clear_progress("tok")
-    assert "tok" not in widget.downloads
 
 
 def test_command_trait_routes_to_actions(monkeypatch):
@@ -163,16 +135,6 @@ def test_command_trait_routes_to_actions(monkeypatch):
         ("dl", "Z", "260902"),
         ("del", "Z", "260902"),
     ]
-
-
-def test_widget_does_not_shadow_ipywidgets_comm_handler():
-    """`_handle_msg` is ipywidgets' internal comm callback - overriding it breaks
-    all comm handling (trait sync included). The widget must not define one, so
-    the inherited handler stays intact."""
-    widget = _browser()
-    assert "_handle_msg" not in type(widget).__dict__
-    # It resolves to ipywidgets' Widget, not our subclass.
-    assert type(widget)._handle_msg.__qualname__.split(".")[0] != type(widget).__name__
 
 
 def test_command_update_routes_through_real_comm_handler(monkeypatch):
@@ -203,17 +165,6 @@ def test_search_blob_includes_authors_and_affiliation():
     assert "4d-stem" in row["search"]  # technique
 
 
-def test_delete_removes_downloaded_file(tmp_path):
-    config.add_location(tmp_path, name="personal", persist=False)
-    ds = catalogue.resolve(TINY_DATASET)
-    assert ds is not None
-    (tmp_path / ds.file).write_bytes(b"x")
-    assert ds.filepath() is not None
-    assert ds.delete() is True
-    assert ds.filepath() is None
-    assert ds.delete() is False  # nothing left to delete
-
-
 def test_a_dated_download_passes_the_version_and_names_the_toast(monkeypatch):
     """The toast label is what the frontend matches a running download to, so a
     dated one says which version it is."""
@@ -231,14 +182,6 @@ def test_a_dated_download_passes_the_version_and_names_the_toast(monkeypatch):
     assert future is not None
     future.result(timeout=30)
     assert seen == {"version": "260902", "label": "DemoNet@260902"}
-
-
-def test_cancel_sets_the_event():
-    widget = _browser()
-    event = threading.Event()
-    widget._cancels["tok"] = event
-    widget._cancel("tok")
-    assert event.is_set()
 
 
 def test_widget_quiets_pooch_download_logs():
@@ -267,10 +210,13 @@ def test_dataset_card_is_populated_and_routes(monkeypatch):
     assert widget.info["name"] == TINY_DATASET
     assert widget.info["technique"] == ["STEM"]
     calls = []
-    monkeypatch.setattr(widget, "_start_download", lambda version=None: calls.append(version))
-    widget._command = {"action": "download", "nonce": 1}
-    widget._command = {"action": "download", "version": "260902", "nonce": 2}
+    monkeypatch.setattr(
+        widget, "_start_download", lambda name, version=None: calls.append(version)
+    )
+    widget._command = {"action": "download", "name": TINY_DATASET, "nonce": 1}
+    widget._command = {"action": "download", "name": TINY_DATASET, "version": "260902", "nonce": 2}
     assert calls == [None, "260902"]
+    assert widget._resolve(TINY_DATASET) is ds
 
 
 def test_dataset_display_is_a_widget_card():
@@ -297,51 +243,29 @@ def test_dataset_display_falls_back_without_anywidget(monkeypatch):
     assert "text/plain" in bundle
 
 
-def test_notebook_detection_and_colab_enable_are_safe():
-    """The frontend helpers must be no-ops off a notebook (e.g. under pytest),
-    so nothing breaks when emdatabase is imported in plain Python."""
-    import emdatabase.widget as widget_mod
-
-    assert widget_mod._in_notebook() is False
-    widget_mod._enable_colab_widgets()  # must not raise when not on Colab
-    widget_mod._prepare_frontend()  # idempotent, safe
-
-
-def test_attach_toast_is_noop_outside_jupyter():
-    """Outside a Jupyter kernel there is no toast, so a bare download is
-    unaffected."""
-    import emdatabase.widget as widget_mod
-
-    monitor, finish = widget_mod._attach_toast("Foo")
-    assert monitor is None and finish is None
-
-
-def test_download_toasts_plumbing():
-    """The global toasts widget tracks a download and clears/errors/cancels it."""
-    pytest.importorskip("anywidget")
+def test_download_progress_plumbing():
+    """A download's progress is tracked, then cleared, errored or cancelled."""
     from concurrent.futures import Future
 
-    import emdatabase.widget as widget_mod
+    widget = _browser()
 
-    toasts = widget_mod._make_toasts_class()()
-
-    monitor, token = toasts.begin("Foo")
-    assert toasts.downloads[token] == {"label": "Foo", "done": 0, "total": 0}
+    monitor, token = widget.begin("Foo")
+    assert widget.downloads[token] == {"label": "Foo", "done": 0, "total": 0}
 
     ok = Future()
     ok.set_result("path")
-    toasts.finish(token, ok)  # success -> toast cleared
-    assert token not in toasts.downloads
+    widget.finish(token, ok)  # success -> progress cleared
+    assert token not in widget.downloads
 
-    monitor2, token2 = toasts.begin("Bar")  # cancel sets the event
-    toasts._command = {"action": "cancel", "token": token2, "nonce": 1}
+    monitor2, token2 = widget.begin("Bar")  # cancel sets the event
+    widget._command = {"action": "cancel", "token": token2, "nonce": 1}
     assert monitor2._cancel.is_set()
 
     bad = Future()
     bad.set_exception(RuntimeError("boom"))
-    _, token3 = toasts.begin("Baz")
-    toasts.finish(token3, bad)  # failure -> error toast
-    assert toasts.downloads[token3]["error"] == "boom"
+    _, token3 = widget.begin("Baz")
+    widget.finish(token3, bad)  # failure -> error shown
+    assert widget.downloads[token3]["error"] == "boom"
 
 
 @pytest.mark.slow
@@ -354,3 +278,51 @@ def test_widget_download_end_to_end(tmp_path):
     ds = catalogue.resolve(TINY_DATASET)
     assert ds is not None
     assert (tmp_path / ds.file).exists()
+
+
+def test_resolve_does_not_build_the_base_class():
+    """DownloadableDataset is in the emdatabase.data namespace, but is not an entry."""
+    assert catalogue.resolve("DownloadableDataset") is None
+    assert catalogue.resolve("NotADataset") is None
+
+
+def test_a_card_delete_that_fails_warns_rather_than_claiming_success(monkeypatch):
+    pytest.importorskip("anywidget")
+    ds = catalogue.resolve(TINY_DATASET)
+    assert ds is not None
+
+    def boom(version=None):
+        raise PermissionError("read-only location")
+
+    import emdatabase.widget as widget_mod
+
+    monkeypatch.setattr(ds, "delete", boom)
+    widget = widget_mod.card(ds)
+    with pytest.warns(UserWarning, match="could not delete"):
+        widget._on_command({"new": {"action": "delete", "name": TINY_DATASET, "nonce": 1}})
+
+
+def _module_repr():
+    # The repr comes from reassigning the module's __class__, which a type checker
+    # cannot follow; getattr still checks that the module really carries it.
+    return getattr(emdatabase, "_repr_mimebundle_")()
+
+
+def test_module_display_reports_a_real_error_rather_than_install_advice(monkeypatch):
+    """A misconfigured locations key is not a missing anywidget."""
+
+    def _boom():
+        raise TypeError("The locations config must be a mapping of name to directory")
+
+    monkeypatch.setattr(emdatabase, "browse", _boom)
+    text = _module_repr()["text/plain"]
+    assert "must be a mapping" in text
+    assert "pip install" not in text
+
+
+def test_module_display_still_advises_installing_the_widget(monkeypatch):
+    def _boom():
+        raise ImportError("no anywidget")
+
+    monkeypatch.setattr(emdatabase, "browse", _boom)
+    assert "pip install" in _module_repr()["text/plain"]

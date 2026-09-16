@@ -1,10 +1,8 @@
-/* browser.css - emdatabase.browse()
+/* browser.css - emdatabase.browse() and a dataset's card
  *
  * Themed after SpyDE (Catppuccin Mocha), dark by design like the app itself.
- * The palette lives on both the widget root and the (body-level) toast root so
- * the pinned toasts are themed even though they render outside .emdb.
  */
-.emdb, .emdb-toast-root {
+.emdb {
   --emdb-base: #1e1e2e;
   --emdb-mantle: #181825;
   --emdb-crust: #11111b;
@@ -21,9 +19,6 @@
   --emdb-red: #f38ba8;
   --emdb-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --emdb-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-}
-
-.emdb {
   font-family: var(--emdb-font);
   font-size: 13px;
   color: var(--emdb-text);
@@ -190,41 +185,37 @@
 .emdb-copy-btn:hover { border-color: var(--emdb-blue); background: rgba(137, 180, 250, 0.1); }
 .emdb-copy-btn.copied { color: var(--emdb-green); border-color: var(--emdb-green); }
 
+/* The browser's details panel stacks the description and load block above
+   the metadata. */
+.emdb-details .emdb-d-meta { margin-top: 12px; }
+
 /* Single-dataset card (display(dataset)) --------------------------- */
-.emdb-card-host { max-width: 75%; }
 .emdb-card { padding: 18px 20px; }
 /* Two columns: a wide description (+ load) on the left, metadata on the right,
    so the description gets the space and nothing sprawls edge to edge. */
-.emdb-card-cols {
+.emdb-card .emdb-d-cols {
   display: grid; grid-template-columns: minmax(0, 1fr) 220px;
   gap: 28px; align-items: start; margin-top: 4px;
 }
-.emdb-card-col-main { min-width: 0; }
-.emdb-card .emdb-d-desc { max-width: none; }           /* fill the main column */
-.emdb-card-col-side .emdb-d-meta { grid-template-columns: 1fr; }
-.emdb-inline-toast {
-  margin: 2px 0 12px; display: flex; flex-direction: column; gap: 6px;
-  background: var(--emdb-mantle); border: 1px solid var(--emdb-surface0);
-  border-radius: 8px; padding: 8px 10px;
-}
-.emdb-inline-toast.cancelling { opacity: 0.65; }
-.emdb-inline-toast.error { border-color: var(--emdb-red); }
+.emdb-card .emdb-d-main { min-width: 0; }
+.emdb-card .emdb-d-meta { grid-template-columns: 1fr; }
+/* A card's downloads sit under its status line. */
+.emdb-card .emdb-toasts:not(:empty) { margin: 2px 0 12px; }
 
-/* Toasts: pinned to the bottom-right of the viewport ----------------- */
-.emdb-toast-root {
-  position: fixed; right: 16px; bottom: 16px; z-index: 99999;
-  display: flex; flex-direction: column; gap: 10px; width: 300px;
-  font-family: var(--emdb-font);
+/* Download progress ------------------------------------------------- */
+.emdb-toasts { display: flex; flex-direction: column; gap: 8px; }
+/* Along the bottom of the browser, side by side in as many columns as fit. */
+.emdb > .emdb-toasts:not(:empty) {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  padding: 10px 14px; border-top: 1px solid var(--emdb-surface0);
 }
 .emdb-toast {
-  background: var(--emdb-base); border: 1px solid var(--emdb-surface0);
-  border-radius: 9px; padding: 10px 12px; color: var(--emdb-text);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
-  display: flex; flex-direction: column; gap: 7px;
+  background: var(--emdb-mantle); border: 1px solid var(--emdb-surface0);
+  border-radius: 8px; padding: 8px 10px; color: var(--emdb-text);
+  display: flex; flex-direction: column; gap: 6px;
 }
 .emdb-toast.error { border-color: var(--emdb-red); }
 .emdb-toast.cancelling { opacity: 0.65; }
-.emdb-x:disabled { opacity: 0.5; cursor: default; }
 .emdb-toast-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .emdb-toast-title { font-size: 12.5px; font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

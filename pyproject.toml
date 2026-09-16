@@ -1,6 +1,6 @@
 [project]
 name = "emdatabase"
-version = "0.5.0.dev0"
+version = "0.4.0"
 description = "A database for electron microscopy data using pooch to download and manage files."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -42,7 +42,7 @@ Issues = "https://github.com/electronmicroscopy/emdatabase/issues"
 [project.optional-dependencies]
 widget = ["anywidget>=0.9"]
 tests = ["pytest", "pytest-cov", "hyperspy", "quantem", "anywidget>=0.9", "jsonschema"]
-doc = ["sphinx", "sphinx-rtd-theme","sphinx-gallery", "quantem", "hyperspy","pydata_sphinx_theme","sphinx_design",]
+doc = ["sphinx", "sphinx-gallery", "quantem", "hyperspy","pydata_sphinx_theme","sphinx_design",]
 dev = [
     "ruff",
     "basedpyright",

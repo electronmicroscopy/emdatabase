@@ -139,7 +139,9 @@ def build_yaml(data):
     source, filename, link = split_url(url)
     if not source:
         sys.exit(f"{data['URL']!r} is not a link to a file")
-    filename = data["File Name"] or filename
+    # Whoever opened the issue typed this, and it is joined onto a directory
+    # later (check_latest_weights.py), so keep the name and nothing else.
+    filename = Path(data["File Name"] or filename).name
     if not filename:
         sys.exit(f"{data['URL']!r} does not end in a file name; fill in --File Name--")
     # The issue may already carry the size; without it the server is asked for
@@ -166,14 +168,12 @@ def build_yaml(data):
     }
     entry["authors"], problems = parse_authors(data["Authors"])
     if data["Kind"] == "weights":
-        entry["kind"] = "weights"
         model = {
             "class": data["Model Class"],
             "framework": data["Model Framework"],
             "quantem": data["Model quantem"],
         }
-        entry["model"] = {k: v for k, v in model.items() if v}
-        entry = as_weights_family(entry, data["Version Date"] or version_date())
+        entry = as_weights_family(entry, data["Version Date"] or version_date(), model)
     return build_document(name, entry), name, problems
 
 
@@ -181,6 +181,9 @@ def write_yaml(issue_file, out_dir):
     """Parse one issue body and write the entry it describes into ``out_dir``."""
     document, dataset_name, problems = build_yaml(parse_issue_body(Path(issue_file).read_text()))
     out_path = Path(out_dir) / f"{dataset_name}.yaml"
+    if out_path.exists():
+        # Anyone can open an issue; the pull request it opens adds, never replaces.
+        problems.append(f"{out_path} already exists; choose another --Dataset Name--")
     # Nothing is downloaded for an issue that is already known to be wrong.
     if not problems:
         for line in fill_download_fields(document):

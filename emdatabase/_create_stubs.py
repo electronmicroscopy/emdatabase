@@ -9,9 +9,7 @@ if the committed stub has drifted from them.
 import sys
 from pathlib import Path
 
-import yaml
-
-from emdatabase.metadata import dataset_files
+from emdatabase.metadata import index_entries
 
 STUB_PATH = Path(__file__).parent / "data" / "__init__.pyi"
 
@@ -39,40 +37,27 @@ def build_docstring(dataset_dict) -> str:
 
 def build_pyi_stub() -> str:
     """The contents of the ``.pyi`` stub for the current dataset YAML."""
-    stub_lines = [
+    # The same entries emdatabase.data builds classes from, so the stub cannot
+    # claim a class the loader skipped or miss one it made.
+    entries = list(index_entries())
+    lines = [
         "# Auto-generated stub file for emdatabase",
         "from emdatabase.downloadable_dataset import DownloadableDataset",
         "",
     ]
-
-    dataset_classes = []
-
-    for dataset_path in dataset_files():
-        data_dict_yaml = yaml.safe_load(dataset_path.read_text(encoding="utf-8"))
-        for name in data_dict_yaml:
-            data_dict = data_dict_yaml[name]
-            class_name = name.replace(" ", "_").replace("-", "_")
-            description = build_docstring(data_dict)
-
-            stub_lines.append(f"class {class_name}(DownloadableDataset):")
-            stub_lines.append('    """')
-            stub_lines.append(f"    {name}")
-            if description:
-                stub_lines.append("")
-                stub_lines.append(f"    {description}")
-            stub_lines.append('    """')
-            stub_lines.append("    ...")
-            stub_lines.append("")
-
-            dataset_classes.append(class_name)
-
-    stub_lines.append(f"__all__ = {dataset_classes}")
-    return "\n".join(stub_lines)
-
-
-def generate_pyi_stub() -> None:
-    """Write the stub file."""
-    STUB_PATH.write_text(build_pyi_stub(), encoding="utf-8")
+    for entry in entries:
+        lines += [
+            f"class {entry.class_name}(DownloadableDataset):",
+            '    """',
+            f"    {entry.name}",
+            "",
+            f"    {build_docstring(entry.spec)}",
+            '    """',
+            "    ...",
+            "",
+        ]
+    lines.append(f"__all__ = {[entry.class_name for entry in entries]}")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
@@ -83,4 +68,4 @@ if __name__ == "__main__":
                 "regenerate it with `python -m emdatabase._create_stubs`"
             )
     else:
-        generate_pyi_stub()
+        STUB_PATH.write_text(build_pyi_stub(), encoding="utf-8")
