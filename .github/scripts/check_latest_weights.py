@@ -161,6 +161,7 @@ class Report:
     """What happened to one family: summary lines, and whether it needs writing."""
 
     lines: list[str] = field(default_factory=list)
+    uploaded: list[str] = field(default_factory=list)
     changed: bool = False
     ok: bool = True
 
@@ -182,6 +183,7 @@ def _archive(report: Report, options: Options, served: Served, asset: str) -> No
     verb = "would upload" if options.dry_run else "uploaded"
     report.lines.append(f"- {verb} `{asset}` to the `{options.archive_tag}` release")
     if not options.dry_run:
+        report.uploaded.append(asset)
         upload_asset(options.archive_tag, served.path, asset)
 
 
@@ -382,6 +384,7 @@ def check_file(path: Path, options: Options) -> Report:
             continue
         one = check_family(name, entry, metadata, options)
         report.lines += one.lines
+        report.uploaded += one.uploaded
         report.changed |= one.changed
         report.ok &= one.ok
     if not report.changed:
@@ -444,13 +447,25 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     lines: list[str] = []
+    uploaded: list[str] = []
     ok = True
     for path in dataset_files(args.index):
         report = check_file(path, options)
         ok &= report.ok
         lines += report.lines
+        uploaded += report.uploaded
 
     summary = "\n".join(lines)
+    if uploaded:
+        # The upload happens during the run, so a pull request that is closed
+        # rather than merged leaves the file in the release with no entry
+        # pointing at it. Name them where whoever closes it will see them.
+        listed = "\n".join(f"- `{asset}`" for asset in uploaded)
+        summary += (
+            f"\n\n## Uploaded to the `{options.archive_tag}` release\n\n{listed}\n\n"
+            "These were uploaded while the run went, not when this pull request is "
+            "merged: closing it unmerged leaves them in the release, to delete by hand."
+        )
     print(summary)
     if args.summary and not args.dry_run:
         args.summary.write_text(f"{summary}\n", encoding="utf-8")
