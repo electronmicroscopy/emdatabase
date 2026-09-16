@@ -186,6 +186,30 @@ def test_a_file_over_the_threshold_is_kept_for_a_maintainer(script, gh, unchange
     assert f"gh release upload weights-archive {kept} --clobber" in summary.read_text()
 
 
+def test_the_summary_lists_what_was_uploaded(script, gh, unchanged, tmp_path):
+    """The upload is not undone by closing the pull request, so the report names it."""
+    _, served, directory, _ = unchanged
+    (served / FILE).write_bytes(NEW_BYTES)
+
+    code, summary = _run(script, directory, tmp_path)
+
+    assert code == 0
+    report = summary.read_text()
+    assert "## Uploaded to the `weights-archive` release" in report
+    assert f"- `DemoNet_{script.version_date()}.pt`" in report
+    assert "closing it unmerged" in report
+
+
+def test_a_file_kept_for_a_maintainer_is_not_listed_as_uploaded(script, gh, unchanged, tmp_path):
+    """Nothing reached the release, so there is nothing to delete afterwards."""
+    _, served, directory, _ = unchanged
+    (served / FILE).write_bytes(NEW_BYTES)
+
+    _, summary = _run(script, directory, tmp_path, "--threshold-mb", "0")
+
+    assert "## Uploaded to" not in summary.read_text()
+
+
 def test_a_link_serving_html_fails_and_writes_nothing(script, gh, http_server, index, tmp_path):
     base, served = http_server
     directory, path, write = index
@@ -204,7 +228,7 @@ def test_a_link_serving_html_fails_and_writes_nothing(script, gh, http_server, i
     assert "text/html" in summary.read_text()
 
 
-def test_dry_run_writes_nothing(script, gh, unchanged, tmp_path):
+def test_dry_run_writes_nothing(script, gh, unchanged, tmp_path, capsys):
     _, served, directory, path = unchanged
     (served / FILE).write_bytes(NEW_BYTES)
     original = path.read_text(encoding="utf-8")
@@ -215,6 +239,8 @@ def test_dry_run_writes_nothing(script, gh, unchanged, tmp_path):
     assert path.read_text(encoding="utf-8") == original
     assert gh == []
     assert not summary.exists()
+    # Nothing reached the release, so nothing is listed as needing deletion.
+    assert "## Uploaded to" not in capsys.readouterr().out
 
 
 def test_two_states_of_a_file_under_one_date_fail(script, gh, unchanged, tmp_path):

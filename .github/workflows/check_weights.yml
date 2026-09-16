@@ -34,6 +34,10 @@ jobs:
           python .github/scripts/check_latest_weights.py \
             --summary changes.md --keep-dir oversize
 
+      - name: Report what the run did
+        if: ${{ always() && hashFiles('changes.md') != '' }}
+        run: cat changes.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload the files too big to archive
         if: ${{ always() && hashFiles('oversize/*') != '' }}
         uses: actions/upload-artifact@v4
