@@ -14,7 +14,12 @@ import pooch
 import yaml
 
 from emdatabase.config import LocationName
-from emdatabase.metadata import DatasetMetadata, WeightsVersion, versioned_filename
+from emdatabase.metadata import (
+    ArchiveCompanion,
+    DatasetMetadata,
+    WeightsVersion,
+    versioned_filename,
+)
 
 USER_AGENT = "emdatabase (https://github.com/electronmicroscopy/emdatabase)"
 
@@ -115,6 +120,7 @@ class _Resolved:
     file: str
     pinned: bool
     member: str | None = None
+    companions: tuple[ArchiveCompanion, ...] = ()
 
 
 class Progress(Protocol):
@@ -421,6 +427,7 @@ class DownloadableDataset:
                 file=md.file,
                 pinned=True,
                 member=md.archive.member if md.archive else None,
+                companions=tuple(md.archive.companions) if md.archive else (),
             )
         if version is None:
             if md.latest is None:
@@ -655,6 +662,7 @@ class DownloadableDataset:
                 return shared
         destination = self._resolve_destination(destination)
         downloader: Any
+        alongside: list[tuple[ArchiveCompanion, Any]] = []
         if resolved.member is None:
             downloader = pooch.HTTPDownloader(
                 progressbar=progressbar,  # pyright: ignore[reportArgumentType]
@@ -663,10 +671,16 @@ class DownloadableDataset:
             )
         else:
             # Imported here, not at the top, because _archive imports this
-            # module for USER_AGENT and the progress protocol.
+            # module for USER_AGENT and the progress protocol - and importing it
+            # pulls in py7zr, which a download that touches no archive should not
+            # pay for.
             from emdatabase._archive import ArchiveMemberDownloader
 
             downloader = ArchiveMemberDownloader(resolved.member, progressbar, chunk_size)
+            alongside = [
+                (c, ArchiveMemberDownloader(c.member, progressbar, chunk_size))
+                for c in resolved.companions
+            ]
         try:
             if refresh:
                 # pooch keeps a file whose hash it was not given anything to
@@ -683,6 +697,18 @@ class DownloadableDataset:
                     path=destination,
                     downloader=downloader,  # pyright: ignore[reportArgumentType]
                 )
+                # Each companion is a download of its own: its own hash, its own
+                # atomic write, and skipped outright if it is already there.
+                for companion, companion_downloader in alongside:
+                    if refresh:
+                        (destination / companion.file).unlink(missing_ok=True)
+                    pooch.retrieve(
+                        url=resolved.url,
+                        known_hash=companion.checksum,
+                        fname=companion.file,
+                        path=destination,
+                        downloader=companion_downloader,
+                    )
         finally:
             # pooch only closes the bar on the happy path, so a failed or
             # cancelled download would leave it hanging open.
@@ -825,7 +851,13 @@ class DownloadableDataset:
         bool
             True if a file was removed, False if there was nothing to delete.
         """
-        path = self._resolve_destination(destination) / self.filename(version)
+        directory = self._resolve_destination(destination)
+        # Companions go too. They are usually the large ones - a header is what
+        # the entry points at, and the gigabytes sit beside it - so leaving them
+        # behind would make delete() look like it had freed the space.
+        for companion in self._resolve(version).companions:
+            (directory / companion.file).unlink(missing_ok=True)
+        path = directory / self.filename(version)
         if path.exists():
             path.unlink()
             return True

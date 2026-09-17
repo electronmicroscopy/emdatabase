@@ -85,10 +85,10 @@ That prints one line per problem and exits non-zero, or prints ``valid``.
 A file inside an archive
 ------------------------
 
-Some data worth shipping is one file inside a multi-gigabyte zip on a record
-nobody can re-publish, where downloading all of it to get one file is not
-reasonable. Such an entry adds an ``archive`` block naming the zip and the
-member inside it:
+Some data worth shipping is one file inside a multi-gigabyte ``.zip`` or ``.7z``
+on a record nobody can re-publish, where downloading all of it to get one file is
+not reasonable. Such an entry adds an ``archive`` block naming the archive and
+the member inside it:
 
 .. code-block:: yaml
 
@@ -97,14 +97,34 @@ member inside it:
      member: Figure_01/Panel_a/scan_x128_y128.raw
 
 ``download()`` then fetches only that member, over HTTP range requests: a few
-requests read the zip's directory, and the member costs its own compressed bytes
-rather than the whole archive. What comes back is a path, as for any other entry.
+requests read the archive's directory, and only the member's own bytes follow.
+What comes back is a path, as for any other entry. The format is taken from the
+link's file name, so no field declares it.
+
+What that costs differs by format. A zip compresses each member on its own, so
+one member is read and streamed directly. A 7z compresses files together in
+solid blocks, so reaching a member means decompressing its block from the start:
+cheap for a file at the front of a small block, expensive for one at the back of
+a large one. It is worth measuring before adding a 7z entry - in the archive
+behind ``MOSS6Fig3`` the same 15.3 GB file holds members costing
+anywhere from 2 MB to 2.6 GB to reach. Note also that 7z is extracted rather
+than streamed, so its progress bar fills in one step at the end and a cancel
+cannot interrupt it.
 
 The entry's own ``file``, ``checksum`` and ``size_bytes`` go on describing the
 member, which is the file you end up with; ``checksum`` and ``size_bytes``
 inside the block describe the archive instead, and are optional. Give ``member``
-as the complete path inside the zip - one file name can appear in several of its
-directories, so a basename alone is ambiguous.
+as the complete path inside the archive - one file name can appear in several of
+its directories, so a basename alone is ambiguous.
+
+Data that is more than one file adds ``companions``, each naming a further member
+and the ``file`` it is saved as. ``download()`` still returns the entry's own
+``file``; the rest arrive beside it. Give them all a directory of their own when
+a reader expects to find them together - an EMPAD ``.xml`` names its ``.raw`` by
+bare file name and opens it next to itself, so ``MyDataset/acquisition_12.xml``
+and ``MyDataset/scan_x256_y256.raw`` both keeps the pairing and keeps it clear of
+identically named members elsewhere. ``delete()`` removes the companions too, and
+the size shown in the catalogue counts them.
 
 These entries are written by hand. The two fields CI otherwise fills in would be
 taken from the archive rather than from the member, so a pull request leaving

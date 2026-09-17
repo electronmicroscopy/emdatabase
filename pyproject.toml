@@ -11,6 +11,7 @@ authors = [
 ]
 dependencies = [
     "pooch",
+    "py7zr",
     "pyyaml",
     "tqdm>=4.67.1",
 ]

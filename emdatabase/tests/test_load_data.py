@@ -20,10 +20,11 @@ import warnings
 import zipfile
 from pathlib import Path
 
+import py7zr
 import pytest
 
 import emdatabase.data as data
-from emdatabase._archive import _HTTPRangeFile
+from emdatabase._archive import _HTTPRangeFile, _is_sevenzip
 from emdatabase.data import MgONanoCrystals, NiEBSDLarge
 from emdatabase.downloadable_dataset import (
     _PENDING,
@@ -72,15 +73,21 @@ def _head(url, timeout=60):
     return urllib.request.urlopen(request, timeout=timeout)
 
 
-def _archive_member(url, member):
-    """The directory entry for one member of a remote zip.
+def _archive_member_size(url, member):
+    """The uncompressed size of one member of a remote archive.
 
     A few small range requests rather than the whole archive, which is the
-    reason an entry names a member in the first place.
+    reason an entry names a member in the first place. A zip and a 7z report
+    that size through different objects, so the size itself is what comes back.
     """
     with io.BufferedReader(_HTTPRangeFile(url), buffer_size=1 << 20) as stream:
+        if _is_sevenzip(url):
+            with py7zr.SevenZipFile(stream) as archive:
+                found = [f for f in archive.list() if f.filename.replace("\\", "/") == member]
+                assert found, f"{url} holds no member {member!r}"
+                return found[0].uncompressed
         with zipfile.ZipFile(stream) as archive:
-            return archive.getinfo(member)
+            return archive.getinfo(member).file_size
 
 
 @pytest.mark.network
@@ -122,13 +129,18 @@ def test_source_url_resolves(name, version):
             f"{name}: {url} is {int(length)} bytes, but the YAML declares {declared}"
         )
     if archive is not None:
-        # What rots for an archive entry is the member being renamed or moved
-        # inside a zip whose own size never changes.
-        info = _archive_member(url, archive.member)
-        assert info.file_size == resolved.size_bytes, (
-            f"{name}: {archive.member} is {info.file_size} bytes inside {url}, "
-            f"but the YAML declares {resolved.size_bytes}"
-        )
+        # What rots for an archive entry is a member being renamed or moved
+        # inside an archive whose own size never changes. Companions are checked
+        # too: they are usually the large ones, and nothing else would notice.
+        members = [(archive.member, resolved.size_bytes)]
+        members += [(c.member, c.size_bytes) for c in archive.companions]
+        for member, declared in members:
+            if declared is None:
+                continue
+            size = _archive_member_size(url, member)
+            assert size == declared, (
+                f"{name}: {member} is {size} bytes inside {url}, but the YAML declares {declared}"
+            )
 
 
 @pytest.mark.parametrize("name", ALL_DATASETS)

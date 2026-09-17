@@ -221,6 +221,23 @@ class LayeredCuNb4DSTEM(DownloadableDataset):
     """
     ...
 
+class MOSS6Fig3(DownloadableDataset):
+    """
+    MOSS6Fig3
+
+    The MOSS-6 metal-organic framework 4D-STEM ptychography dataset shown in Fig. 3 of "Atomically resolved imaging of radiation-sensitive metal-organic frameworks via electron ptychography" (Nature Communications 16, 2025; doi 10.1038/s41467-025-56215-z). It arrives as a pair in a directory of its own: acquisition_12.xml, the EMPAD header, which is what download() hands back and what a reader is pointed at, and scan_x256_y256.raw beside it, which the header names and which holds the data - 256 x 256 scan positions of 128 x 130 little-endian float32 frames, each frame a 128 x 128 detector followed by two rows of EMPAD metadata. Read it with quantem's read_4dstem(path, file_type="empad"), or rsciio.empad, which takes the header and opens the raw next to it. The scan was taken on a double Cs-corrected FEI Titan Cubed Themis Z at 300 kV, with a 10 mrad convergence semi-angle, a 1.05 Angstrom step, about 100 nm of defocus, and an electron dose of about 98 electrons per square Angstrom. MOSS-6 is a MOF solid solution of the NU-1000 and NU-901 phases. Both files are members of the record's 15.3 GB RawData.7z and are fetched out of it directly, without downloading the archive; the raw costs about 2.6 GB of it.
+
+    DOI: 10.5281/zenodo.13958144
+
+    License: CC-BY-4.0
+
+    You can download this dataset here:
+    https://zenodo.org/records/13958144/files
+
+
+    """
+    ...
+
 class MgONanoCrystals(DownloadableDataset):
     """
     MgONanoCrystals
@@ -359,4 +376,4 @@ class ZrNbPrecipitate(DownloadableDataset):
     """
     ...
 
-__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'PeakDetectionPolymers', 'SPEDAg', 'TutorialUNet', 'TwistedBilayerWSe2Themis', 'ZrNbPrecipitate']
+__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MOSS6Fig3', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'PeakDetectionPolymers', 'SPEDAg', 'TutorialUNet', 'TwistedBilayerWSe2Themis', 'ZrNbPrecipitate']

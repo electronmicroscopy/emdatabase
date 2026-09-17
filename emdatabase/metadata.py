@@ -321,8 +321,25 @@ class WeightsVersion:
 
 
 @dataclass(frozen=True)
+class ArchiveCompanion:
+    """A second file the entry's own file cannot be read without.
+
+    An EMPAD acquisition is the plain case: the ``.xml`` is what a reader is
+    pointed at, but it names its ``.raw`` by bare file name and expects to find
+    it in the same directory. Both come out of the same archive, and ``file``
+    gives each its name on disk - including a directory, which is how the two
+    are kept together and away from identically named members elsewhere.
+    """
+
+    member: str
+    file: str
+    checksum: str | None = None
+    size_bytes: int | None = None
+
+
+@dataclass(frozen=True)
 class ArchiveMember:
-    """One file inside a zip on someone else's record.
+    """One file inside an archive on someone else's record.
 
     An entry names this when the data worth shipping is a single member of a
     multi-gigabyte archive that cannot be re-published. ``download()`` fetches
@@ -330,14 +347,20 @@ class ArchiveMember:
     ``checksum`` and ``size_bytes`` go on describing the file the user ends up
     with, and the two here describe the archive they come out of.
 
-    ``member`` is the complete path inside the zip: one file name can appear in
-    several directories of the same archive.
+    ``member`` is the complete path inside the archive: one file name can appear
+    in several of its directories. A ``.zip`` and a ``.7z`` are both read, told
+    apart by the link's own file name.
+
+    ``companions`` names further members fetched alongside, for data that is more
+    than one file; see :class:`ArchiveCompanion`. ``download()`` still hands back
+    the entry's own ``file``.
     """
 
     url: str
     member: str
     checksum: str | None = None
     size_bytes: int | None = None
+    companions: tuple[ArchiveCompanion, ...] = ()
 
 
 @dataclass(frozen=True, repr=False)
@@ -409,7 +432,11 @@ class DatasetMetadata:
                     }
                 )
             if values.get("archive") is not None:
-                values["archive"] = ArchiveMember(**values["archive"])
+                archive = dict(values["archive"])
+                archive["companions"] = tuple(
+                    ArchiveCompanion(**c) for c in archive.get("companions") or ()
+                )
+                values["archive"] = ArchiveMember(**archive)
             if values.get("latest") is not None:
                 values["latest"] = WeightsVersion(**values["latest"])
             values["versions"] = {
@@ -421,9 +448,22 @@ class DatasetMetadata:
             raise TypeError(f"{_where(origin)}: {error}") from None
 
     @property
+    def total_bytes(self) -> int | None:
+        """Every byte the entry puts on disk, companions included, or None.
+
+        :attr:`size_bytes` describes the entry's own file. For a multi-member
+        entry that is the small one - an EMPAD header beside gigabytes of raw -
+        so it is this, not that, which answers "how big is this dataset".
+        """
+        if self.size_bytes is None:
+            return None
+        companions = self.archive.companions if self.archive else ()
+        return self.size_bytes + sum(c.size_bytes or 0 for c in companions)
+
+    @property
     def size(self) -> str:
-        """:attr:`size_bytes` formatted for display, or ``""`` if unknown."""
-        return format_size(self.size_bytes)
+        """:attr:`total_bytes` formatted for display, or ``""`` if unknown."""
+        return format_size(self.total_bytes)
 
     @property
     def headline(self) -> str:
@@ -457,7 +497,9 @@ class DatasetMetadata:
             elif entry.name == "model":
                 value = " · ".join(p for p in (value.class_, value.framework, value.quantem) if p)
             elif entry.name == "archive":
-                value = f"{value.member} in {value.url}"
+                value = f"{value.member} in {value.url}" + (
+                    f" (+{len(value.companions)} alongside)" if value.companions else ""
+                )
             elif entry.name == "latest":
                 value = " · ".join(p for p in (value.checksum, value.url) if p)
             elif entry.name == "versions":

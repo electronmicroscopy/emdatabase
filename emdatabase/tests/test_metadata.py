@@ -13,6 +13,7 @@ import yaml
 
 from emdatabase.metadata import (
     TEMPLATE_PATH,
+    ArchiveCompanion,
     ArchiveMember,
     Author,
     DatasetMetadata,
@@ -102,6 +103,23 @@ def test_author_schema_and_dataclass_agree():
     assert list(author_schema["properties"]) == [f.name for f in dataclasses.fields(Author)]
 
 
+def test_an_orcid_ending_in_x_is_accepted():
+    """``X`` is a legal ORCID check digit (ISO 7064 mod 11-2), not a typo, so a
+    digits-only pattern would reject about one valid ORCID in eleven."""
+
+    def entry(orcid):
+        return {
+            "description": "A dataset by someone with an ORCID.",
+            "source": "https://example.com",
+            "file": "f.zspy",
+            "authors": {"Jane Doe": {"affiliation": "Somewhere", "orcid": orcid}},
+        }
+
+    assert validate_document({"Fine_Name": entry("0000-0003-2269-320X")}) == []
+    assert validate_document({"Fine_Name": entry("0000-0003-2269-320Y")})  # only X, not any letter
+    assert validate_document({"Fine_Name": entry("0000-0003-2269-32XX")})  # and only at the end
+
+
 def test_weights_file_schema_and_dataclass_agree():
     """``latest`` and every dated version are the same three fields."""
     weights_file = SCHEMA["$defs"]["weightsFile"]
@@ -116,6 +134,17 @@ def test_archive_member_schema_and_dataclass_agree():
     assert list(archive["properties"]) == [f.name for f in dataclasses.fields(ArchiveMember)]
     assert archive["required"] == ["url", "member"]
     assert ENTRY_SCHEMA["properties"]["archive"] == {"$ref": "#/$defs/archiveMember"}
+
+
+def test_archive_companion_schema_and_dataclass_agree():
+    """A companion comes out of the same archive and is saved beside the entry's file."""
+    companion = SCHEMA["$defs"]["archiveCompanion"]
+    fields = [f.name for f in dataclasses.fields(ArchiveCompanion)]
+    assert list(companion["properties"]) == fields
+    assert companion["required"] == ["member", "file"]
+    assert SCHEMA["$defs"]["archiveMember"]["properties"]["companions"]["items"] == {
+        "$ref": "#/$defs/archiveCompanion"
+    }
 
 
 @pytest.mark.parametrize(
