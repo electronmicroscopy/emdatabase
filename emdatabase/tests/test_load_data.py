@@ -306,6 +306,33 @@ def test_downloading_again_after_a_failure_retries(tmp_path, monkeypatch):
     assert second.failed is False
 
 
+def test_a_blocking_download_clears_an_earlier_failure(tmp_path, monkeypatch):
+    """A kept failure is about a file that is not there; this one is.
+
+    The entry is keyed by path, not by attempt, so a failure left behind would
+    be found by every handle to that path - including the one just handed back
+    by the download that succeeded.
+    """
+    dataset = getattr(data, TINY_DATASET)()
+    monkeypatch.setattr(dataset, "_retrieve", _failing_retrieve(ConnectionError("host is down")))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DownloadFailedWarning)
+        failed = dataset.download(destination=tmp_path, progressbar=False)
+        with pytest.raises(ConnectionError):
+            failed.result()
+
+    monkeypatch.setattr(dataset, "_retrieve", _slow_retrieve(dataset, tmp_path))
+    handle = dataset.download(destination=tmp_path, progressbar=False, background=False)
+
+    assert handle.failed is False
+    assert "failed" not in repr(handle)
+    assert Path(os.fspath(handle)).read_bytes() == b"payload"
+    assert _pending_key(handle) not in _PENDING
+    # and not just this handle: any path to the file, however it was built
+    assert DatasetPath(tmp_path / dataset.file).failed is False
+
+
 def test_keyword_overrides_leave_the_class_spec_alone():
     base = getattr(data, TINY_DATASET)
     overridden = base(checksum="md5:" + "0" * 32)

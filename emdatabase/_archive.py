@@ -107,18 +107,31 @@ class _HTTPRangeFile(io.RawIOBase):
             self.url,
             headers={"User-Agent": USER_AGENT, "Range": f"bytes={self.pos}-{end}"},
         )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            # A host that does not do ranges answers 200 with the whole body.
-            # Reading it would quietly pull the entire archive, which is the one
-            # thing this exists to avoid, so it is an error rather than a
-            # fallback.
-            if response.status != 206:
-                raise ArchiveError(
-                    f"{_host(self.url)} ignored a Range request and answered "
-                    f"{response.status}, so fetching one member would mean downloading "
-                    f"all {self.size} bytes of {self.url}."
-                )
-            data = response.read()
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                # A host that does not do ranges answers 200 with the whole body.
+                # Reading it would quietly pull the entire archive, which is the one
+                # thing this exists to avoid, so it is an error rather than a
+                # fallback.
+                if response.status != 206:
+                    raise ArchiveError(
+                        f"{_host(self.url)} ignored a Range request and answered "
+                        f"{response.status}, so fetching one member would mean downloading "
+                        f"all {self.size} bytes of {self.url}."
+                    )
+                data = response.read()
+        except OSError as error:
+            # A host that answered the HEAD and then stopped serving - a 503
+            # from one under load, a dropped connection, a range it will not
+            # give - fails here as an OSError, and ``zipfile`` turns any OSError
+            # raised while it reads the directory into
+            # BadZipFile("File is not a zip file"). Reporting an outage as a
+            # corrupt archive is the substitution ArchiveError exists to
+            # prevent, so the transport failure is named rather than left to it.
+            raise ArchiveError(
+                f"{_host(self.url)} did not serve bytes {self.pos}-{end} of {self.url}: "
+                f"{type(error).__name__}: {error}"
+            ) from error
         buffer[: len(data)] = data
         self.pos += len(data)
         return len(data)

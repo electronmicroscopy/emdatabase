@@ -238,6 +238,21 @@ def test_a_7z_host_that_ignores_range_fails_loudly(archived_7z, dest, http_serve
     assert list(dest.iterdir()) == []
 
 
+def test_a_host_that_stops_serving_mid_read_says_so(archived, dest, http_server):
+    """The archive is found, then the host goes down while its bytes are being read.
+
+    ``zipfile`` turns any ``OSError`` raised while it reads the directory into
+    ``BadZipFile("File is not a zip file")``, so an outage reported as it
+    happens is the difference between a message about the host and one blaming
+    the archive.
+    """
+    base, _ = http_server
+    ds = archived(archive={"url": f"{base}/flaky/Fig_01.zip"})
+    with pytest.raises(ArchiveError, match="503"):
+        ds.download(destination=dest, progressbar=False, background=False)
+    assert list(dest.iterdir()) == []
+
+
 # --- more than one member --------------------------------------------------
 #
 # Some data is not one file. An EMPAD acquisition is a header naming a raw it
@@ -323,6 +338,35 @@ def test_delete_removes_the_companion_too(paired, dest):
     assert len(list(folder.iterdir())) == 2
     assert ds.delete() is True
     assert list(folder.iterdir()) == []
+
+
+def test_a_shared_copy_missing_its_companion_is_not_used(paired, tmp_path, dest):
+    """A header without its raw is not the dataset, so the whole set is fetched."""
+    group = tmp_path / "group"
+    (group / "Paired").mkdir(parents=True)
+    (group / "Paired/scan.raw").write_bytes(CONTENT)  # the header arrived; the raw did not
+    config.set({"locations": {"group": str(group), "personal": str(dest)}})
+    ds = paired()
+
+    assert ds.filepath() is None  # a partial copy is not a copy
+    path = ds.download(progressbar=False, background=False)
+
+    assert Path(path) == dest / "Paired/scan.raw"  # not the shared header
+    assert (dest / "Paired/scan_x256_y256.raw").read_bytes() == COMPANION_CONTENT
+
+
+def test_a_complete_shared_copy_is_still_used_as_is(paired, tmp_path, dest):
+    """The shortcut stays a shortcut: both members there means nothing is fetched."""
+    group = tmp_path / "group"
+    (group / "Paired").mkdir(parents=True)
+    (group / "Paired/scan.raw").write_bytes(CONTENT)
+    (group / "Paired/scan_x256_y256.raw").write_bytes(COMPANION_CONTENT)
+    config.set({"locations": {"group": str(group), "personal": str(dest)}})
+
+    path = paired().download(progressbar=False, background=False)
+
+    assert Path(path) == group / "Paired/scan.raw"
+    assert list(dest.iterdir()) == []  # nothing downloaded to the personal dir
 
 
 def test_the_size_shown_counts_the_companion(paired):

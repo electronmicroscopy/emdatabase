@@ -225,6 +225,24 @@ def _settle_pending(key: str, future: "Future[Path]") -> None:
             del _PENDING[key]
 
 
+def _discard_settled(key: str) -> None:
+    """Drop a kept failure once the file has arrived by some other route.
+
+    :func:`_settle_pending` keeps a failed download's entry so that it goes on
+    being reported, but the entry is keyed by the path alone and so outlives the
+    attempt it belongs to: without this, a blocking download that succeeds after
+    a background one failed would hand back a handle that still raises the old
+    error - and reprs as ``[failed]`` - for a file that is now on disk.
+
+    A download still running is left alone. It is writing the same file, and
+    dropping it would let its handle report itself done before the bytes are.
+    """
+    with _PENDING_LOCK:
+        future = _PENDING.get(key)
+        if future is not None and future.done():
+            del _PENDING[key]
+
+
 class DatasetPath(_ConcretePath):
     """The local path to a dataset, which may still be downloading.
 
@@ -614,9 +632,11 @@ class DownloadableDataset:
             reports download state. With ``background`` False it is already done.
         """
         if not background:
-            return DatasetPath(
-                self._retrieve(destination, progressbar, chunk_size, version, refresh)
-            )
+            path = self._retrieve(destination, progressbar, chunk_size, version, refresh)
+            # The bytes are here, so an earlier failure kept for this path no
+            # longer describes it and must not be re-raised by the handle.
+            _discard_settled(_pending_key(path))
+            return DatasetPath(path)
         # Where the file will end up: the copy the search order finds, unless a
         # destination or a refresh asks for a fresh one.
         existing = None if destination is not None or refresh else self.filepath(version)
@@ -790,13 +810,32 @@ class DownloadableDataset:
             )
         return filepath
 
+    def _is_complete(self, directory: Path, version: str | None = None) -> bool:
+        """Whether ``directory`` holds the whole dataset, companions included.
+
+        An entry with companions is not on disk until they are: its own file is
+        a header, the data sits beside it under the name the archive gave it,
+        and a header whose raw is missing fails in the reader rather than here.
+        A directory holding only part of the set is passed over, so the rest is
+        fetched instead of the dataset reporting itself already downloaded.
+        """
+        if not (directory / self.filename(version)).exists():
+            return False
+        return all((directory / c.file).exists() for c in self._resolve(version).companions)
+
     def _find_in_shared_locations(self, version: str | None = None) -> Path | None:
-        """Path to an existing copy in a configured shared location, or None."""
+        """Path to an existing, complete copy in a shared location, or None."""
         from emdatabase import config
 
         name = self.filename(version)
-        shared = (loc.path / name for loc in config.locations() if loc.kind != "personal")
-        return next((path for path in shared if path.exists()), None)
+        return next(
+            (
+                location.path / name
+                for location in config.locations()
+                if location.kind != "personal" and self._is_complete(location.path, version)
+            ),
+            None,
+        )
 
     def filepaths(self, version: str | None = None) -> list[Path]:
         """Every copy of the dataset on disk, in search order.
@@ -810,11 +849,14 @@ class DownloadableDataset:
 
         ``version`` asks about one dated version of a weights family; with no
         version it is the ``latest`` file, which is a different name on disk.
+
+        A copy counts only if it is complete: an entry that names companions is
+        not there unless they are beside it.
         """
         from emdatabase import config
 
         name = self.filename(version)
-        return [d / name for d in config.data_search_dirs() if (d / name).exists()]
+        return [d / name for d in config.data_search_dirs() if self._is_complete(d, version)]
 
     def filepath(self, version: str | None = None) -> Path | None:
         """Return the local file path of the dataset if present.
