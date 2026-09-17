@@ -39,6 +39,15 @@ class StaleIndexWarning(UserWarning):
     index describes, so the shipped checksum is out of date."""
 
 
+class DownloadFailedWarning(UserWarning):
+    """A background download failed.
+
+    Using the path raises the error itself, but a caller that never touches the
+    handle - a notebook cell that only reads ``done`` - would otherwise be told
+    nothing at all, because the failure happened on another thread.
+    """
+
+
 def _clear_upstream_cache() -> None:
     """Forget the fetched index documents and which families have warned."""
     _UPSTREAM_CACHE.clear()
@@ -183,7 +192,28 @@ def _pending_key(path: object) -> str:
     return os.path.normcase(os.path.abspath(str(path)))
 
 
-def _release_pending(key: str, future: "Future[Path]") -> None:
+def _settle_pending(key: str, future: "Future[Path]") -> None:
+    """What becomes of a finished download's entry in :data:`_PENDING`.
+
+    A failure keeps its entry, so that ``result()`` and every consumer of the
+    path go on re-raising it. Dropped, a failed download would be
+    indistinguishable from a file that was already on disk: ``done`` would say
+    True, the file would not be there, and the exception - the only account of
+    what went wrong - would be discarded without anyone retrieving it.
+    """
+    # Importing the widget module costs nothing: it never imports anywidget at
+    # module load, and a cancelled download is not a failure to report.
+    from emdatabase.widget import DownloadCancelled
+
+    error = None if future.cancelled() else future.exception()
+    if error is not None and not isinstance(error, DownloadCancelled):
+        warnings.warn(
+            f"{os.path.basename(key)} was not downloaded: "
+            f"{type(error).__name__}: {error} "
+            "Using the path raises this error; call download() again to retry.",
+            DownloadFailedWarning,
+        )
+        return
     with _PENDING_LOCK:
         if _PENDING.get(key) is future:
             del _PENDING[key]
@@ -204,6 +234,12 @@ class DatasetPath(_ConcretePath):
     one that is already done, so :meth:`DownloadableDataset.download` returns
     this type whether or not it downloaded anything.
 
+    A download that failed - an unreachable host, a checksum that did not match
+    - is ``done`` but not successful: ``failed`` says so without blocking, and
+    anything that touches the file raises the original error rather than
+    ``FileNotFoundError``. The failure is also warned about when it happens, so
+    a caller who never uses the handle still hears about it.
+
     Any path pointing at the same file waits, however it was built. ``str()``
     and ``Path()`` are the exceptions: they hand back a plain value with no
     download attached, so ``hs.load(str(handle))`` will not block.
@@ -217,7 +253,7 @@ class DatasetPath(_ConcretePath):
         key = _pending_key(self)
         with _PENDING_LOCK:
             _PENDING[key] = future
-        future.add_done_callback(lambda finished: _release_pending(key, finished))
+        future.add_done_callback(lambda finished: _settle_pending(key, finished))
         return self
 
     def __fspath__(self) -> str:
@@ -241,13 +277,24 @@ class DatasetPath(_ConcretePath):
         future = self._future
         return future.done() if future is not None else True
 
+    @property
+    def failed(self) -> bool:
+        """Whether the download finished with an error. Never blocks, never raises."""
+        future = self._future
+        if future is None or not future.done() or future.cancelled():
+            return False
+        return future.exception() is not None
+
     def wait(self, timeout: float | None = None) -> "DatasetPath":
         """Block until the download finishes and return self (for chaining)."""
         self.result(timeout)
         return self
 
     def __repr__(self) -> str:  # never block just to display the object
-        state = "done" if self.done else "downloading"
+        if self.failed:
+            state = "failed"
+        else:
+            state = "done" if self.done else "downloading"
         return f"<DatasetPath {str(self)!r} [{state}]>"
 
 

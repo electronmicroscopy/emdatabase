@@ -16,6 +16,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import warnings
 import zipfile
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from emdatabase.downloadable_dataset import (
     _PENDING,
     DatasetPath,
     DownloadableDataset,
+    DownloadFailedWarning,
     _get_executor,
     _pending_key,
     _shutdown_executor,
@@ -229,6 +231,69 @@ def test_finished_downloads_leave_no_pending_entry(tmp_path, monkeypatch):
     assert key not in _PENDING
 
 
+def _failing_retrieve(error):
+    """A stand-in for ``_retrieve`` that fails the way an unreachable host does."""
+
+    def retrieve(destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False):
+        raise error
+
+    return retrieve
+
+
+def test_a_failed_background_download_warns(tmp_path, monkeypatch):
+    """The failure happens on another thread, so nothing else would report it."""
+    dataset = getattr(data, TINY_DATASET)()
+    monkeypatch.setattr(
+        dataset, "_retrieve", _failing_retrieve(ConnectionError("zenodo.org is unreachable"))
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        handle = dataset.download(destination=tmp_path, progressbar=False)
+        for _ in range(300):  # the warning comes from the worker thread
+            if caught:
+                break
+            time.sleep(0.01)
+
+    failures = [w for w in caught if issubclass(w.category, DownloadFailedWarning)]
+    assert failures, [str(w.message) for w in caught]
+    assert "unreachable" in str(failures[0].message)
+    assert handle.failed is True
+    assert handle.done is True  # it finished - just not successfully
+    assert "failed" in repr(handle)
+
+
+def test_a_failed_download_re_raises_when_the_path_is_used(tmp_path, monkeypatch):
+    """Not FileNotFoundError: the handle still knows why the file is not there."""
+    dataset = getattr(data, TINY_DATASET)()
+    monkeypatch.setattr(dataset, "_retrieve", _failing_retrieve(ConnectionError("host is down")))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DownloadFailedWarning)
+        handle = dataset.download(destination=tmp_path, progressbar=False)
+        with pytest.raises(ConnectionError, match="host is down"):
+            handle.result()
+        with pytest.raises(ConnectionError, match="host is down"):
+            os.fspath(handle)
+
+
+def test_downloading_again_after_a_failure_retries(tmp_path, monkeypatch):
+    """A kept failure must not stop the next attempt from replacing it."""
+    dataset = getattr(data, TINY_DATASET)()
+    monkeypatch.setattr(dataset, "_retrieve", _failing_retrieve(ConnectionError("down")))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DownloadFailedWarning)
+        first = dataset.download(destination=tmp_path, progressbar=False)
+        with pytest.raises(ConnectionError):
+            first.result()
+
+    monkeypatch.setattr(dataset, "_retrieve", _slow_retrieve(dataset, tmp_path))
+    second = dataset.download(destination=tmp_path, progressbar=False)
+    assert Path(os.fspath(second)).read_bytes() == b"payload"
+    assert second.failed is False
+
+
 def test_keyword_overrides_leave_the_class_spec_alone():
     base = getattr(data, TINY_DATASET)
     overridden = base(checksum="md5:" + "0" * 32)
@@ -249,8 +314,13 @@ def test_a_dataset_without_a_source_is_an_error():
         DownloadableDataset()
 
 
+@pytest.mark.filterwarnings("ignore::emdatabase.downloadable_dataset.DownloadFailedWarning")
 def test_download_handle_propagates_errors(tmp_path, monkeypatch):
-    """A failed background download raises when the handle is consumed."""
+    """A failed background download raises when the handle is consumed.
+
+    The warning that failure also emits is this test's own doing; that it is
+    emitted at all is ``test_a_failed_background_download_warns``'s business.
+    """
     dataset = getattr(data, TINY_DATASET)()
 
     def fail(*args):
