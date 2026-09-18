@@ -328,12 +328,29 @@ class _TqdmProgress:
     A background download calls :meth:`open` up front instead, on the calling
     thread. A pool thread does not carry the running cell, so a notebook bar
     built there is shown in whichever cell ran last, or not at all.
+
+    A download that is more than one file drives one of these through a bar per
+    file, in turn: :attr:`desc` is set to each as it starts, so the label names
+    the file whose bytes are moving rather than the first of them.
     """
 
     def __init__(self, desc: str = "") -> None:
         self._desc = desc
         self._bar: Any = None  # a tqdm.auto bar; which backend depends on the host
         self._total = 0
+
+    @property
+    def desc(self) -> str:
+        """What the bar is labelled with, which is the file it is showing."""
+        return self._desc
+
+    @desc.setter
+    def desc(self, value: str) -> None:
+        self._desc = value
+        if self._bar is not None:
+            # set_description_str, not set_description: the latter appends a
+            # ": " of its own, which the constructor's `desc=` does not.
+            self._bar.set_description_str(value)
 
     @property
     def total(self) -> int:
@@ -727,16 +744,22 @@ class DownloadableDataset:
             if newer is None and not resolved.pinned:
                 filepath = self._retrieve_latest(resolved, destination, downloader)
             else:
-                written = [
-                    pooch.retrieve(
-                        url=pin.url,
-                        known_hash=checksum,
-                        fname=name,
-                        path=destination,
-                        downloader=part,  # pyright: ignore[reportArgumentType]
+                written = []
+                for name, checksum, part in parts:
+                    if isinstance(bar, _TqdmProgress):
+                        # Each member closes the bar and the next one opens a
+                        # fresh one, so the label has to follow. The directory
+                        # is the same for every member and only costs width.
+                        bar.desc = Path(name).name
+                    written.append(
+                        pooch.retrieve(
+                            url=pin.url,
+                            known_hash=checksum,
+                            fname=name,
+                            path=destination,
+                            downloader=part,  # pyright: ignore[reportArgumentType]
+                        )
                     )
-                    for name, checksum, part in parts
-                ]
                 filepath = written[0]  # parts[0] is the entry's own file
         finally:
             # pooch only closes the bar on the happy path, so a failed or

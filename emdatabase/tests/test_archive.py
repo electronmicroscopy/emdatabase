@@ -21,7 +21,7 @@ import pytest
 
 from emdatabase import config
 from emdatabase._archive import ArchiveError
-from emdatabase.downloadable_dataset import DownloadableDataset
+from emdatabase.downloadable_dataset import DownloadableDataset, _TqdmProgress
 from emdatabase.metadata import format_size
 from emdatabase.widget import DownloadCancelled
 
@@ -330,6 +330,17 @@ def test_a_companion_lands_beside_the_entrys_own_file(paired, dest):
     folder = dest / "Paired"
     assert sorted(p.name for p in folder.iterdir()) == ["scan.raw", "scan_x256_y256.raw"]
     assert (folder / "scan_x256_y256.raw").read_bytes() == COMPANION_CONTENT
+
+
+def test_each_member_labels_its_own_bar(paired, archived, dest):
+    """Both files get a bar, so the second must not carry the first one's name."""
+    bar = _TqdmProgress("placeholder")
+    paired().download(destination=dest, progressbar=bar, background=False)
+    assert bar.desc == "scan_x256_y256.raw"  # the file fetched last, not the header
+
+    solo = _TqdmProgress("placeholder")
+    archived().download(destination=dest / "one", progressbar=solo, background=False)
+    assert solo.desc == "scan.raw"
 
 
 def test_a_companion_with_a_wrong_checksum_fails(paired, dest):
