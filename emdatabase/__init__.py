@@ -11,7 +11,7 @@ def browse(**kwargs):
     Returns an `anywidget` widget listing every dataset grouped by technique,
     showing which are downloaded, revealing full metadata on hover, and
     downloading on click with a live progress bar. Requires the optional
-    `anywidget` dependency (`pip install emdatabase[widget]`).
+    `anywidget` dependency (`pip install em-database[widget]`).
 
     ``display(emdatabase)`` renders the same browser.
     """
@@ -51,7 +51,7 @@ class _EmDatabaseModule(_ModuleType):
             return {
                 "text/plain": (
                     "emdatabase — install the interactive browser with "
-                    "`pip install emdatabase[widget]`, then call "
+                    "`pip install em-database[widget]`, then call "
                     "emdatabase.browse()."
                 )
             }

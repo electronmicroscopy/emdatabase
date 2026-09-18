@@ -347,7 +347,7 @@ def card(dataset):
     """Return an interactive card widget for a single dataset (Jupyter).
 
     This backs ``display(dataset)`` / a dataset being the last line in a cell.
-    Requires anywidget (``pip install emdatabase[widget]``).
+    Requires anywidget (``pip install em-database[widget]``).
     """
     _prepare_frontend()
     try:
@@ -355,7 +355,7 @@ def card(dataset):
     except ImportError as error:
         raise ImportError(
             "Displaying a dataset needs anywidget. Install it with "
-            "`pip install emdatabase[widget]` (or `pip install anywidget`)."
+            "`pip install em-database[widget]` (or `pip install anywidget`)."
         ) from error
     return cls(dataset)
 
@@ -363,7 +363,7 @@ def card(dataset):
 def browse(**kwargs):
     """Return an interactive dataset browser widget for Jupyter.
 
-    Requires anywidget (``pip install emdatabase[widget]``). The widget lists
+    Requires anywidget (``pip install em-database[widget]``). The widget lists
     every dataset grouped by technique, shows which are downloaded, reveals full
     metadata on hover, and downloads on click with a live progress bar.
     """
@@ -373,7 +373,7 @@ def browse(**kwargs):
     except ImportError as error:
         raise ImportError(
             "emdatabase.browse() needs anywidget. Install it with "
-            "`pip install emdatabase[widget]` (or `pip install anywidget`)."
+            "`pip install em-database[widget]` (or `pip install anywidget`)."
         ) from error
     return cls(**kwargs)
 

@@ -8,9 +8,9 @@ A list of all datasets and model weights can be found in our [docs](https://elec
 ## Installation
 
 ```bash
-pip install emdatabase
+pip install em-database
 ```
-You can install `emdatabase` via pip or as a local install in the usual way. 
+You can install `em-database` via pip or as a local install in the usual way. The distribution is named `em-database` on PyPI; the import name is `emdatabase`. 
 
 ## Usage
 

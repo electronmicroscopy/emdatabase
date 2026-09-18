@@ -1,5 +1,5 @@
 [project]
-name = "emdatabase"
+name = "em-database"
 version = "0.5.0"
 description = "A database for electron microscopy data using pooch to download and manage files."
 readme = "README.md"
