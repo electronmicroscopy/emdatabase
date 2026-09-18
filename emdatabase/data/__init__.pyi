@@ -225,7 +225,7 @@ class MOSS6Fig3(DownloadableDataset):
     """
     MOSS6Fig3
 
-    The MOSS-6 metal-organic framework 4D-STEM ptychography dataset shown in Fig. 3 of "Atomically resolved imaging of radiation-sensitive metal-organic frameworks via electron ptychography" (Nature Communications 16, 2025; doi 10.1038/s41467-025-56215-z). It arrives as a pair in a directory of its own: acquisition_12.xml, the EMPAD header, which is what download() hands back and what a reader is pointed at, and scan_x256_y256.raw beside it, which the header names and which holds the data - 256 x 256 scan positions of 128 x 130 little-endian float32 frames, each frame a 128 x 128 detector followed by two rows of EMPAD metadata. Read it with quantem's read_4dstem(path, file_type="empad"), or rsciio.empad, which takes the header and opens the raw next to it. The scan was taken on a double Cs-corrected FEI Titan Cubed Themis Z at 300 kV, with a 10 mrad convergence semi-angle, a 1.05 Angstrom step, about 100 nm of defocus, and an electron dose of about 98 electrons per square Angstrom. MOSS-6 is a MOF solid solution of the NU-1000 and NU-901 phases. Both files are members of the record's 15.3 GB RawData.7z and are fetched out of it directly, without downloading the archive; the raw costs about 2.6 GB of it.
+    The MOSS-6 metal-organic framework 4D-STEM ptychography dataset shown in Fig. 3 of "Atomically resolved imaging of radiation-sensitive metal-organic frameworks via electron ptychography" (Nature Communications 16, 2025; doi 10.1038/s41467-025-56215-z). It downloads two files into a directory of its own: acquisition_12.xml, the EMPAD header, which is what download() hands back, and scan_x256_y256.raw beside it. Read it with quantem's  read_4dstem(path, file_type="empad"), or rsciio.empad, which takes the header. The scan was taken on a Cs-corrected FEI Titan at 300 kV, with a 10 mrad convergence semi-angle, a 1.05  Angstrom step, about 100 nm of defocus, and an electron dose of about 98 e/A^2. 
 
     DOI: 10.5281/zenodo.13958144
 
@@ -350,7 +350,7 @@ class TwistedBilayerWSe2Themis(DownloadableDataset):
     """
     TwistedBilayerWSe2Themis
 
-    Electron ptychography of a twisted bilayer WSe2, acquired at 80 kV on an uncorrected Thermo Fisher Themis with an EMPAD. From the record for "Achieving sub-0.5-Angstrom resolution ptychography in an uncorrected electron microscope", which reaches 0.44 Angstrom without an aberration corrector (Science 384, adl2029). The file is one member of the record's 1.9 GB Fig_01.zip and is fetched out of it directly, without downloading the archive. It is a headerless raw: a 128 x 128 scan of 128 x 130 little-endian float32 frames, each frame the 128 x 128 detector followed by two rows of EMPAD metadata. Read it with numpy.fromfile(path, dtype="<f4").reshape(128, 128, 130, 128)[..., :128, :]. The same archive holds a Talos acquisition of the same scan under Fig_01/Panel_c-d_Talos/, so the member path matters.
+    Electron ptychography of a twisted bilayer WSe2, acquired at 80 kV on an uncorrected Thermo Fisher Themis with an EMPAD. From the Zenodo record for "Achieving sub-0.5-Angstrom resolution ptychography in an uncorrected electron microscope" (Science 384, adl2029). The  file is one member of the record's 1.9 GB Fig_01.zip and is fetched out of it directly.  It is a headerless raw: read it with  numpy.fromfile(path, dtype="<f4").reshape(128, 128, 130, 128)[..., :128, :].
 
     DOI: 10.5281/zenodo.10431683
 
