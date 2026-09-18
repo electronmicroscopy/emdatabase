@@ -41,6 +41,24 @@ FILLED_ARCHIVE = {
         }
     ],
 }
+# A second member with no checksum of its own, which the schema allows: the one
+# shipped multi-file entry has exactly this shape, its 4.3 GB raw unhashed.
+PAIRED_ARCHIVE = {
+    "url": "https://example.invalid/Figures.zip",
+    "members": [
+        {
+            "member": "Fig/Panel/scan.raw",
+            "file": FILE,
+            "checksum": MD5,
+            "size_bytes": len(CONTENT),
+        },
+        {
+            "member": "Fig/Panel/scan_x256.raw",
+            "file": "scan_x256.raw",
+            "size_bytes": 4362076160,
+        },
+    ],
+}
 
 
 @pytest.fixture(scope="module")
@@ -113,6 +131,23 @@ def test_an_archive_entry_with_blank_fields_is_refused(script, index, tmp_path):
     assert code == 1
     assert "by hand" in summary
     assert path.read_text(encoding="utf-8") == before  # nothing guessed, nothing written
+
+
+def test_a_member_without_a_checksum_is_not_refused(script, index, tmp_path):
+    """Only the entry's own file is asked for.
+
+    A member beside it may leave its checksum out - the schema requires only
+    ``member`` and ``file`` - so requiring one of every member would refuse the
+    entry the feature was built for.
+    """
+    _, directory, write = index
+    path = write(file=None, archive=PAIRED_ARCHIVE)
+    before = path.read_text(encoding="utf-8")
+
+    code, _ = _run(script, directory, tmp_path)
+
+    assert code == 0
+    assert path.read_text(encoding="utf-8") == before
 
 
 def test_a_complete_archive_entry_is_not_downloaded(script, index, tmp_path):

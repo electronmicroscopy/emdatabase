@@ -132,8 +132,9 @@ the pairing and keeps it clear of identically named members elsewhere.
 ``delete()`` removes them all, and the size shown in the catalogue counts them.
 
 These entries are written by hand. The two fields CI otherwise fills in would be
-taken from the archive rather than from the member, so a pull request leaving any
-member's blank is refused rather than guessed at. ``download_url``, and the download
+taken from the archive rather than from the member, so a pull request leaving the
+entry's own blank is refused rather than guessed at. A member beside it may leave
+its ``checksum`` out, and is then fetched unverified. ``download_url``, and the download
 link on the docs site, point at the archive: the member has no link of its own.
 
 A host that ignores ``Range`` and answers with the whole archive fails loudly,

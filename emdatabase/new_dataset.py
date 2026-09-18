@@ -357,10 +357,14 @@ def fill_download_fields(document: dict[str, Any]) -> list[str]:
             # the archive. Following the link here would hash the whole archive
             # and write a value that is wrong in a way nothing downstream
             # notices.
+            # A later member may leave its checksum out - the schema allows it,
+            # and pooch then fetches that file unverified - so only the entry's
+            # own file, which is the first member, is required here.
             members = entry["archive"].get("members") or ()
-            if not members or not all(m.get("checksum") and m.get("size_bytes") for m in members):
+            first = members[0] if members else {}
+            if not (first.get("checksum") and first.get("size_bytes")):
                 raise ValueError(
-                    f"{name}: each member's checksum and size_bytes describe that file "
+                    f"{name}: the first member's checksum and size_bytes describe that file "
                     "inside the archive, which is not something this can download. Fill "
                     "them in by hand."
                 )
