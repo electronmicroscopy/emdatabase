@@ -477,10 +477,9 @@ def test_build_document_keeps_the_archive_block():
     entry = {
         "description": "One headerless raw file inside a zip.",
         "source": "https://zenodo.org/records/1/files",
-        "file": "scan.raw",
         "archive": {
             "url": "https://zenodo.org/records/1/files/Fig_01.zip",
-            "member": "Fig_01/Panel/scan.raw",
+            "members": [{"member": "Fig_01/Panel/scan.raw", "file": "scan.raw"}],
         },
     }
     written = build_document("Archived", entry)["Archived"]

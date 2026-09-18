@@ -12,14 +12,15 @@ TwistedBilayerWSe2Themis:
     archive holds a Talos acquisition of the same scan under Fig_01/Panel_c-d_Talos/, so the
     member path matters.
   source: https://zenodo.org/records/10431683/files
-  checksum: md5:6de543cc5026f3e6b8f34a2189cb2fb4
-  file: TwistedBilayerWSe2_Themis_x128_y128.raw
-  size_bytes: 1090519040
   archive:
     url: https://zenodo.org/records/10431683/files/Fig_01.zip
-    member: Fig_01/Panel_g-h_Themis/scan_x128_y128.raw
     checksum: md5:6b340d06ddf33415e402f96bb0ff17ff
     size_bytes: 1908605317
+    members:
+      - member: Fig_01/Panel_g-h_Themis/scan_x128_y128.raw
+        file: TwistedBilayerWSe2_Themis_x128_y128.raw
+        checksum: md5:6de543cc5026f3e6b8f34a2189cb2fb4
+        size_bytes: 1090519040
   detector_manufacturer: Thermo Fisher Scientific
   detector: EMPAD
   microscope_vendor: Thermo Fisher Scientific

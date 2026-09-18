@@ -31,7 +31,7 @@
           "minimum": 0
         },
         "archive": {
-          "$ref": "#/$defs/archiveMember"
+          "$ref": "#/$defs/archive"
         },
         "detector_manufacturer": {
           "type": "string"
@@ -156,10 +156,48 @@
       },
       "required": [
         "description",
-        "source",
-        "file"
+        "source"
       ],
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "archive"
+            ]
+          },
+          "then": {
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "file"
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "required": [
+                    "checksum"
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "required": [
+                    "size_bytes"
+                  ]
+                }
+              }
+            ]
+          },
+          "else": {
+            "required": [
+              "file"
+            ]
+          }
+        }
+      ],
       "if": {
         "properties": {
           "kind": {
@@ -258,16 +296,12 @@
       ],
       "additionalProperties": false
     },
-    "archiveMember": {
+    "archive": {
       "type": "object",
       "properties": {
         "url": {
           "type": "string",
           "format": "uri"
-        },
-        "member": {
-          "type": "string",
-          "minLength": 1
         },
         "checksum": {
           "type": "string",
@@ -277,21 +311,21 @@
           "type": "integer",
           "minimum": 0
         },
-        "companions": {
+        "members": {
           "type": "array",
           "minItems": 1,
           "items": {
-            "$ref": "#/$defs/archiveCompanion"
+            "$ref": "#/$defs/archiveMember"
           }
         }
       },
       "required": [
         "url",
-        "member"
+        "members"
       ],
       "additionalProperties": false
     },
-    "archiveCompanion": {
+    "archiveMember": {
       "type": "object",
       "properties": {
         "member": {

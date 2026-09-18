@@ -12,10 +12,10 @@ A ``kind: weights`` entry is a family rather than a single file: it declares a
 :class:`WeightsVersion`, and :func:`versioned_filename` is what a dated copy is
 called on disk.
 
-An entry whose data is one file inside a zip on a record that cannot be
-re-published names that archive as an :class:`ArchiveMember`. The entry's own
-``file``, ``checksum`` and ``size_bytes`` go on describing the member, which is
-all a caller ever receives.
+An entry whose data lives inside a zip on a record that cannot be re-published
+names that archive as an :class:`Archive`, and every file taken out of it as an
+:class:`ArchiveMember`. The entry's own ``file`` and ``checksum`` are the first
+member's, which is what a caller receives; its ``size_bytes`` counts them all.
 
 This module also owns the small amount of shared knowledge about where the
 dataset files live - :func:`dataset_files`, :func:`index_entries`,
@@ -321,14 +321,15 @@ class WeightsVersion:
 
 
 @dataclass(frozen=True)
-class ArchiveCompanion:
-    """A second file the entry's own file cannot be read without.
+class ArchiveMember:
+    """One file inside an archive, and what it is called once it is out.
 
-    An EMPAD acquisition is the plain case: the ``.xml`` is what a reader is
-    pointed at, but it names its ``.raw`` by bare file name and expects to find
-    it in the same directory. Both come out of the same archive, and ``file``
-    gives each its name on disk - including a directory, which is how the two
-    are kept together and away from identically named members elsewhere.
+    ``member`` is the complete path inside the archive: one file name can appear
+    in several of its directories, so a basename alone is ambiguous. ``file`` is
+    the name on disk - including a directory, which is how the files of one
+    dataset are kept together and away from identically named members
+    elsewhere. ``checksum`` and ``size_bytes`` describe this file, never the
+    archive it is taken out of.
     """
 
     member: str
@@ -338,29 +339,28 @@ class ArchiveCompanion:
 
 
 @dataclass(frozen=True)
-class ArchiveMember:
-    """One file inside an archive on someone else's record.
+class Archive:
+    """An archive on someone else's record, and the files taken out of it.
 
-    An entry names this when the data worth shipping is a single member of a
-    multi-gigabyte archive that cannot be re-published. ``download()`` fetches
-    only that member, with HTTP range requests; the entry's ``file``,
-    ``checksum`` and ``size_bytes`` go on describing the file the user ends up
-    with, and the two here describe the archive they come out of.
+    An entry names this when the data worth shipping sits inside a
+    multi-gigabyte ``.zip`` or ``.7z`` that cannot be re-published.
+    ``download()`` fetches only the members named here, with HTTP range
+    requests, and hands back the first of them. A ``.zip`` and a ``.7z`` are
+    both read, told apart by the link's own file name.
 
-    ``member`` is the complete path inside the archive: one file name can appear
-    in several of its directories. A ``.zip`` and a ``.7z`` are both read, told
-    apart by the link's own file name.
-
-    ``companions`` names further members fetched alongside, for data that is more
-    than one file; see :class:`ArchiveCompanion`. ``download()`` still hands back
-    the entry's own ``file``.
+    ``checksum`` and ``size_bytes`` here describe the archive. Every file the
+    entry puts on disk is one of ``members``, described the same way whether it
+    is the one handed back or one that has to arrive beside it - an EMPAD
+    ``.xml`` names its ``.raw`` by bare file name and expects to open it next to
+    itself. ``members[0]`` is the entry's own file, and is where the entry's
+    ``file`` and ``checksum`` come from, so that no fact about a file is stated
+    at two levels; the entry's ``size_bytes`` is every member's added up.
     """
 
     url: str
-    member: str
     checksum: str | None = None
     size_bytes: int | None = None
-    companions: tuple[ArchiveCompanion, ...] = ()
+    members: tuple[ArchiveMember, ...] = ()
 
 
 @dataclass(frozen=True, repr=False)
@@ -382,7 +382,7 @@ class DatasetMetadata:
     url: str | None = None
     checksum: str | None = None
     size_bytes: int | None = None
-    archive: ArchiveMember | None = None
+    archive: Archive | None = None
     detector_manufacturer: str | None = None
     detector: str | None = None
     microscope_vendor: str | None = None
@@ -433,10 +433,23 @@ class DatasetMetadata:
                 )
             if values.get("archive") is not None:
                 archive = dict(values["archive"])
-                archive["companions"] = tuple(
-                    ArchiveCompanion(**c) for c in archive.get("companions") or ()
+                archive["members"] = tuple(
+                    ArchiveMember(**m) for m in archive.get("members") or ()
                 )
-                values["archive"] = ArchiveMember(**archive)
+                values["archive"] = Archive(**archive)
+                # The entry's own file is the first member, and is described
+                # there rather than at the top level, so that its name and hash
+                # are not stated in two places that can disagree. `size_bytes`
+                # counts every member: one number for how much disk the dataset
+                # takes, which is what anyone asking a size is asking.
+                members = values["archive"].members
+                if members:
+                    values.setdefault("file", members[0].file)
+                    values.setdefault("checksum", members[0].checksum)
+                    sizes = [m.size_bytes for m in members]
+                    values.setdefault(
+                        "size_bytes", None if sizes[0] is None else sum(s or 0 for s in sizes)
+                    )
             if values.get("latest") is not None:
                 values["latest"] = WeightsVersion(**values["latest"])
             values["versions"] = {
@@ -448,22 +461,9 @@ class DatasetMetadata:
             raise TypeError(f"{_where(origin)}: {error}") from None
 
     @property
-    def total_bytes(self) -> int | None:
-        """Every byte the entry puts on disk, companions included, or None.
-
-        :attr:`size_bytes` describes the entry's own file. For a multi-member
-        entry that is the small one - an EMPAD header beside gigabytes of raw -
-        so it is this, not that, which answers "how big is this dataset".
-        """
-        if self.size_bytes is None:
-            return None
-        companions = self.archive.companions if self.archive else ()
-        return self.size_bytes + sum(c.size_bytes or 0 for c in companions)
-
-    @property
     def size(self) -> str:
-        """:attr:`total_bytes` formatted for display, or ``""`` if unknown."""
-        return format_size(self.total_bytes)
+        """:attr:`size_bytes` formatted for display, or ``""`` if unknown."""
+        return format_size(self.size_bytes)
 
     @property
     def headline(self) -> str:
@@ -497,8 +497,10 @@ class DatasetMetadata:
             elif entry.name == "model":
                 value = " · ".join(p for p in (value.class_, value.framework, value.quantem) if p)
             elif entry.name == "archive":
-                value = f"{value.member} in {value.url}" + (
-                    f" (+{len(value.companions)} alongside)" if value.companions else ""
+                beside = len(value.members) - 1
+                first = value.members[0].member if value.members else "?"
+                value = f"{first} in {value.url}" + (
+                    f" (+{beside} alongside)" if beside > 0 else ""
                 )
             elif entry.name == "latest":
                 value = " · ".join(p for p in (value.checksum, value.url) if p)

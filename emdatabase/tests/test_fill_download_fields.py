@@ -25,7 +25,22 @@ FILE = "MyData.zspy"
 CONTENT = b"a small 4D-STEM dataset, allegedly" * 100
 MD5 = f"md5:{hashlib.md5(CONTENT).hexdigest()}"
 # Deliberately unreachable: an archive entry must never be downloaded here.
-ARCHIVE = {"url": "https://example.invalid/Figures.zip", "member": "Fig/Panel/scan.raw"}
+ARCHIVE = {
+    "url": "https://example.invalid/Figures.zip",
+    "members": [{"member": "Fig/Panel/scan.raw", "file": FILE}],
+}
+# The same archive with every member described, which is what CI must leave alone.
+FILLED_ARCHIVE = {
+    "url": "https://example.invalid/Figures.zip",
+    "members": [
+        {
+            "member": "Fig/Panel/scan.raw",
+            "file": FILE,
+            "checksum": MD5,
+            "size_bytes": len(CONTENT),
+        }
+    ],
+}
 
 
 @pytest.fixture(scope="module")
@@ -50,16 +65,17 @@ def index(http_server, tmp_path):
     directory.mkdir()
 
     def write(**extra):
-        document = {
-            "MyData": {
-                "description": "A 4D-STEM dataset of something.",
-                "source": base,
-                "file": FILE,
-                "license": "CC-BY-4.0",
-                "technique": ["4D-STEM"],
-                **extra,
-            }
+        entry = {
+            "description": "A 4D-STEM dataset of something.",
+            "source": base,
+            "file": FILE,
+            "license": "CC-BY-4.0",
+            "technique": ["4D-STEM"],
+            **extra,
         }
+        # None drops a key, which is how an archive entry leaves out the
+        # top-level `file`: for those it is the first member's.
+        document = {"MyData": {key: value for key, value in entry.items() if value is not None}}
         path = directory / "MyData.yaml"
         path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
         return path
@@ -90,7 +106,7 @@ def test_a_blank_entry_is_filled_in_and_written(script, index, tmp_path):
 def test_an_archive_entry_with_blank_fields_is_refused(script, index, tmp_path):
     """Following the link would hash the whole zip, not the member inside it."""
     _, directory, write = index
-    path = write(archive=ARCHIVE)
+    path = write(file=None, archive=ARCHIVE)
     before = path.read_text(encoding="utf-8")
 
     code, summary = _run(script, directory, tmp_path)
@@ -102,7 +118,7 @@ def test_an_archive_entry_with_blank_fields_is_refused(script, index, tmp_path):
 def test_a_complete_archive_entry_is_not_downloaded(script, index, tmp_path):
     """The archive URL does not resolve, so getting here at all means it was left alone."""
     _, directory, write = index
-    path = write(checksum=MD5, size_bytes=len(CONTENT), archive=ARCHIVE)
+    path = write(file=None, archive=FILLED_ARCHIVE)
     before = path.read_text(encoding="utf-8")
 
     code, _ = _run(script, directory, tmp_path)

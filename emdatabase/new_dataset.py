@@ -353,14 +353,16 @@ def fill_download_fields(document: dict[str, Any]) -> list[str]:
                 if pin:
                     lines += _fill_pin(label, pin, pin.get("url", ""))
         elif entry.get("archive"):
-            # The entry's checksum and size_bytes describe the member inside the
-            # archive. Following the link here would hash the whole zip and
-            # write a value that is wrong in a way nothing downstream notices.
-            if not (entry.get("checksum") and entry.get("size_bytes")):
+            # Each member's checksum and size_bytes describe that file inside
+            # the archive. Following the link here would hash the whole archive
+            # and write a value that is wrong in a way nothing downstream
+            # notices.
+            members = entry["archive"].get("members") or ()
+            if not members or not all(m.get("checksum") and m.get("size_bytes") for m in members):
                 raise ValueError(
-                    f"{name}: checksum and size_bytes describe the member inside the "
-                    "archive, which is not something this can download. Fill them in "
-                    "by hand."
+                    f"{name}: each member's checksum and size_bytes describe that file "
+                    "inside the archive, which is not something this can download. Fill "
+                    "them in by hand."
                 )
         else:
             url = entry.get("url") or f"{entry.get('source', '')}/{entry.get('file', '')}"

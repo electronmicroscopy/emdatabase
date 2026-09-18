@@ -181,25 +181,29 @@ class ArchiveMemberDownloader:
     def __init__(
         self,
         member: str,
-        progressbar: Progress | bool = False,
+        progressbar: Progress | None = None,
         chunk_size: int = 4096,
     ) -> None:
         self.member = member
-        # `True` means "build your own bar", which pooch's HTTPDownloader does
-        # and this does not: _retrieve has already swapped it for a Progress.
-        self.progressbar = None if isinstance(progressbar, bool) else progressbar
+        # pooch's `progressbar=True` - "build your own bar", which this does not
+        # do - stops at _retrieve, which has already turned it into a Progress
+        # or into nothing.
+        self.progressbar = progressbar
         self.chunk_size = chunk_size
 
     def __call__(self, url: str, output_file: str, _pooch: Any = None) -> None:
         with io.BufferedReader(_HTTPRangeFile(url), buffer_size=_BUFFER_SIZE) as stream:  # pyright: ignore[reportArgumentType]
             if _is_sevenzip(url):
-                total = self._from_7z(stream, url, output_file)
+                self._from_7z(stream, url, output_file)
             else:
-                total = self._from_zip(stream, url, output_file)
+                self._from_zip(stream, url, output_file)
         bar = self.progressbar
         if bar:
+            # The member's size is whatever the reader set the bar to; a second
+            # copy of it threaded back through the return value could only
+            # disagree with what the bar is actually showing.
             bar.reset()
-            bar.update(total)
+            bar.update(bar.total)
             bar.close()
 
     def _missing(self, url: str) -> str:
@@ -208,7 +212,7 @@ class ArchiveMemberDownloader:
             "the archive: one file name can appear in several of its directories."
         )
 
-    def _from_zip(self, stream: IO[bytes], url: str, output_file: str) -> int:
+    def _from_zip(self, stream: IO[bytes], url: str, output_file: str) -> None:
         """Stream one zip member out; each is compressed on its own."""
         bar = self.progressbar
         with zipfile.ZipFile(stream) as archive:
@@ -223,9 +227,8 @@ class ArchiveMemberDownloader:
                     out.write(chunk)
                     if bar:
                         bar.update(len(chunk))
-            return info.file_size
 
-    def _from_7z(self, stream: IO[bytes], url: str, output_file: str) -> int:
+    def _from_7z(self, stream: IO[bytes], url: str, output_file: str) -> None:
         """Extract one 7z member, which py7zr will only write to a directory."""
         bar = self.progressbar
         with py7zr.SevenZipFile(stream) as archive:
@@ -249,4 +252,3 @@ class ArchiveMemberDownloader:
                     callback=_SevenZipProgress(bar) if bar else None,
                 )
                 os.replace(Path(scratch) / wanted.filename, output_file)
-            return wanted.uncompressed

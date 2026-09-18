@@ -24,7 +24,7 @@ import py7zr
 import pytest
 
 import emdatabase.data as data
-from emdatabase._archive import _HTTPRangeFile, _is_sevenzip
+from emdatabase._archive import _BUFFER_SIZE, _HTTPRangeFile, _is_sevenzip
 from emdatabase.data import MgONanoCrystals, NiEBSDLarge
 from emdatabase.downloadable_dataset import (
     _PENDING,
@@ -80,7 +80,7 @@ def _archive_member_size(url, member):
     reason an entry names a member in the first place. A zip and a 7z report
     that size through different objects, so the size itself is what comes back.
     """
-    with io.BufferedReader(_HTTPRangeFile(url), buffer_size=1 << 20) as stream:
+    with io.BufferedReader(_HTTPRangeFile(url), buffer_size=_BUFFER_SIZE) as stream:
         if _is_sevenzip(url):
             with py7zr.SevenZipFile(stream) as archive:
                 found = [f for f in archive.list() if f.filename.replace("\\", "/") == member]
@@ -130,16 +130,17 @@ def test_source_url_resolves(name, version):
         )
     if archive is not None:
         # What rots for an archive entry is a member being renamed or moved
-        # inside an archive whose own size never changes. Companions are checked
-        # too: they are usually the large ones, and nothing else would notice.
-        members = [(archive.member, resolved.size_bytes)]
-        members += [(c.member, c.size_bytes) for c in archive.companions]
-        for member, declared in members:
-            if declared is None:
+        # inside an archive whose own size never changes. Every member is
+        # checked: the ones beside the entry's own file are usually the large
+        # ones, and nothing else would notice.
+        members = [(m.member, m.size_bytes) for m in archive.members]
+        for member, member_declared in members:
+            if member_declared is None:
                 continue
             size = _archive_member_size(url, member)
-            assert size == declared, (
-                f"{name}: {member} is {size} bytes inside {url}, but the YAML declares {declared}"
+            assert size == member_declared, (
+                f"{name}: {member} is {size} bytes inside {url}, but the YAML declares "
+                f"{member_declared}"
             )
 
 

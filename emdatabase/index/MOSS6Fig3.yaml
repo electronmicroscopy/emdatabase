@@ -16,15 +16,15 @@ MOSS6Fig3:
     files are members of the record's 15.3 GB RawData.7z and are fetched out of it directly,
     without downloading the archive; the raw costs about 2.6 GB of it.
   source: https://zenodo.org/records/13958144/files
-  checksum: md5:6f9a865545655a2d53bf887afa98c135
-  file: MOSS6Fig3/acquisition_12.xml
-  size_bytes: 3953
   archive:
     url: https://zenodo.org/records/13958144/files/RawData.7z
-    member: RawData/ExperimentalData_MOSS-6_Fig.3/acquisition_12.xml
     checksum: md5:97581a943b20f2b6ba5d636b859d5f10
     size_bytes: 15266871965
-    companions:
+    members:
+      - member: RawData/ExperimentalData_MOSS-6_Fig.3/acquisition_12.xml
+        file: MOSS6Fig3/acquisition_12.xml
+        checksum: md5:6f9a865545655a2d53bf887afa98c135
+        size_bytes: 3953
       - member: RawData/ExperimentalData_MOSS-6_Fig.3/scan_x256_y256.raw
         file: MOSS6Fig3/scan_x256_y256.raw
         size_bytes: 4362076160

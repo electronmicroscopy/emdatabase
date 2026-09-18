@@ -88,15 +88,19 @@ A file inside an archive
 Some data worth shipping is one file inside a multi-gigabyte ``.zip`` or ``.7z``
 on a record nobody can re-publish, where downloading all of it to get one file is
 not reasonable. Such an entry adds an ``archive`` block naming the archive and
-the member inside it:
+every file taken out of it:
 
 .. code-block:: yaml
 
    archive:
      url: https://zenodo.org/records/0000000/files/Figures.zip
-     member: Figure_01/Panel_a/scan_x128_y128.raw
+     members:
+       - member: Figure_01/Panel_a/scan_x128_y128.raw
+         file: MyDatasetName/scan_x128_y128.raw
+         checksum: md5:0123456789abcdef0123456789abcdef
+         size_bytes: 1000000
 
-``download()`` then fetches only that member, over HTTP range requests: a few
+``download()`` then fetches only those members, over HTTP range requests: a few
 requests read the archive's directory, and only the member's own bytes follow.
 What comes back is a path, as for any other entry. The format is taken from the
 link's file name, so no field declares it.
@@ -111,24 +115,25 @@ anywhere from 2 MB to 2.6 GB to reach. Note also that 7z is extracted rather
 than streamed, so its progress bar fills in one step at the end and a cancel
 cannot interrupt it.
 
-The entry's own ``file``, ``checksum`` and ``size_bytes`` go on describing the
-member, which is the file you end up with; ``checksum`` and ``size_bytes``
-inside the block describe the archive instead, and are optional. Give ``member``
-as the complete path inside the archive - one file name can appear in several of
-its directories, so a basename alone is ambiguous.
+An archive entry leaves out the top-level ``file``, ``checksum`` and
+``size_bytes``. The first two are the first member's, stated there instead so
+that no fact about a file appears at two levels; the entry's ``size_bytes`` is
+every member's added up, which is the one number ``size`` shows. ``checksum`` and
+``size_bytes`` directly under ``archive`` describe the archive itself, and are
+optional. Give ``member`` as the complete path inside the archive - one file name
+can appear in several of its directories, so a basename alone is ambiguous.
 
-Data that is more than one file adds ``companions``, each naming a further member
-and the ``file`` it is saved as. ``download()`` still returns the entry's own
-``file``; the rest arrive beside it. Give them all a directory of their own when
-a reader expects to find them together - an EMPAD ``.xml`` names its ``.raw`` by
-bare file name and opens it next to itself, so ``MyDataset/acquisition_12.xml``
-and ``MyDataset/scan_x256_y256.raw`` both keeps the pairing and keeps it clear of
-identically named members elsewhere. ``delete()`` removes the companions too, and
-the size shown in the catalogue counts them.
+Data that is more than one file lists them all under ``members``. The first is
+what ``download()`` returns; the rest arrive beside it. Give them a directory of
+their own when a reader expects to find them together - an EMPAD ``.xml`` names
+its ``.raw`` by bare file name and opens it next to itself, so
+``MyDataset/acquisition_12.xml`` and ``MyDataset/scan_x256_y256.raw`` both keeps
+the pairing and keeps it clear of identically named members elsewhere.
+``delete()`` removes them all, and the size shown in the catalogue counts them.
 
 These entries are written by hand. The two fields CI otherwise fills in would be
-taken from the archive rather than from the member, so a pull request leaving
-them blank is refused rather than guessed at. ``download_url``, and the download
+taken from the archive rather than from the member, so a pull request leaving any
+member's blank is refused rather than guessed at. ``download_url``, and the download
 link on the docs site, point at the archive: the member has no link of its own.
 
 A host that ignores ``Range`` and answers with the whole archive fails loudly,
@@ -203,9 +208,9 @@ a dataset with one, fail as well.
 files. It downloads the file behind each changed entry that is missing its
 ``checksum`` or ``size_bytes`` - a weights family's ``latest`` and each dated
 version on their own links - fills the fields in and pushes the result back to
-the branch. An entry naming an ``archive`` is refused instead: its ``checksum``
-and ``size_bytes`` describe the member inside the zip, and the only thing there
-is to download is the whole archive, so those two are filled in by hand. A
+the branch. An entry naming an ``archive`` is refused instead: each member's
+``checksum`` and ``size_bytes`` describe that file inside the zip, and the only
+thing there is to download is the whole archive, so they are filled in by hand. A
 fork's branch cannot be pushed to, so a pull request from one
 fails instead and prints the values to paste in. An entry coming in through the
 issue form is filled in the same way before its pull request is opened, so it

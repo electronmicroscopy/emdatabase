@@ -22,6 +22,7 @@ import pytest
 from emdatabase import config
 from emdatabase._archive import ArchiveError
 from emdatabase.downloadable_dataset import DownloadableDataset
+from emdatabase.metadata import format_size
 from emdatabase.widget import DownloadCancelled
 
 MEMBER = "Fig_01/Panel_g-h_Themis/scan.raw"
@@ -47,13 +48,20 @@ def archived(http_server):
     (directory / "Fig_01.zip").write_bytes(_zip_bytes())
 
     def make(**overrides):
-        archive = {"url": f"{base}/Fig_01.zip", "member": MEMBER, **overrides.pop("archive", {})}
+        member = {
+            "member": MEMBER,
+            "file": "scan.raw",
+            "checksum": overrides.pop("checksum", f"md5:{hashlib.md5(CONTENT).hexdigest()}"),
+            "size_bytes": len(CONTENT),
+        }
+        archive = {
+            "url": f"{base}/Fig_01.zip",
+            "members": [member],
+            **overrides.pop("archive", {}),
+        }
         spec = {
             "description": "One headerless raw file inside a zip.",
             "source": base,
-            "file": "scan.raw",
-            "checksum": f"md5:{hashlib.md5(CONTENT).hexdigest()}",
-            "size_bytes": len(CONTENT),
             "archive": archive,
             **overrides,
         }
@@ -132,7 +140,11 @@ def test_a_cancel_raised_from_update_aborts_and_leaves_no_file(archived, dest):
 
 
 def test_a_member_the_archive_does_not_hold_names_it(archived, dest):
-    ds = archived(archive={"member": "Fig_01/Panel_g-h_Themis/missing.raw"})
+    ds = archived(
+        archive={
+            "members": [{"member": "Fig_01/Panel_g-h_Themis/missing.raw", "file": "scan.raw"}]
+        }
+    )
     with pytest.raises(KeyError, match="missing.raw"):
         ds.download(destination=dest, progressbar=False, background=False)
 
@@ -163,8 +175,6 @@ def test_filepath_and_delete_behave_as_for_any_other_dataset(archived, dest):
 # solid blocks and can only be extracted to a directory. Both end up at the same
 # place, so the behaviour asserted here is deliberately the zip's.
 
-MEMBER_7Z = "Fig_01/Panel_g-h_Themis/scan.raw"
-
 
 def _sevenzip_bytes() -> bytes:
     """A small .7z holding the member and a decoy sharing its file name."""
@@ -175,7 +185,7 @@ def _sevenzip_bytes() -> bytes:
         built = work / "built.7z"
         with py7zr.SevenZipFile(built, "w") as archive:
             archive.write(work / "decoy", DECOY)
-            archive.write(work / "good", MEMBER_7Z)
+            archive.write(work / "good", MEMBER)
         return built.read_bytes()
 
 
@@ -186,13 +196,20 @@ def archived_7z(http_server):
     (directory / "Fig_01.7z").write_bytes(_sevenzip_bytes())
 
     def make(**overrides):
-        archive = {"url": f"{base}/Fig_01.7z", "member": MEMBER_7Z, **overrides.pop("archive", {})}
+        member = {
+            "member": MEMBER,
+            "file": "scan.raw",
+            "checksum": overrides.pop("checksum", f"md5:{hashlib.md5(CONTENT).hexdigest()}"),
+            "size_bytes": len(CONTENT),
+        }
+        archive = {
+            "url": f"{base}/Fig_01.7z",
+            "members": [member],
+            **overrides.pop("archive", {}),
+        }
         spec = {
             "description": "One headerless raw file inside a 7z.",
             "source": base,
-            "file": "scan.raw",
-            "checksum": f"md5:{hashlib.md5(CONTENT).hexdigest()}",
-            "size_bytes": len(CONTENT),
             "archive": archive,
             **overrides,
         }
@@ -208,7 +225,11 @@ def test_a_7z_member_comes_out_byte_for_byte(archived_7z, dest):
 
 def test_a_7z_member_the_archive_does_not_hold_names_it(archived_7z, dest):
     """py7zr extracts nothing and raises nothing for a name it lacks, so we check."""
-    ds = archived_7z(archive={"member": "Fig_01/Panel_g-h_Themis/missing.raw"})
+    ds = archived_7z(
+        archive={
+            "members": [{"member": "Fig_01/Panel_g-h_Themis/missing.raw", "file": "scan.raw"}]
+        }
+    )
     with pytest.raises(KeyError, match="missing.raw"):
         ds.download(destination=dest, progressbar=False, background=False)
     assert list(dest.iterdir()) == []
@@ -277,19 +298,21 @@ def paired(http_server):
         spec = {
             "description": "A header and the file it names.",
             "source": base,
-            "file": "Paired/scan.raw",
-            "checksum": f"md5:{hashlib.md5(CONTENT).hexdigest()}",
-            "size_bytes": len(CONTENT),
             "archive": {
                 "url": f"{base}/Paired.zip",
-                "member": MEMBER,
-                "companions": [
+                "members": [
+                    {
+                        "member": MEMBER,
+                        "file": "Paired/scan.raw",
+                        "checksum": f"md5:{hashlib.md5(CONTENT).hexdigest()}",
+                        "size_bytes": len(CONTENT),
+                    },
                     {
                         "member": COMPANION,
                         "file": "Paired/scan_x256_y256.raw",
                         "checksum": f"md5:{hashlib.md5(COMPANION_CONTENT).hexdigest()}",
                         "size_bytes": len(COMPANION_CONTENT),
-                    }
+                    },
                 ],
             },
             **overrides,
@@ -314,13 +337,17 @@ def test_a_companion_with_a_wrong_checksum_fails(paired, dest):
     ds = paired(
         archive={
             "url": paired().metadata.archive.url,
-            "member": MEMBER,
-            "companions": [
+            "members": [
+                {
+                    "member": MEMBER,
+                    "file": "Paired/scan.raw",
+                    "checksum": f"md5:{hashlib.md5(CONTENT).hexdigest()}",
+                },
                 {
                     "member": COMPANION,
                     "file": "Paired/scan_x256_y256.raw",
                     "checksum": "md5:" + "0" * 32,
-                }
+                },
             ],
         }
     )
@@ -370,7 +397,7 @@ def test_a_complete_shared_copy_is_still_used_as_is(paired, tmp_path, dest):
 
 
 def test_the_size_shown_counts_the_companion(paired):
-    """`size_bytes` is the entry's own file; `size` is what the dataset occupies."""
+    """One number for how much disk the dataset takes, every member counted."""
     md = paired().metadata
-    assert md.size_bytes == len(CONTENT)
-    assert md.total_bytes == len(CONTENT) + len(COMPANION_CONTENT)
+    assert md.size_bytes == len(CONTENT) + len(COMPANION_CONTENT)
+    assert md.size == format_size(md.size_bytes)  # the same number, formatted
