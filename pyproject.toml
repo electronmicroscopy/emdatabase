@@ -1,6 +1,6 @@
 [project]
 name = "emdatabase"
-version = "0.4.0"
+version = "0.5.0"
 description = "A database for electron microscopy data using pooch to download and manage files."
 readme = "README.md"
 requires-python = ">=3.11"
