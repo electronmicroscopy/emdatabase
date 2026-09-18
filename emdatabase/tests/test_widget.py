@@ -107,7 +107,11 @@ def test_browse_returns_widget_populated_from_the_catalogue():
     widget = _browser()
     assert widget.n_total > 0
     assert widget.groups
-    assert widget.n_total == sum(len(g["items"]) for g in widget.groups)
+    # As for the payload above: a dataset declaring several techniques is in
+    # each of their groups, so the groups overlap and n_total is the distinct
+    # rows rather than the group sizes added up.
+    names = {it["name"] for g in widget.groups for it in g["items"]}
+    assert widget.n_total == len(names)
     assert isinstance(widget.data_dir, str) and widget.data_dir
 
 

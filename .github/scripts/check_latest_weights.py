@@ -27,8 +27,10 @@ A family whose ``latest`` is a Zenodo record file is handled the other way
 round. Those bytes are immutable and permanent, so nothing is downloaded and
 nothing is copied to GitHub; retraining publishes a new record under the same
 concept record instead, which the file URL cannot show. The script asks the
-Zenodo API for the concept's newest record, and a new record id becomes a dated
-version pointing at that record.
+Zenodo API for the concept's newest record, and a new record serving a file
+whose md5 differs becomes a dated version pointing at that record. One serving
+the same md5 is not a new state of the weights - a record is versioned whole, so
+anything published beside them mints a new id - so only the link moves.
 """
 
 from __future__ import annotations
@@ -262,8 +264,13 @@ def _check_zenodo(
     """Ask the Zenodo API whether this concept has a newer record.
 
     A record's files never change, so there is nothing to download and nothing
-    to archive: a new version of the model is a new record id, and the dated
-    version written for it points straight at that record.
+    to archive: the API's md5 is what the link serves, and a dated version
+    written for it points straight at that record.
+
+    A newer record is not by itself a newer file. Zenodo versions the whole
+    record, so a change to anything in it publishes a new id while the file this
+    entry names may be byte for byte what it was; only a checksum that differs
+    is a new state of the weights worth a date of its own.
     """
     try:
         record = fetch_json(f"{link.api}/{link.record_id}")
@@ -299,10 +306,24 @@ def _check_zenodo(
         report.lines.append(f"- unchanged; Zenodo record {new_id} is still the latest version")
         return
 
+    url = link.file_url(new_id, str(served.get("key") or link.key))
+    if latest.checksum and checksum == latest.checksum:
+        # A newer record is not a newer file. Zenodo versions the whole record,
+        # so anything else in it changing - a zip published beside the weights -
+        # is a new id while this file stays byte for byte what it was. Only the
+        # link moves: a dated version would pin a second date to bytes that
+        # already have one.
+        report.lines.append(
+            f"- unchanged; Zenodo record {new_id} is newer than {link.record_id} but serves "
+            f"the same `{checksum}`, so the link moved and no version was filed"
+        )
+        entry["latest"]["url"] = url
+        report.changed = True
+        return
+
     date = published.strftime("%y%m%d")
     if _date_taken(report, metadata, date, checksum):
         return
-    url = link.file_url(new_id, str(served.get("key") or link.key))
     report.lines.append(
         f"- new Zenodo record {new_id}: the index has `{latest.checksum}` from record "
         f"{link.record_id}, and the new record serves `{checksum}` "

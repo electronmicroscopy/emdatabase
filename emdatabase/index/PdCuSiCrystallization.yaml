@@ -20,6 +20,7 @@ PdCuSiCrystallization:
   doi: 10.5281/zenodo.15490547
   technique:
     - 4D-STEM
+    - In-situ
   tags:
     - Amorphous
     - Metallic Glass

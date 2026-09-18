@@ -16,18 +16,21 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import warnings
 import zipfile
 from pathlib import Path
 
+import py7zr
 import pytest
 
 import emdatabase.data as data
-from emdatabase._archive import _HTTPRangeFile
+from emdatabase._archive import _BUFFER_SIZE, _HTTPRangeFile, _is_sevenzip
 from emdatabase.data import MgONanoCrystals, NiEBSDLarge
 from emdatabase.downloadable_dataset import (
     _PENDING,
     DatasetPath,
     DownloadableDataset,
+    DownloadFailedWarning,
     _get_executor,
     _pending_key,
     _shutdown_executor,
@@ -70,15 +73,21 @@ def _head(url, timeout=60):
     return urllib.request.urlopen(request, timeout=timeout)
 
 
-def _archive_member(url, member):
-    """The directory entry for one member of a remote zip.
+def _archive_member_size(url, member):
+    """The uncompressed size of one member of a remote archive.
 
     A few small range requests rather than the whole archive, which is the
-    reason an entry names a member in the first place.
+    reason an entry names a member in the first place. A zip and a 7z report
+    that size through different objects, so the size itself is what comes back.
     """
-    with io.BufferedReader(_HTTPRangeFile(url), buffer_size=1 << 20) as stream:
+    with io.BufferedReader(_HTTPRangeFile(url), buffer_size=_BUFFER_SIZE) as stream:
+        if _is_sevenzip(url):
+            with py7zr.SevenZipFile(stream) as archive:
+                found = [f for f in archive.list() if f.filename.replace("\\", "/") == member]
+                assert found, f"{url} holds no member {member!r}"
+                return found[0].uncompressed
         with zipfile.ZipFile(stream) as archive:
-            return archive.getinfo(member)
+            return archive.getinfo(member).file_size
 
 
 @pytest.mark.network
@@ -120,13 +129,19 @@ def test_source_url_resolves(name, version):
             f"{name}: {url} is {int(length)} bytes, but the YAML declares {declared}"
         )
     if archive is not None:
-        # What rots for an archive entry is the member being renamed or moved
-        # inside a zip whose own size never changes.
-        info = _archive_member(url, archive.member)
-        assert info.file_size == resolved.size_bytes, (
-            f"{name}: {archive.member} is {info.file_size} bytes inside {url}, "
-            f"but the YAML declares {resolved.size_bytes}"
-        )
+        # What rots for an archive entry is a member being renamed or moved
+        # inside an archive whose own size never changes. Every member is
+        # checked: the ones beside the entry's own file are usually the large
+        # ones, and nothing else would notice.
+        members = [(m.member, m.size_bytes) for m in archive.members]
+        for member, member_declared in members:
+            if member_declared is None:
+                continue
+            size = _archive_member_size(url, member)
+            assert size == member_declared, (
+                f"{name}: {member} is {size} bytes inside {url}, but the YAML declares "
+                f"{member_declared}"
+            )
 
 
 @pytest.mark.parametrize("name", ALL_DATASETS)
@@ -229,6 +244,96 @@ def test_finished_downloads_leave_no_pending_entry(tmp_path, monkeypatch):
     assert key not in _PENDING
 
 
+def _failing_retrieve(error):
+    """A stand-in for ``_retrieve`` that fails the way an unreachable host does."""
+
+    def retrieve(destination=None, progressbar=True, chunk_size=4096, version=None, refresh=False):
+        raise error
+
+    return retrieve
+
+
+def test_a_failed_background_download_warns(tmp_path, monkeypatch):
+    """The failure happens on another thread, so nothing else would report it."""
+    dataset = getattr(data, TINY_DATASET)()
+    monkeypatch.setattr(
+        dataset, "_retrieve", _failing_retrieve(ConnectionError("zenodo.org is unreachable"))
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        handle = dataset.download(destination=tmp_path, progressbar=False)
+        for _ in range(300):  # the warning comes from the worker thread
+            if caught:
+                break
+            time.sleep(0.01)
+
+    failures = [w for w in caught if issubclass(w.category, DownloadFailedWarning)]
+    assert failures, [str(w.message) for w in caught]
+    assert "unreachable" in str(failures[0].message)
+    assert handle.failed is True
+    assert handle.done is True  # it finished - just not successfully
+    assert "failed" in repr(handle)
+
+
+def test_a_failed_download_re_raises_when_the_path_is_used(tmp_path, monkeypatch):
+    """Not FileNotFoundError: the handle still knows why the file is not there."""
+    dataset = getattr(data, TINY_DATASET)()
+    monkeypatch.setattr(dataset, "_retrieve", _failing_retrieve(ConnectionError("host is down")))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DownloadFailedWarning)
+        handle = dataset.download(destination=tmp_path, progressbar=False)
+        with pytest.raises(ConnectionError, match="host is down"):
+            handle.result()
+        with pytest.raises(ConnectionError, match="host is down"):
+            os.fspath(handle)
+
+
+def test_downloading_again_after_a_failure_retries(tmp_path, monkeypatch):
+    """A kept failure must not stop the next attempt from replacing it."""
+    dataset = getattr(data, TINY_DATASET)()
+    monkeypatch.setattr(dataset, "_retrieve", _failing_retrieve(ConnectionError("down")))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DownloadFailedWarning)
+        first = dataset.download(destination=tmp_path, progressbar=False)
+        with pytest.raises(ConnectionError):
+            first.result()
+
+    monkeypatch.setattr(dataset, "_retrieve", _slow_retrieve(dataset, tmp_path))
+    second = dataset.download(destination=tmp_path, progressbar=False)
+    assert Path(os.fspath(second)).read_bytes() == b"payload"
+    assert second.failed is False
+
+
+def test_a_blocking_download_clears_an_earlier_failure(tmp_path, monkeypatch):
+    """A kept failure is about a file that is not there; this one is.
+
+    The entry is keyed by path, not by attempt, so a failure left behind would
+    be found by every handle to that path - including the one just handed back
+    by the download that succeeded.
+    """
+    dataset = getattr(data, TINY_DATASET)()
+    monkeypatch.setattr(dataset, "_retrieve", _failing_retrieve(ConnectionError("host is down")))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DownloadFailedWarning)
+        failed = dataset.download(destination=tmp_path, progressbar=False)
+        with pytest.raises(ConnectionError):
+            failed.result()
+
+    monkeypatch.setattr(dataset, "_retrieve", _slow_retrieve(dataset, tmp_path))
+    handle = dataset.download(destination=tmp_path, progressbar=False, background=False)
+
+    assert handle.failed is False
+    assert "failed" not in repr(handle)
+    assert Path(os.fspath(handle)).read_bytes() == b"payload"
+    assert _pending_key(handle) not in _PENDING
+    # and not just this handle: any path to the file, however it was built
+    assert DatasetPath(tmp_path / dataset.file).failed is False
+
+
 def test_keyword_overrides_leave_the_class_spec_alone():
     base = getattr(data, TINY_DATASET)
     overridden = base(checksum="md5:" + "0" * 32)
@@ -249,8 +354,13 @@ def test_a_dataset_without_a_source_is_an_error():
         DownloadableDataset()
 
 
+@pytest.mark.filterwarnings("ignore::emdatabase.downloadable_dataset.DownloadFailedWarning")
 def test_download_handle_propagates_errors(tmp_path, monkeypatch):
-    """A failed background download raises when the handle is consumed."""
+    """A failed background download raises when the handle is consumed.
+
+    The warning that failure also emits is this test's own doing; that it is
+    emitted at all is ``test_a_failed_background_download_warns``'s business.
+    """
     dataset = getattr(data, TINY_DATASET)()
 
     def fail(*args):

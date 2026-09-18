@@ -85,30 +85,56 @@ That prints one line per problem and exits non-zero, or prints ``valid``.
 A file inside an archive
 ------------------------
 
-Some data worth shipping is one file inside a multi-gigabyte zip on a record
-nobody can re-publish, where downloading all of it to get one file is not
-reasonable. Such an entry adds an ``archive`` block naming the zip and the
-member inside it:
+Some data worth shipping is one file inside a multi-gigabyte ``.zip`` or ``.7z``
+on a record nobody can re-publish, where downloading all of it to get one file is
+not reasonable. Such an entry adds an ``archive`` block naming the archive and
+every file taken out of it:
 
 .. code-block:: yaml
 
    archive:
      url: https://zenodo.org/records/0000000/files/Figures.zip
-     member: Figure_01/Panel_a/scan_x128_y128.raw
+     members:
+       - member: Figure_01/Panel_a/scan_x128_y128.raw
+         file: MyDatasetName/scan_x128_y128.raw
+         checksum: md5:0123456789abcdef0123456789abcdef
+         size_bytes: 1000000
 
-``download()`` then fetches only that member, over HTTP range requests: a few
-requests read the zip's directory, and the member costs its own compressed bytes
-rather than the whole archive. What comes back is a path, as for any other entry.
+``download()`` then fetches only those members, over HTTP range requests: a few
+requests read the archive's directory, and only the member's own bytes follow.
+What comes back is a path, as for any other entry. The format is taken from the
+link's file name, so no field declares it.
 
-The entry's own ``file``, ``checksum`` and ``size_bytes`` go on describing the
-member, which is the file you end up with; ``checksum`` and ``size_bytes``
-inside the block describe the archive instead, and are optional. Give ``member``
-as the complete path inside the zip - one file name can appear in several of its
-directories, so a basename alone is ambiguous.
+What that costs differs by format. A zip compresses each member on its own, so
+one member is read and streamed directly. A 7z compresses files together in
+solid blocks, so reaching a member means decompressing its block from the start:
+cheap for a file at the front of a small block, expensive for one at the back of
+a large one. It is worth measuring before adding a 7z entry - in the archive
+behind ``MOSS6Fig3`` the same 15.3 GB file holds members costing
+anywhere from 2 MB to 2.6 GB to reach. Note also that 7z is extracted rather
+than streamed, so its progress bar fills in one step at the end and a cancel
+cannot interrupt it.
+
+An archive entry leaves out the top-level ``file``, ``checksum`` and
+``size_bytes``. The first two are the first member's, stated there instead so
+that no fact about a file appears at two levels; the entry's ``size_bytes`` is
+every member's added up, which is the one number ``size`` shows. ``checksum`` and
+``size_bytes`` directly under ``archive`` describe the archive itself, and are
+optional. Give ``member`` as the complete path inside the archive - one file name
+can appear in several of its directories, so a basename alone is ambiguous.
+
+Data that is more than one file lists them all under ``members``. The first is
+what ``download()`` returns; the rest arrive beside it. Give them a directory of
+their own when a reader expects to find them together - an EMPAD ``.xml`` names
+its ``.raw`` by bare file name and opens it next to itself, so
+``MyDataset/acquisition_12.xml`` and ``MyDataset/scan_x256_y256.raw`` both keeps
+the pairing and keeps it clear of identically named members elsewhere.
+``delete()`` removes them all, and the size shown in the catalogue counts them.
 
 These entries are written by hand. The two fields CI otherwise fills in would be
-taken from the archive rather than from the member, so a pull request leaving
-them blank is refused rather than guessed at. ``download_url``, and the download
+taken from the archive rather than from the member, so a pull request leaving the
+entry's own blank is refused rather than guessed at. A member beside it may leave
+its ``checksum`` out, and is then fetched unverified. ``download_url``, and the download
 link on the docs site, point at the archive: the member has no link of its own.
 
 A host that ignores ``Range`` and answers with the whole archive fails loudly,
@@ -183,9 +209,9 @@ a dataset with one, fail as well.
 files. It downloads the file behind each changed entry that is missing its
 ``checksum`` or ``size_bytes`` - a weights family's ``latest`` and each dated
 version on their own links - fills the fields in and pushes the result back to
-the branch. An entry naming an ``archive`` is refused instead: its ``checksum``
-and ``size_bytes`` describe the member inside the zip, and the only thing there
-is to download is the whole archive, so those two are filled in by hand. A
+the branch. An entry naming an ``archive`` is refused instead: each member's
+``checksum`` and ``size_bytes`` describe that file inside the zip, and the only
+thing there is to download is the whole archive, so they are filled in by hand. A
 fork's branch cannot be pushed to, so a pull request from one
 fails instead and prints the values to paste in. An entry coming in through the
 issue form is filled in the same way before its pull request is opened, so it
@@ -214,11 +240,15 @@ For a Zenodo record file, nothing is downloaded and nothing is copied to
 GitHub. The job asks the Zenodo API for the newest record of the concept the
 current record belongs to. If that is still the record the entry points at, the
 run reports it unchanged, and reports an error if the API's md5 is not the one
-in the index. If a newer record has been published, the job adds a dated
-version - dated by the new record's publication date - pointing at the file in
-that record, and moves ``latest`` to it. The file it looks for in the new
-record is the one whose name matches the current link; if the name has changed
-and the record holds more than one file, the run fails rather than guess.
+in the index. If a newer record has been published and it serves a different
+md5, the job adds a dated version - dated by the new record's publication date -
+pointing at the file in that record, and moves ``latest`` to it. A newer record
+serving the same md5 only moves ``latest``: a record is versioned whole, so
+publishing anything beside the weights - a zip of the training data, say - makes
+a new id while the weights stand still, and a second date for the same bytes
+would claim they had changed. The file it looks for in the new record is the one
+whose name matches the current link; if the name has changed and the record
+holds more than one file, the run fails rather than guess.
 
 Removing an entry
 -----------------

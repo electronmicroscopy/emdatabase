@@ -106,9 +106,28 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Disposition", f'attachment; filename="{name}"')
             self.end_headers()
             return io.BytesIO(body)
+        if self.path.startswith("/flaky/"):
+            return self._die_mid_read()
         if "Range" in self.headers:
             return self._send_range()
         return super().send_head()
+
+    def _die_mid_read(self):
+        """Says how big the file is, then refuses to serve any of it.
+
+        A host that goes down between the HEAD that finds the archive's
+        directory and the ranges that read it - Zenodo under load answering
+        ``503`` - which is a failure arriving mid-read rather than up front.
+        """
+        body = (Path(self.directory) / self.path[len("/flaky/") :]).read_bytes()
+        if self.command == "HEAD":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return None
+        self.send_error(503)
+        return None
 
     def _send_range(self):
         """``206`` with the requested slice, for ``bytes=<first>-[<last>]``."""

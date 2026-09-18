@@ -14,7 +14,12 @@ import pooch
 import yaml
 
 from emdatabase.config import LocationName
-from emdatabase.metadata import DatasetMetadata, WeightsVersion, versioned_filename
+from emdatabase.metadata import (
+    ArchiveMember,
+    DatasetMetadata,
+    WeightsVersion,
+    versioned_filename,
+)
 
 USER_AGENT = "emdatabase (https://github.com/electronmicroscopy/emdatabase)"
 
@@ -37,6 +42,15 @@ _WARNED_STALE: set[str] = set()
 class StaleIndexWarning(UserWarning):
     """The file behind a weights family's ``latest`` link is not the one the
     index describes, so the shipped checksum is out of date."""
+
+
+class DownloadFailedWarning(UserWarning):
+    """A background download failed.
+
+    Using the path raises the error itself, but a caller that never touches the
+    handle - a notebook cell that only reads ``done`` - would otherwise be told
+    nothing at all, because the failure happened on another thread.
+    """
 
 
 def _clear_upstream_cache() -> None:
@@ -106,6 +120,7 @@ class _Resolved:
     file: str
     pinned: bool
     member: str | None = None
+    companions: tuple[ArchiveMember, ...] = ()
 
 
 class Progress(Protocol):
@@ -183,7 +198,37 @@ def _pending_key(path: object) -> str:
     return os.path.normcase(os.path.abspath(str(path)))
 
 
-def _release_pending(key: str, future: "Future[Path]") -> None:
+def _settle_pending(key: str, future: "Future[Path]") -> None:
+    """What becomes of a finished download's entry in :data:`_PENDING`.
+
+    A failure keeps its entry, so that ``result()`` and every consumer of the
+    path go on re-raising it. Dropped, a failed download would be
+    indistinguishable from a file that was already on disk: ``done`` would say
+    True, the file would not be there, and the exception - the only account of
+    what went wrong - would be discarded without anyone retrieving it.
+    """
+    # Importing the widget module costs nothing: it never imports anywidget at
+    # module load, and a cancelled download is not a failure to report.
+    from emdatabase.widget import DownloadCancelled
+
+    error = None if future.cancelled() else future.exception()
+    if error is not None and not isinstance(error, DownloadCancelled):
+        warnings.warn(
+            f"{os.path.basename(key)} was not downloaded: "
+            f"{type(error).__name__}: {error} "
+            "Using the path raises this error; call download() again to retry.",
+            DownloadFailedWarning,
+        )
+        # The entry is kept for the life of the process, and a traceback holds
+        # every frame of the download and its locals - for an archive that is
+        # the downloader, its range file and its read buffers. What the handle
+        # owes its caller is which error and what it said, both of which the
+        # exception still carries; re-raising it gets a fresh traceback from
+        # the raise itself.
+        error.__traceback__ = None
+        error.__context__ = None
+        error.__cause__ = None
+        return
     with _PENDING_LOCK:
         if _PENDING.get(key) is future:
             del _PENDING[key]
@@ -204,6 +249,12 @@ class DatasetPath(_ConcretePath):
     one that is already done, so :meth:`DownloadableDataset.download` returns
     this type whether or not it downloaded anything.
 
+    A download that failed - an unreachable host, a checksum that did not match
+    - is ``done`` but not successful: ``failed`` says so without blocking, and
+    anything that touches the file raises the original error rather than
+    ``FileNotFoundError``. The failure is also warned about when it happens, so
+    a caller who never uses the handle still hears about it.
+
     Any path pointing at the same file waits, however it was built. ``str()``
     and ``Path()`` are the exceptions: they hand back a plain value with no
     download attached, so ``hs.load(str(handle))`` will not block.
@@ -217,7 +268,7 @@ class DatasetPath(_ConcretePath):
         key = _pending_key(self)
         with _PENDING_LOCK:
             _PENDING[key] = future
-        future.add_done_callback(lambda finished: _release_pending(key, finished))
+        future.add_done_callback(lambda finished: _settle_pending(key, finished))
         return self
 
     def __fspath__(self) -> str:
@@ -241,13 +292,24 @@ class DatasetPath(_ConcretePath):
         future = self._future
         return future.done() if future is not None else True
 
+    @property
+    def failed(self) -> bool:
+        """Whether the download finished with an error. Never blocks, never raises."""
+        future = self._future
+        if future is None or not future.done() or future.cancelled():
+            return False
+        return future.exception() is not None
+
     def wait(self, timeout: float | None = None) -> "DatasetPath":
         """Block until the download finishes and return self (for chaining)."""
         self.result(timeout)
         return self
 
     def __repr__(self) -> str:  # never block just to display the object
-        state = "done" if self.done else "downloading"
+        if self.failed:
+            state = "failed"
+        else:
+            state = "done" if self.done else "downloading"
         return f"<DatasetPath {str(self)!r} [{state}]>"
 
 
@@ -266,12 +328,29 @@ class _TqdmProgress:
     A background download calls :meth:`open` up front instead, on the calling
     thread. A pool thread does not carry the running cell, so a notebook bar
     built there is shown in whichever cell ran last, or not at all.
+
+    A download that is more than one file drives one of these through a bar per
+    file, in turn: :attr:`desc` is set to each as it starts, so the label names
+    the file whose bytes are moving rather than the first of them.
     """
 
     def __init__(self, desc: str = "") -> None:
         self._desc = desc
         self._bar: Any = None  # a tqdm.auto bar; which backend depends on the host
         self._total = 0
+
+    @property
+    def desc(self) -> str:
+        """What the bar is labelled with, which is the file it is showing."""
+        return self._desc
+
+    @desc.setter
+    def desc(self, value: str) -> None:
+        self._desc = value
+        if self._bar is not None:
+            # set_description_str, not set_description: the latter appends a
+            # ": " of its own, which the constructor's `desc=` does not.
+            self._bar.set_description_str(value)
 
     @property
     def total(self) -> int:
@@ -367,13 +446,25 @@ class DownloadableDataset:
         if md.kind != "weights":
             if version is not None:
                 raise ValueError(f"{type(self).__name__} is a dataset and has no versions")
+            if md.archive is not None:
+                # The archive is the only thing there is a link to, and every
+                # file the entry puts on disk is a member of it: the first is
+                # the one handed back, the rest arrive beside it.
+                return _Resolved(
+                    url=md.archive.url,
+                    checksum=md.checksum,
+                    size_bytes=md.size_bytes,
+                    file=md.file,
+                    pinned=True,
+                    member=md.archive.members[0].member,
+                    companions=md.archive.members[1:],
+                )
             return _Resolved(
-                url=md.archive.url if md.archive else (md.url or f"{md.source}/{md.file}"),
+                url=md.url or f"{md.source}/{md.file}",
                 checksum=md.checksum,
                 size_bytes=md.size_bytes,
                 file=md.file,
                 pinned=True,
-                member=md.archive.member if md.archive else None,
             )
         if version is None:
             if md.latest is None:
@@ -560,9 +651,14 @@ class DownloadableDataset:
             reports download state. With ``background`` False it is already done.
         """
         if not background:
-            return DatasetPath(
-                self._retrieve(destination, progressbar, chunk_size, version, refresh)
-            )
+            path = self._retrieve(destination, progressbar, chunk_size, version, refresh)
+            # Attached like any other download, so that "the newest attempt owns
+            # the entry" stays one rule rather than two: _attach replaces a
+            # failure kept for this path, and the done-callback - which fires
+            # immediately for a future that is already settled - clears it.
+            settled: Future[Path] = Future()
+            settled.set_result(Path(path))
+            return DatasetPath(path)._attach(settled)
         # Where the file will end up: the copy the search order finds, unless a
         # destination or a refresh asks for a fresh one.
         existing = None if destination is not None or refresh else self.filepath(version)
@@ -607,35 +703,64 @@ class DownloadableDataset:
             if shared is not None:
                 return shared
         destination = self._resolve_destination(destination)
+        pin = newer or resolved  # the newer link on main, if there is one
+        # pooch's `progressbar=True` - "build your own bar" - has already become
+        # a _TqdmProgress above; what a downloader takes is a Progress or nothing.
+        bar = None if isinstance(progressbar, bool) else progressbar
         downloader: Any
+        # Every file this download puts on disk, the entry's own first. A
+        # companion is a download of its own - its own hash, its own atomic
+        # write, and skipped outright if it is already there - differing only in
+        # which member of the archive the bytes come from.
+        parts: list[tuple[str, str | None, Any]]
         if resolved.member is None:
             downloader = pooch.HTTPDownloader(
                 progressbar=progressbar,  # pyright: ignore[reportArgumentType]
                 chunk_size=chunk_size,
                 headers={"User-Agent": USER_AGENT},
             )
+            parts = [(resolved.file, pin.checksum, downloader)]
         else:
             # Imported here, not at the top, because _archive imports this
-            # module for USER_AGENT and the progress protocol.
+            # module for USER_AGENT and the progress protocol - and importing it
+            # pulls in py7zr, which a download that touches no archive should not
+            # pay for.
             from emdatabase._archive import ArchiveMemberDownloader
 
-            downloader = ArchiveMemberDownloader(resolved.member, progressbar, chunk_size)
+            downloader = ArchiveMemberDownloader(resolved.member, bar, chunk_size)
+            parts = [
+                (resolved.file, pin.checksum, downloader),
+                *(
+                    (c.file, c.checksum, ArchiveMemberDownloader(c.member, bar, chunk_size))
+                    for c in resolved.companions
+                ),
+            ]
         try:
             if refresh:
                 # pooch keeps a file whose hash it was not given anything to
                 # check against, so the copy has to go before it will re-fetch.
-                (destination / resolved.file).unlink(missing_ok=True)
+                for name, _, _ in parts:
+                    (destination / name).unlink(missing_ok=True)
             if newer is None and not resolved.pinned:
                 filepath = self._retrieve_latest(resolved, destination, downloader)
             else:
-                pin = newer or resolved  # the newer link on main, if there is one
-                filepath = pooch.retrieve(
-                    url=pin.url,
-                    known_hash=pin.checksum,
-                    fname=resolved.file,
-                    path=destination,
-                    downloader=downloader,  # pyright: ignore[reportArgumentType]
-                )
+                written = []
+                for name, checksum, part in parts:
+                    if isinstance(bar, _TqdmProgress):
+                        # Each member closes the bar and the next one opens a
+                        # fresh one, so the label has to follow. The directory
+                        # is the same for every member and only costs width.
+                        bar.desc = Path(name).name
+                    written.append(
+                        pooch.retrieve(
+                            url=pin.url,
+                            known_hash=checksum,
+                            fname=name,
+                            path=destination,
+                            downloader=part,  # pyright: ignore[reportArgumentType]
+                        )
+                    )
+                filepath = written[0]  # parts[0] is the entry's own file
         finally:
             # pooch only closes the bar on the happy path, so a failed or
             # cancelled download would leave it hanging open.
@@ -717,13 +842,36 @@ class DownloadableDataset:
             )
         return filepath
 
+    def _is_complete(self, directory: Path, resolved: _Resolved) -> bool:
+        """Whether ``directory`` holds the whole dataset, companions included.
+
+        An entry with companions is not on disk until they are: its own file is
+        a header, the data sits beside it under the name the archive gave it,
+        and a header whose raw is missing fails in the reader rather than here.
+        A directory holding only part of the set is passed over, so the rest is
+        fetched instead of the dataset reporting itself already downloaded.
+
+        Takes the resolved entry rather than a version: the answer differs per
+        directory, but what is being looked for does not, and the search order
+        asks about several directories in a row.
+        """
+        if not (directory / resolved.file).exists():
+            return False
+        return all((directory / c.file).exists() for c in resolved.companions)
+
     def _find_in_shared_locations(self, version: str | None = None) -> Path | None:
-        """Path to an existing copy in a configured shared location, or None."""
+        """Path to an existing, complete copy in a shared location, or None."""
         from emdatabase import config
 
-        name = self.filename(version)
-        shared = (loc.path / name for loc in config.locations() if loc.kind != "personal")
-        return next((path for path in shared if path.exists()), None)
+        resolved = self._resolve(version)
+        return next(
+            (
+                location.path / resolved.file
+                for location in config.locations()
+                if location.kind != "personal" and self._is_complete(location.path, resolved)
+            ),
+            None,
+        )
 
     def filepaths(self, version: str | None = None) -> list[Path]:
         """Every copy of the dataset on disk, in search order.
@@ -737,11 +885,16 @@ class DownloadableDataset:
 
         ``version`` asks about one dated version of a weights family; with no
         version it is the ``latest`` file, which is a different name on disk.
+
+        A copy counts only if it is complete: an entry that names companions is
+        not there unless they are beside it.
         """
         from emdatabase import config
 
-        name = self.filename(version)
-        return [d / name for d in config.data_search_dirs() if (d / name).exists()]
+        resolved = self._resolve(version)
+        return [
+            d / resolved.file for d in config.data_search_dirs() if self._is_complete(d, resolved)
+        ]
 
     def filepath(self, version: str | None = None) -> Path | None:
         """Return the local file path of the dataset if present.
@@ -778,7 +931,14 @@ class DownloadableDataset:
         bool
             True if a file was removed, False if there was nothing to delete.
         """
-        path = self._resolve_destination(destination) / self.filename(version)
+        directory = self._resolve_destination(destination)
+        # Companions go too. They are usually the large ones - a header is what
+        # the entry points at, and the gigabytes sit beside it - so leaving them
+        # behind would make delete() look like it had freed the space.
+        resolved = self._resolve(version)
+        for companion in resolved.companions:
+            (directory / companion.file).unlink(missing_ok=True)
+        path = directory / resolved.file
         if path.exists():
             path.unlink()
             return True

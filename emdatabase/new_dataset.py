@@ -353,14 +353,20 @@ def fill_download_fields(document: dict[str, Any]) -> list[str]:
                 if pin:
                     lines += _fill_pin(label, pin, pin.get("url", ""))
         elif entry.get("archive"):
-            # The entry's checksum and size_bytes describe the member inside the
-            # archive. Following the link here would hash the whole zip and
-            # write a value that is wrong in a way nothing downstream notices.
-            if not (entry.get("checksum") and entry.get("size_bytes")):
+            # Each member's checksum and size_bytes describe that file inside
+            # the archive. Following the link here would hash the whole archive
+            # and write a value that is wrong in a way nothing downstream
+            # notices.
+            # A later member may leave its checksum out - the schema allows it,
+            # and pooch then fetches that file unverified - so only the entry's
+            # own file, which is the first member, is required here.
+            members = entry["archive"].get("members") or ()
+            first = members[0] if members else {}
+            if not (first.get("checksum") and first.get("size_bytes")):
                 raise ValueError(
-                    f"{name}: checksum and size_bytes describe the member inside the "
-                    "archive, which is not something this can download. Fill them in "
-                    "by hand."
+                    f"{name}: the first member's checksum and size_bytes describe that file "
+                    "inside the archive, which is not something this can download. Fill "
+                    "them in by hand."
                 )
         else:
             url = entry.get("url") or f"{entry.get('source', '')}/{entry.get('file', '')}"

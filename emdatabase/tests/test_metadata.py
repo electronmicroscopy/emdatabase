@@ -13,6 +13,7 @@ import yaml
 
 from emdatabase.metadata import (
     TEMPLATE_PATH,
+    Archive,
     ArchiveMember,
     Author,
     DatasetMetadata,
@@ -90,16 +91,45 @@ def test_schema_and_dataclass_agree():
     assert list(ENTRY_SCHEMA["properties"]) == [
         f.name for f in dataclasses.fields(DatasetMetadata)
     ]
-    assert set(ENTRY_SCHEMA["required"]) == {
+    no_default = {
         f.name
         for f in dataclasses.fields(DatasetMetadata)
         if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING
     }
+    # Every entry needs a `file` too, but an archive entry leaves it out - it is
+    # the first member's - so it is required in the branch for entries without
+    # an archive rather than unconditionally at the top.
+    assert set(ENTRY_SCHEMA["required"]) == no_default - {"file"}
+    branch = ENTRY_SCHEMA["allOf"][0]
+    assert branch["if"] == {"required": ["archive"]}
+    assert branch["else"] == {"required": ["file"]}
+    assert branch["then"]["allOf"] == [
+        {"not": {"required": ["file"]}},
+        {"not": {"required": ["checksum"]}},
+        {"not": {"required": ["size_bytes"]}},
+    ]
 
 
 def test_author_schema_and_dataclass_agree():
     author_schema = ENTRY_SCHEMA["properties"]["authors"]["patternProperties"]["^.+$"]
     assert list(author_schema["properties"]) == [f.name for f in dataclasses.fields(Author)]
+
+
+def test_an_orcid_ending_in_x_is_accepted():
+    """``X`` is a legal ORCID check digit (ISO 7064 mod 11-2), not a typo, so a
+    digits-only pattern would reject about one valid ORCID in eleven."""
+
+    def entry(orcid):
+        return {
+            "description": "A dataset by someone with an ORCID.",
+            "source": "https://example.com",
+            "file": "f.zspy",
+            "authors": {"Jane Doe": {"affiliation": "Somewhere", "orcid": orcid}},
+        }
+
+    assert validate_document({"Fine_Name": entry("0000-0003-2269-320X")}) == []
+    assert validate_document({"Fine_Name": entry("0000-0003-2269-320Y")})  # only X, not any letter
+    assert validate_document({"Fine_Name": entry("0000-0003-2269-32XX")})  # and only at the end
 
 
 def test_weights_file_schema_and_dataclass_agree():
@@ -110,12 +140,51 @@ def test_weights_file_schema_and_dataclass_agree():
     assert ENTRY_SCHEMA["properties"]["latest"] == {"$ref": "#/$defs/weightsFile"}
 
 
+def test_archive_schema_and_dataclass_agree():
+    """The archive itself: a link, what it hashes to, and the files inside it."""
+    archive = SCHEMA["$defs"]["archive"]
+    assert list(archive["properties"]) == [f.name for f in dataclasses.fields(Archive)]
+    assert archive["required"] == ["url", "members"]
+    assert ENTRY_SCHEMA["properties"]["archive"] == {"$ref": "#/$defs/archive"}
+
+
 def test_archive_member_schema_and_dataclass_agree():
-    """The archive a member is fetched out of is the same four fields, in two files."""
-    archive = SCHEMA["$defs"]["archiveMember"]
-    assert list(archive["properties"]) == [f.name for f in dataclasses.fields(ArchiveMember)]
-    assert archive["required"] == ["url", "member"]
-    assert ENTRY_SCHEMA["properties"]["archive"] == {"$ref": "#/$defs/archiveMember"}
+    """Every file the entry puts on disk is a member, described the same way."""
+    member = SCHEMA["$defs"]["archiveMember"]
+    assert list(member["properties"]) == [f.name for f in dataclasses.fields(ArchiveMember)]
+    assert member["required"] == ["member", "file"]
+    assert SCHEMA["$defs"]["archive"]["properties"]["members"]["items"] == {
+        "$ref": "#/$defs/archiveMember"
+    }
+
+
+def test_an_archive_entry_takes_its_file_from_the_first_member():
+    """Stated once, in the member, rather than at two levels that can disagree."""
+    spec = {
+        "description": "A header and the raw it names.",
+        "source": "https://zenodo.org/records/1/files",
+        "archive": {
+            "url": "https://zenodo.org/records/1/files/Raw.zip",
+            "members": [
+                {
+                    "member": "Raw/acquisition_12.xml",
+                    "file": "Paired/acquisition_12.xml",
+                    "checksum": "md5:" + "a" * 32,
+                    "size_bytes": 3953,
+                },
+                {
+                    "member": "Raw/scan.raw",
+                    "file": "Paired/scan.raw",
+                    "size_bytes": 4000,
+                },
+            ],
+        },
+    }
+    md = DatasetMetadata.from_spec(spec)
+
+    assert md.file == "Paired/acquisition_12.xml"
+    assert md.checksum == "md5:" + "a" * 32
+    assert md.size_bytes == 3953 + 4000  # every member, not just the first
 
 
 @pytest.mark.parametrize(

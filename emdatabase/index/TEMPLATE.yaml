@@ -23,7 +23,7 @@ MyDatasetName:
   file: MyDatasetName.zspy
   # The file's Content-Length in bytes; the weekly CI check compares it to the server.
   size_bytes: 1000000
-  # Only for a file that lives inside a zip on a record you cannot re-publish,
+  # Only for a file that lives inside a zip or 7z on a record you cannot republish,
   # where downloading the whole archive to get one file is not reasonable.
   # `download()` fetches just this member, with HTTP range requests, and hands
   # back a path like any other entry. `url`, `checksum` and `size_bytes` here
@@ -31,11 +31,30 @@ MyDatasetName:
   # `checksum` and `size_bytes` above go on describing the member, the file you
   # end up with. Give the complete path inside the zip: the same file name can
   # appear in several of its directories. Not allowed on a `kind: weights` entry.
+  # A 7z compresses files together in solid blocks, so reaching a member means
+  # decompressing its block from the start: measure the cost before adding one.
+  # For a file that lives inside a .zip or .7z on someone else's record. The
+  # entry's own `file`, `checksum` and `size_bytes` above are left out: they are
+  # the first member's, stated once, here. `checksum` and `size_bytes` directly
+  # under `archive` describe the archive itself and are optional.
   # archive:
   #   url: https://zenodo.org/records/0000000/files/Figures.zip
-  #   member: Figure_01/Panel_a/scan_x128_y128.raw
   #   checksum: md5:0123456789abcdef0123456789abcdef
   #   size_bytes: 2000000
+  #   # Every file this entry puts on disk, described the same way. The first is
+  #   # the one `download()` hands back; any others arrive beside it, which is
+  #   # what data that is more than one file needs. Give them a directory of
+  #   # their own when a reader expects to find them side by side - an EMPAD
+  #   # `.xml` names its `.raw` by bare file name and opens it next to itself.
+  #   members:
+  #     - member: Figure_01/Panel_a/acquisition_12.xml
+  #       file: MyDatasetName/acquisition_12.xml
+  #       checksum: md5:0123456789abcdef0123456789abcdef
+  #       size_bytes: 4000
+  #     - member: Figure_01/Panel_a/scan_x128_y128.raw
+  #       file: MyDatasetName/scan_x128_y128.raw
+  #       checksum: md5:0123456789abcdef0123456789abcdef
+  #       size_bytes: 1000000
   # Who made the detector. See vendors.yaml for the names already in use.
   detector_manufacturer: Direct Electron
   # The detector model.
@@ -65,7 +84,8 @@ MyDatasetName:
   authors:
     Jane Doe:
       affiliation: University of Somewhere
-      # ORCID as `0000-0000-0000-0000`.
+      # ORCID as `0000-0000-0000-0000`. The last character may be `X`, which is
+      # a legal check digit rather than a typo.
       orcid: 0000-0002-1825-0097
   # What the entry hands out: `dataset` (the default) or `weights` for a model checkpoint.
   kind: dataset

@@ -21,6 +21,7 @@ CuZnEELSMapping:
   license: Unspecified
   technique:
     - EELS
+    - STEM
   tags:
     - Spectrum Image
     - Elemental Mapping

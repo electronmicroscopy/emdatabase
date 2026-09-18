@@ -1,0 +1,74 @@
+# $schema: ./json-schema.json
+MOSS6Fig3:
+  description: >-
+    The MOSS-6 metal-organic framework 4D-STEM ptychography dataset shown in Fig. 3 of
+    "Atomically resolved imaging of radiation-sensitive metal-organic frameworks via electron
+    ptychography" (Nature Communications 16, 2025; doi 10.1038/s41467-025-56215-z). It downloads
+    two files into a directory of its own: acquisition_12.xml, the EMPAD header, which is what
+    download() hands back, and scan_x256_y256.raw beside it. Read it with quantem's
+    read_4dstem(path, file_type="empad"), or rsciio.empad, which takes the header. The scan was
+    taken on a Cs-corrected FEI Titan at 300 kV, with a 10 mrad convergence semi-angle, a 1.05
+    Angstrom step, about 100 nm of defocus, and an electron dose of about 98 e/A^2.
+  source: https://zenodo.org/records/13958144/files
+  archive:
+    url: https://zenodo.org/records/13958144/files/RawData.7z
+    checksum: md5:97581a943b20f2b6ba5d636b859d5f10
+    size_bytes: 15266871965
+    members:
+      - member: RawData/ExperimentalData_MOSS-6_Fig.3/acquisition_12.xml
+        file: MOSS6Fig3/acquisition_12.xml
+        checksum: md5:6f9a865545655a2d53bf887afa98c135
+        size_bytes: 3953
+      - member: RawData/ExperimentalData_MOSS-6_Fig.3/scan_x256_y256.raw
+        file: MOSS6Fig3/scan_x256_y256.raw
+        size_bytes: 4362076160
+  detector_manufacturer: Thermo Fisher Scientific
+  detector: EMPAD
+  microscope_vendor: Thermo Fisher Scientific
+  microscope_model: Titan Cubed Themis Z
+  camera_length: 576.6 mm
+  voltage: 300 kV
+  license: CC-BY-4.0
+  technique:
+    - 4D-STEM
+  doi: 10.5281/zenodo.13958144
+  tags:
+    - Ptychography
+    - Metal-Organic Framework
+    - Low Dose
+  authors:
+    Guanxing Li:
+      affiliation: King Abdullah University of Science and Technology
+      orcid: 0000-0003-1573-4528
+    Ming Xu:
+      affiliation: Nanjing Normal University
+    Wen-Qi Tang:
+      affiliation: Nanjing Normal University
+    Ying Liu:
+      affiliation: Chongqing University
+    Cailing Chen:
+      affiliation: King Abdullah University of Science and Technology
+      orcid: 0000-0003-2598-1354
+    Daliang Zhang:
+      affiliation: Chongqing University
+    Lingmei Liu:
+      affiliation: Chongqing University
+      orcid: 0000-0002-3273-9884
+    Shoucong Ning:
+      affiliation: University of Science and Technology of China
+    Hui Zhang:
+      affiliation: South China University of Technology
+      orcid: 0000-0003-2269-320X
+    Zhi-Yuan Gu:
+      affiliation: Nanjing Normal University
+      orcid: 0000-0002-6245-4759
+    Zhiping Lai:
+      affiliation: King Abdullah University of Science and Technology
+      orcid: 0000-0001-9555-6009
+    David A. Muller:
+      affiliation: Cornell University
+      orcid: 0000-0003-4129-0473
+    Yu Han:
+      affiliation: South China University of Technology
+      orcid: 0000-0003-1462-1118
+  kind: dataset

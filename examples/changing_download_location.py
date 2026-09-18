@@ -10,14 +10,14 @@ on a group drive is used instead of refetched.
 :func:`emdatabase.config.remove_location` are how you manage them.
 
 Every call here passes ``persist=False``, so this example changes nothing on
-disk. Drop it and the location is written to
+disk. If ``persist=True`` (the default), the location is written to
 ``~/.config/emdatabase/config.yaml``, which is read on every import.
 """
 
 from emdatabase import config
 
 # %%
-# The personal location is where datasets download to. Unset, it is pooch's
+# The personal location is where datasets download to. By default, it is pooch's
 # cache directory for emdatabase (``~/.cache/emdatabase`` on Linux).
 print("configured    :", config.get("locations.personal"))
 print("download dir  :", config.data_dir())
