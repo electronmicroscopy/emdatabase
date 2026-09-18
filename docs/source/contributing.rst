@@ -239,11 +239,15 @@ For a Zenodo record file, nothing is downloaded and nothing is copied to
 GitHub. The job asks the Zenodo API for the newest record of the concept the
 current record belongs to. If that is still the record the entry points at, the
 run reports it unchanged, and reports an error if the API's md5 is not the one
-in the index. If a newer record has been published, the job adds a dated
-version - dated by the new record's publication date - pointing at the file in
-that record, and moves ``latest`` to it. The file it looks for in the new
-record is the one whose name matches the current link; if the name has changed
-and the record holds more than one file, the run fails rather than guess.
+in the index. If a newer record has been published and it serves a different
+md5, the job adds a dated version - dated by the new record's publication date -
+pointing at the file in that record, and moves ``latest`` to it. A newer record
+serving the same md5 only moves ``latest``: a record is versioned whole, so
+publishing anything beside the weights - a zip of the training data, say - makes
+a new id while the weights stand still, and a second date for the same bytes
+would claim they had changed. The file it looks for in the new record is the one
+whose name matches the current link; if the name has changed and the record
+holds more than one file, the run fails rather than guess.
 
 Removing an entry
 -----------------

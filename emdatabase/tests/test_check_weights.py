@@ -360,6 +360,34 @@ def test_a_new_zenodo_record_becomes_a_dated_version(script, gh, zenodo, tmp_pat
     assert _md5(LATEST_BYTES) in report and _md5(NEW_BYTES) in report
 
 
+def test_a_new_zenodo_record_serving_the_same_file_files_no_version(script, gh, zenodo, tmp_path):
+    """A new record is not a new file.
+
+    Zenodo versions the whole record, so publishing anything beside the weights
+    - a zip of the training data, say - mints a new id while the weights stand
+    still. Two dates for one checksum is the state this guards against.
+    """
+    base, _, directory, path, publish = zenodo
+    publish(
+        OLD_RECORD,
+        "2026-01-01",
+        [_zenodo_file(base, OLD_RECORD, FILE, LATEST_BYTES)],
+        newest=False,
+    )
+    publish(NEW_RECORD, "2026-03-04", [_zenodo_file(base, NEW_RECORD, FILE, LATEST_BYTES)])
+
+    code, summary = _run(script, directory, tmp_path)
+
+    assert code == 0
+    assert gh == []
+    entry = _entry(path)
+    assert list(entry["versions"]) == [OLD_DATE]  # no second date for the same bytes
+    assert entry["latest"]["checksum"] == _md5(LATEST_BYTES)
+    # The link still moves to the record Zenodo serves now.
+    assert entry["latest"]["url"] == f"{base}/records/{NEW_RECORD}/files/{FILE}"
+    assert "no version was filed" in summary.read_text()
+
+
 def test_a_zenodo_record_without_the_named_file_fails(script, gh, zenodo, tmp_path):
     base, _, directory, path, publish = zenodo
     publish(

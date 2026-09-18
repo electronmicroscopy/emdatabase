@@ -42,7 +42,3 @@ PeakDetectionPolymers:
       url: https://zenodo.org/records/22311217/files/best.pth
       size_bytes: 57343166
       checksum: md5:1d2524b53c6f8be4a85d0530312a4ade
-    "260914":
-      url: https://zenodo.org/records/22741835/files/best.pth
-      checksum: md5:1d2524b53c6f8be4a85d0530312a4ade
-      size_bytes: 57343166
