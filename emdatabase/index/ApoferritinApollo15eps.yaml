@@ -16,6 +16,7 @@ ApoferritinApollo15eps:
   license: CC0-1.0
   technique:
     - Cryo
+    - TEM
   doi: 10.5281/zenodo.21632101
   tags:
     - Cryo-EM

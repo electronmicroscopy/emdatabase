@@ -19,6 +19,7 @@ LSMOSTOLineScanLowLoss:
   license: Unspecified
   technique:
     - EELS
+    - STEM
   tags:
     - Line Scan
     - Low Loss

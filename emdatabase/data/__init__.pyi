@@ -225,7 +225,7 @@ class MOSS6Fig3(DownloadableDataset):
     """
     MOSS6Fig3
 
-    The MOSS-6 metal-organic framework 4D-STEM ptychography dataset shown in Fig. 3 of "Atomically resolved imaging of radiation-sensitive metal-organic frameworks via electron ptychography" (Nature Communications 16, 2025; doi 10.1038/s41467-025-56215-z). It downloads two files into a directory of its own: acquisition_12.xml, the EMPAD header, which is what download() hands back, and scan_x256_y256.raw beside it. Read it with quantem's  read_4dstem(path, file_type="empad"), or rsciio.empad, which takes the header. The scan was taken on a Cs-corrected FEI Titan at 300 kV, with a 10 mrad convergence semi-angle, a 1.05  Angstrom step, about 100 nm of defocus, and an electron dose of about 98 e/A^2. 
+    The MOSS-6 metal-organic framework 4D-STEM ptychography dataset shown in Fig. 3 of "Atomically resolved imaging of radiation-sensitive metal-organic frameworks via electron ptychography" (Nature Communications 16, 2025; doi 10.1038/s41467-025-56215-z). It downloads two files into a directory of its own: acquisition_12.xml, the EMPAD header, which is what download() hands back, and scan_x256_y256.raw beside it. Read it with quantem's read_4dstem(path, file_type="empad"), or rsciio.empad, which takes the header. The scan was taken on a Cs-corrected FEI Titan at 300 kV, with a 10 mrad convergence semi-angle, a 1.05 Angstrom step, about 100 nm of defocus, and an electron dose of about 98 e/A^2.
 
     DOI: 10.5281/zenodo.13958144
 

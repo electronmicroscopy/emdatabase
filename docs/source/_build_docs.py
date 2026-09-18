@@ -350,8 +350,7 @@ def generate_weights_html() -> str:
         "<p>Trained model checkpoints, one entry per model. Downloading an entry "
         "follows its <code>latest</code> link, which serves whatever the current "
         "weights are; every earlier state of that link is kept as a dated version, "
-        "pinned to its checksum. Pick one with the selector; the load snippet "
-        "opens it with <code>weights_only=True</code>.</p>"
+        "pinned to its checksum."
         "<p><code>download()</code> warns when the index on the project's "
         "<code>main</code> branch has newer weights than your installed release, "
         "and <code>download(refresh=True)</code> fetches them; the "
@@ -379,12 +378,13 @@ def generate_add_dataset_html() -> str:
         '<main class="app-main"><div class="explainer">'
         '<div class="app-hero page">'
         "<h1>Add a Dataset</h1>"
-        "<p>Submissions go through an issue. Fill in the new-dataset issue form and "
+        "<p>Submissions go through an issue on GitHub. Fill in the new-dataset issue form and "
         "an action turns it into the entry’s YAML file, fills in whatever it can "
         "work out for itself, and opens the pull request.</p>"
+        "The checksum and the size are filled in automatically by "
+        "downloading the file, so both can be left blank in most cases. If the file is very large,"
+        " you may want to provide the checksum manually.</p>"
         "</div>"
-        '<p class="note">The checksum and the size are filled in automatically by '
-        "downloading the file, so both can be left blank.</p>"
         '<div class="submit-row">'
         '<a class="btn-primary" target="_blank" rel="noopener" href="'
         + _ISSUE_URL
@@ -393,7 +393,7 @@ def generate_add_dataset_html() -> str:
         "<h2>From a terminal</h2>"
         "<pre><code>" + escape(_CLI_COMMAND) + "</code></pre>"
         "<p>It asks the same questions at the prompt and writes the YAML file, leaving "
-        "the pull request to you. A trained model checkpoint takes "
+        "the pull request to you. A model checkpoint takes "
         "<code>--kind weights</code> as well.</p>"
         "<p>It computes the checksum from the file on your own machine rather than on "
         "GitHub, which is the route to take for a very large file.</p>"

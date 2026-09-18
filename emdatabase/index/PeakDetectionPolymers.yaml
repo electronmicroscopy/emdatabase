@@ -9,6 +9,7 @@ PeakDetectionPolymers:
   file: best.pth
   license: CC-BY-4.0
   technique:
+    - 4D-STEM
     - ML - peak finding
   doi: 10.5281/zenodo.22311216
   tags:

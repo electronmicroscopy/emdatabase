@@ -20,6 +20,7 @@ LSMOLineScan:
   license: Unspecified
   technique:
     - EELS
+    - STEM
   tags:
     - Line Scan
     - Core Loss

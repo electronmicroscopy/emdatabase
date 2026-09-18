@@ -12,6 +12,7 @@ SPEDAg:
   license: CC-BY-4.0
   technique:
     - 4D-STEM
+    - Diffraction
   tags:
     - Orientation Mapping
     - Grain Boundaries
