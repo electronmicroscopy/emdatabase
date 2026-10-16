@@ -1,0 +1,39 @@
+# $schema: ./json-schema.json
+DE_SpotNet_Production_Torch:
+  description: >-
+    DE SpotNet variant with short-range-order augmentation and an edge-decoupled head; slightly
+    higher recall on crystalline 4D-STEM at the canonical disk size, weaker off its trained
+    scale. The torch checkpoint, for training and fine-tuning: a dict with the state_dict and
+    the architecture scalars, loaded with torch.load(path, weights_only=True). The ONNX graph
+    for inference is the DE_SpotNet_Production entry. Licensed CC BY-NC 4.0: commercial use (for
+    example, analyzing your own data at a company) is permitted; the weights may not be
+    redistributed in, or incorporated into, software or services that are sold.
+  source: https://zenodo.org/records/23383572/files
+  file: de_spotnet_production.pt
+  license: CC-BY-NC-4.0
+  technique:
+    - 4D-STEM
+    - Diffraction
+    - ML - peak finding
+  doi: 10.5281/zenodo.23383571
+  tags:
+    - Machine Learning
+    - Vector finding
+    - Bragg disk detection
+    - Direct Electron
+  authors:
+    Carter Francis:
+      affiliation: Direct Electron
+  kind: weights
+  model:
+    class: quantem.core.ml.SpotNet
+    framework: torch
+  latest:
+    url: https://zenodo.org/records/23383572/files/de_spotnet_production.pt
+    checksum: md5:6768177f96f61358d913bde8dcf5346e
+    size_bytes: 493490
+  versions:
+    "261015":
+      url: https://zenodo.org/records/23383572/files/de_spotnet_production.pt
+      checksum: md5:6768177f96f61358d913bde8dcf5346e
+      size_bytes: 493490

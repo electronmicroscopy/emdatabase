@@ -1,0 +1,43 @@
+# $schema: ./json-schema.json
+DE_SpotNet:
+  description: >-
+    Direct Electron's neural-network diffraction spot (Bragg disk) detector for 4D-STEM and
+    scanning precession electron diffraction, the default detector in SpyDE, pyxem and quantem.
+    Each pattern is rescaled so its disks are about 9 px across (diameter from the
+    autocorrelation) and normalized; the network predicts a peak heat map and a sub-pixel
+    offset. Trained across disk sizes, so it tolerates residual error in the rescale. An ONNX
+    graph (BatchNorm folded, opset 17, dynamic batch/height/width, configuration in the model
+    metadata) for inference with ONNX Runtime; the torch checkpoint for training and fine-tuning
+    is the DE_SpotNet_Torch entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing
+    your own data at a company) is permitted; the weights may not be redistributed in, or
+    incorporated into, software or services that are sold.
+  source: https://zenodo.org/records/23383572/files
+  file: de_spotnet.onnx
+  license: CC-BY-NC-4.0
+  technique:
+    - 4D-STEM
+    - Diffraction
+    - ML - peak finding
+  doi: 10.5281/zenodo.23383571
+  tags:
+    - Machine Learning
+    - Vector finding
+    - Bragg disk detection
+    - U-Net
+    - Direct Electron
+  authors:
+    Carter Francis:
+      affiliation: Direct Electron
+  kind: weights
+  model:
+    class: onnxruntime.InferenceSession
+    framework: onnx
+  latest:
+    url: https://zenodo.org/records/23383572/files/de_spotnet.onnx
+    checksum: md5:9ee0700aefd1ed64b8d6fbe2a3bc0c84
+    size_bytes: 490476
+  versions:
+    "261015":
+      url: https://zenodo.org/records/23383572/files/de_spotnet.onnx
+      checksum: md5:9ee0700aefd1ed64b8d6fbe2a3bc0c84
+      size_bytes: 490476

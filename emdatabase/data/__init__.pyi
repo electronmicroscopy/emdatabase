@@ -95,6 +95,198 @@ class CuZnHAADF(DownloadableDataset):
     """
     ...
 
+class DE_CenterNet(DownloadableDataset):
+    """
+    DE_CenterNet
+
+    Center refinement for DE SpotNet detections: segments each detected disk in a window of the raw pattern at native resolution and takes the coverage centroid, with a sigma head giving a positional uncertainty. Used for spot radii of 5 px and above; on real GaN it lowers the Friedel error of the detector's centers from 1.13 to 0.84 px. An ONNX graph (BatchNorm folded, opset 17, dynamic batch/height/width, configuration in the model metadata) for inference with ONNX Runtime; the torch checkpoint for training and fine-tuning is the DE_CenterNet_Torch entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_CenterNet_Torch(DownloadableDataset):
+    """
+    DE_CenterNet_Torch
+
+    Center refinement for DE SpotNet detections: segments each detected disk in a window of the raw pattern at native resolution and takes the coverage centroid, with a sigma head giving a positional uncertainty. Used for spot radii of 5 px and above; on real GaN it lowers the Friedel error of the detector's centers from 1.13 to 0.84 px. The torch checkpoint, for training and fine-tuning: a dict with the state_dict and the architecture scalars, loaded with torch.load(path, weights_only=True). The ONNX graph for inference is the DE_CenterNet entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_FriedelNet(DownloadableDataset):
+    """
+    DE_FriedelNet
+
+    Friedel-partner center refinement, applied after DE CenterNet: reads each disk's window together with the 180-degree-rotated window at its Friedel mirror point, so it sees both dynamical fills of g and -g. Trained on disks of 6-16 px radius and leaves others unchanged. An ONNX graph (BatchNorm folded, opset 17, dynamic batch/height/width, configuration in the model metadata) for inference with ONNX Runtime; the torch checkpoint for training and fine- tuning is the DE_FriedelNet_Torch entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_FriedelNet_Torch(DownloadableDataset):
+    """
+    DE_FriedelNet_Torch
+
+    Friedel-partner center refinement, applied after DE CenterNet: reads each disk's window together with the 180-degree-rotated window at its Friedel mirror point, so it sees both dynamical fills of g and -g. Trained on disks of 6-16 px radius and leaves others unchanged. The torch checkpoint, for training and fine-tuning: a dict with the state_dict and the architecture scalars, loaded with torch.load(path, weights_only=True). The ONNX graph for inference is the DE_FriedelNet entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_SpotNet(DownloadableDataset):
+    """
+    DE_SpotNet
+
+    Direct Electron's neural-network diffraction spot (Bragg disk) detector for 4D-STEM and scanning precession electron diffraction, the default detector in SpyDE, pyxem and quantem. Each pattern is rescaled so its disks are about 9 px across (diameter from the autocorrelation) and normalized; the network predicts a peak heat map and a sub-pixel offset. Trained across disk sizes, so it tolerates residual error in the rescale. An ONNX graph (BatchNorm folded, opset 17, dynamic batch/height/width, configuration in the model metadata) for inference with ONNX Runtime; the torch checkpoint for training and fine-tuning is the DE_SpotNet_Torch entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_SpotNet_Base16(DownloadableDataset):
+    """
+    DE_SpotNet_Base16
+
+    Earlier edge-trained DE SpotNet detector, kept as a fallback. An ONNX graph (BatchNorm folded, opset 17, dynamic batch/height/width, configuration in the model metadata) for inference with ONNX Runtime; the torch checkpoint for training and fine-tuning is the DE_SpotNet_Base16_Torch entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_SpotNet_Base16_Torch(DownloadableDataset):
+    """
+    DE_SpotNet_Base16_Torch
+
+    Earlier edge-trained DE SpotNet detector, kept as a fallback. The torch checkpoint, for training and fine-tuning: a dict with the state_dict and the architecture scalars, loaded with torch.load(path, weights_only=True). The ONNX graph for inference is the DE_SpotNet_Base16 entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_SpotNet_Dynamical(DownloadableDataset):
+    """
+    DE_SpotNet_Dynamical
+
+    DE SpotNet fine-tuned on multislice (dynamical) disks with counted and integrating detector noise, then self-trained on real 4D-STEM frames whose labels are persistence- and Friedel- verified. A disk-coverage head centers each disk on its predicted aperture. Halves the center error on dynamical disks and cuts false positives on sparse counted data; on real SPED Ag the in-grain strain speckle drops from 0.063 to 0.036 %. An ONNX graph (BatchNorm folded, opset 17, dynamic batch/height/width, configuration in the model metadata) for inference with ONNX Runtime; the torch checkpoint for training and fine-tuning is the DE_SpotNet_Dynamical_Torch entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_SpotNet_Dynamical_Torch(DownloadableDataset):
+    """
+    DE_SpotNet_Dynamical_Torch
+
+    DE SpotNet fine-tuned on multislice (dynamical) disks with counted and integrating detector noise, then self-trained on real 4D-STEM frames whose labels are persistence- and Friedel- verified. A disk-coverage head centers each disk on its predicted aperture. Halves the center error on dynamical disks and cuts false positives on sparse counted data; on real SPED Ag the in-grain strain speckle drops from 0.063 to 0.036 %. The torch checkpoint, for training and fine-tuning: a dict with the state_dict and the architecture scalars, loaded with torch.load(path, weights_only=True). The ONNX graph for inference is the DE_SpotNet_Dynamical entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_SpotNet_Production(DownloadableDataset):
+    """
+    DE_SpotNet_Production
+
+    DE SpotNet variant with short-range-order augmentation and an edge-decoupled head; slightly higher recall on crystalline 4D-STEM at the canonical disk size, weaker off its trained scale. An ONNX graph (BatchNorm folded, opset 17, dynamic batch/height/width, configuration in the model metadata) for inference with ONNX Runtime; the torch checkpoint for training and fine-tuning is the DE_SpotNet_Production_Torch entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_SpotNet_Production_Torch(DownloadableDataset):
+    """
+    DE_SpotNet_Production_Torch
+
+    DE SpotNet variant with short-range-order augmentation and an edge-decoupled head; slightly higher recall on crystalline 4D-STEM at the canonical disk size, weaker off its trained scale. The torch checkpoint, for training and fine-tuning: a dict with the state_dict and the architecture scalars, loaded with torch.load(path, weights_only=True). The ONNX graph for inference is the DE_SpotNet_Production entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
+class DE_SpotNet_Torch(DownloadableDataset):
+    """
+    DE_SpotNet_Torch
+
+    Direct Electron's neural-network diffraction spot (Bragg disk) detector for 4D-STEM and scanning precession electron diffraction, the default detector in SpyDE, pyxem and quantem. Each pattern is rescaled so its disks are about 9 px across (diameter from the autocorrelation) and normalized; the network predicts a peak heat map and a sub-pixel offset. Trained across disk sizes, so it tolerates residual error in the rescale. The torch checkpoint, for training and fine-tuning: a dict with the state_dict and the architecture scalars, loaded with torch.load(path, weights_only=True). The ONNX graph for inference is the DE_SpotNet entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a company) is permitted; the weights may not be redistributed in, or incorporated into, software or services that are sold.
+
+    DOI: 10.5281/zenodo.23383571
+
+    License: CC-BY-NC-4.0
+
+    Model weights hosted at https://zenodo.org/records/23383572/files; see ``.versions`` for the dated snapshots.
+
+
+    """
+    ...
+
 class FeAlStripes(DownloadableDataset):
     """
     FeAlStripes
@@ -376,4 +568,4 @@ class ZrNbPrecipitate(DownloadableDataset):
     """
     ...
 
-__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MOSS6Fig3', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'PeakDetectionPolymers', 'SPEDAg', 'TutorialUNet', 'TwistedBilayerWSe2Themis', 'ZrNbPrecipitate']
+__all__ = ['AlNanocrystals', 'AmorphousFilm4nm4DSTEM', 'ApoferritinApollo15eps', 'BilayerWS2', 'CuZnEELSMapping', 'CuZnHAADF', 'DE_CenterNet', 'DE_CenterNet_Torch', 'DE_FriedelNet', 'DE_FriedelNet_Torch', 'DE_SpotNet', 'DE_SpotNet_Base16', 'DE_SpotNet_Base16_Torch', 'DE_SpotNet_Dynamical', 'DE_SpotNet_Dynamical_Torch', 'DE_SpotNet_Production', 'DE_SpotNet_Production_Torch', 'DE_SpotNet_Torch', 'FeAlStripes', 'HREBSDStrainPatterns', 'InSituElectrochemGrowth', 'LSMOLineScan', 'LSMOLineScanLowLoss', 'LSMOSTOLineScan', 'LSMOSTOLineScanLowLoss', 'LayeredCuNb4DSTEM', 'MOSS6Fig3', 'MgONanoCrystals', 'NiEBSDLarge', 'PdCuSiCrystallization', 'PdNiPGlass', 'PeakDetectionPolymers', 'SPEDAg', 'TutorialUNet', 'TwistedBilayerWSe2Themis', 'ZrNbPrecipitate']

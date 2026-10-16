@@ -1,0 +1,41 @@
+# $schema: ./json-schema.json
+DE_FriedelNet:
+  description: >-
+    Friedel-partner center refinement, applied after DE CenterNet: reads each disk's window
+    together with the 180-degree-rotated window at its Friedel mirror point, so it sees both
+    dynamical fills of g and -g. Trained on disks of 6-16 px radius and leaves others unchanged.
+    An ONNX graph (BatchNorm folded, opset 17, dynamic batch/height/width, configuration in the
+    model metadata) for inference with ONNX Runtime; the torch checkpoint for training and fine-
+    tuning is the DE_FriedelNet_Torch entry. Licensed CC BY-NC 4.0: commercial use (for example,
+    analyzing your own data at a company) is permitted; the weights may not be redistributed in,
+    or incorporated into, software or services that are sold.
+  source: https://zenodo.org/records/23383572/files
+  file: de_friedelnet.onnx
+  license: CC-BY-NC-4.0
+  technique:
+    - 4D-STEM
+    - Diffraction
+    - ML - peak finding
+  doi: 10.5281/zenodo.23383571
+  tags:
+    - Machine Learning
+    - Vector finding
+    - Subpixel refinement
+    - Friedel pairs
+    - Direct Electron
+  authors:
+    Carter Francis:
+      affiliation: Direct Electron
+  kind: weights
+  model:
+    class: onnxruntime.InferenceSession
+    framework: onnx
+  latest:
+    url: https://zenodo.org/records/23383572/files/de_friedelnet.onnx
+    checksum: md5:127d5c86840377da01bd09b0f0eb0992
+    size_bytes: 124793
+  versions:
+    "261015":
+      url: https://zenodo.org/records/23383572/files/de_friedelnet.onnx
+      checksum: md5:127d5c86840377da01bd09b0f0eb0992
+      size_bytes: 124793

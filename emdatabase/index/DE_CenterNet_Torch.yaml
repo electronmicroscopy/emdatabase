@@ -1,0 +1,41 @@
+# $schema: ./json-schema.json
+DE_CenterNet_Torch:
+  description: >-
+    Center refinement for DE SpotNet detections: segments each detected disk in a window of the
+    raw pattern at native resolution and takes the coverage centroid, with a sigma head giving a
+    positional uncertainty. Used for spot radii of 5 px and above; on real GaN it lowers the
+    Friedel error of the detector's centers from 1.13 to 0.84 px. The torch checkpoint, for
+    training and fine-tuning: a dict with the state_dict and the architecture scalars, loaded
+    with torch.load(path, weights_only=True). The ONNX graph for inference is the DE_CenterNet
+    entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your own data at a
+    company) is permitted; the weights may not be redistributed in, or incorporated into,
+    software or services that are sold.
+  source: https://zenodo.org/records/23383572/files
+  file: de_centernet.pt
+  license: CC-BY-NC-4.0
+  technique:
+    - 4D-STEM
+    - Diffraction
+    - ML - peak finding
+  doi: 10.5281/zenodo.23383571
+  tags:
+    - Machine Learning
+    - Vector finding
+    - Subpixel refinement
+    - Direct Electron
+  authors:
+    Carter Francis:
+      affiliation: Direct Electron
+  kind: weights
+  model:
+    class: quantem.core.ml.CenterNet
+    framework: torch
+  latest:
+    url: https://zenodo.org/records/23383572/files/de_centernet.pt
+    checksum: md5:ee19c495f722192886f1a2b0852a5acb
+    size_bytes: 141658
+  versions:
+    "261015":
+      url: https://zenodo.org/records/23383572/files/de_centernet.pt
+      checksum: md5:ee19c495f722192886f1a2b0852a5acb
+      size_bytes: 141658

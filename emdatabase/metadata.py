@@ -53,8 +53,14 @@ _STR_WIDTH = 88
 
 
 def dataset_files(directory: Path = INDEX_DIR) -> list[Path]:
-    """Every dataset collection YAML in ``directory``, sorted by name."""
-    return sorted(p for p in directory.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
+    """Every dataset collection YAML in ``directory``, sorted by name.
+
+    Sorted on the path string, not the ``Path``: Windows paths compare case-insensitively,
+    so on Windows ``LayeredCuNb4DSTEM`` would sort before ``LSMOLineScan`` and the generated
+    stub would disagree with the one CI builds on Linux.
+    """
+    files = (p for p in directory.rglob("*.y*ml") if p.name not in NON_DATASET_FILES)
+    return sorted(files, key=lambda path: path.as_posix())
 
 
 class IndexEntry(NamedTuple):

@@ -1,0 +1,43 @@
+# $schema: ./json-schema.json
+DE_SpotNet_Dynamical_Torch:
+  description: >-
+    DE SpotNet fine-tuned on multislice (dynamical) disks with counted and integrating detector
+    noise, then self-trained on real 4D-STEM frames whose labels are persistence- and Friedel-
+    verified. A disk-coverage head centers each disk on its predicted aperture. Halves the
+    center error on dynamical disks and cuts false positives on sparse counted data; on real
+    SPED Ag the in-grain strain speckle drops from 0.063 to 0.036 %. The torch checkpoint, for
+    training and fine-tuning: a dict with the state_dict and the architecture scalars, loaded
+    with torch.load(path, weights_only=True). The ONNX graph for inference is the
+    DE_SpotNet_Dynamical entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing
+    your own data at a company) is permitted; the weights may not be redistributed in, or
+    incorporated into, software or services that are sold.
+  source: https://zenodo.org/records/23383572/files
+  file: de_spotnet_dynamical.pt
+  license: CC-BY-NC-4.0
+  technique:
+    - 4D-STEM
+    - Diffraction
+    - ML - peak finding
+  doi: 10.5281/zenodo.23383571
+  tags:
+    - Machine Learning
+    - Vector finding
+    - Bragg disk detection
+    - Dynamical diffraction
+    - Direct Electron
+  authors:
+    Carter Francis:
+      affiliation: Direct Electron
+  kind: weights
+  model:
+    class: quantem.core.ml.SpotNet
+    framework: torch
+  latest:
+    url: https://zenodo.org/records/23383572/files/de_spotnet_dynamical.pt
+    checksum: md5:d441483802cea81fbb8db58c022149e1
+    size_bytes: 516186
+  versions:
+    "261015":
+      url: https://zenodo.org/records/23383572/files/de_spotnet_dynamical.pt
+      checksum: md5:d441483802cea81fbb8db58c022149e1
+      size_bytes: 516186

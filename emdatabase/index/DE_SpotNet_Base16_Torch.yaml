@@ -1,0 +1,38 @@
+# $schema: ./json-schema.json
+DE_SpotNet_Base16_Torch:
+  description: >-
+    Earlier edge-trained DE SpotNet detector, kept as a fallback. The torch checkpoint, for
+    training and fine-tuning: a dict with the state_dict and the architecture scalars, loaded
+    with torch.load(path, weights_only=True). The ONNX graph for inference is the
+    DE_SpotNet_Base16 entry. Licensed CC BY-NC 4.0: commercial use (for example, analyzing your
+    own data at a company) is permitted; the weights may not be redistributed in, or
+    incorporated into, software or services that are sold.
+  source: https://zenodo.org/records/23383572/files
+  file: de_spotnet_base16.pt
+  license: CC-BY-NC-4.0
+  technique:
+    - 4D-STEM
+    - Diffraction
+    - ML - peak finding
+  doi: 10.5281/zenodo.23383571
+  tags:
+    - Machine Learning
+    - Vector finding
+    - Bragg disk detection
+    - Direct Electron
+  authors:
+    Carter Francis:
+      affiliation: Direct Electron
+  kind: weights
+  model:
+    class: quantem.core.ml.SpotNet
+    framework: torch
+  latest:
+    url: https://zenodo.org/records/23383572/files/de_spotnet_base16.pt
+    checksum: md5:d6438632aec861815e66f1130b509815
+    size_bytes: 493770
+  versions:
+    "261015":
+      url: https://zenodo.org/records/23383572/files/de_spotnet_base16.pt
+      checksum: md5:d6438632aec861815e66f1130b509815
+      size_bytes: 493770
