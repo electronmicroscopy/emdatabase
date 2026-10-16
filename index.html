@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EM-Database</title>
+<style>
+/* browser.css - emdatabase.browse() and a dataset's card
+ *
+ * Themed after SpyDE (Catppuccin Mocha), dark by design like the app itself.
+ */
+.emdb {
+  --emdb-base: #1e1e2e;
+  --emdb-mantle: #181825;
+  --emdb-crust: #11111b;
+  --emdb-surface0: #313244;
+  --emdb-surface1: #45475a;
+  --emdb-surface2: #585b70;
+  --emdb-overlay: #2a2a3c;
+  --emdb-text: #cdd6f4;
+  --emdb-subtext: #a6adc8;
+  --emdb-muted: #7f849c;
+  --emdb-blue: #89b4fa;
+  --emdb-mauve: #cba6f7;
+  --emdb-green: #a6e3a1;
+  --emdb-red: #f38ba8;
+  --emdb-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --emdb-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-family: var(--emdb-font);
+  font-size: 13px;
+  color: var(--emdb-text);
+  background: var(--emdb-base);
+  border: 1px solid var(--emdb-surface0);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 75%;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* Header ------------------------------------------------------------- */
+.emdb-header {
+  padding: 12px 14px 10px;
+  background: linear-gradient(#1c1c2b, var(--emdb-mantle));
+  border-bottom: 1px solid var(--emdb-surface0);
+}
+.emdb-header-top { display: flex; align-items: center; justify-content: space-between; }
+.emdb-brand { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+.emdb-diamond {
+  background: linear-gradient(135deg, var(--emdb-blue), var(--emdb-mauve));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  margin-right: 4px;
+}
+.emdb-count { font-size: 11.5px; color: var(--emdb-subtext); }
+.emdb-search {
+  margin-top: 10px; width: 100%; box-sizing: border-box;
+  background: var(--emdb-crust); color: var(--emdb-text);
+  border: 1px solid var(--emdb-surface0); border-radius: 7px;
+  padding: 6px 10px; font-size: 12.5px; font-family: var(--emdb-font); outline: none;
+}
+.emdb-search::placeholder { color: var(--emdb-muted); }
+.emdb-search:focus { border-color: var(--emdb-blue); }
+
+/* Tabs --------------------------------------------------------------- */
+.emdb-tabs {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  padding: 8px 12px; background: var(--emdb-mantle);
+  border-bottom: 1px solid var(--emdb-surface0);
+}
+.emdb-tab {
+  cursor: pointer; font-family: var(--emdb-font); font-size: 11.5px; font-weight: 600;
+  color: var(--emdb-subtext); background: transparent;
+  border: 1px solid transparent; border-radius: 999px; padding: 3px 11px;
+}
+.emdb-tab:hover { color: var(--emdb-text); background: var(--emdb-overlay); }
+.emdb-tab.active {
+  color: var(--emdb-blue); background: rgba(137, 180, 250, 0.14);
+  border-color: rgba(137, 180, 250, 0.4);
+}
+
+/* Body: list + details ---------------------------------------------- */
+.emdb-body { display: flex; height: 440px; }
+/* List is only as wide as its content (the longest row); the details panel,
+   with the description, takes all the remaining width. */
+.emdb-list {
+  flex: 0 1 auto; width: max-content; max-width: 62%; min-width: 560px;
+  overflow-y: auto; border-right: 1px solid var(--emdb-surface0);
+}
+.emdb-details { flex: 1 1 0; overflow-y: auto; padding: 14px 18px; background: var(--emdb-mantle); }
+
+/* Scrollbars (both columns) */
+.emdb-list, .emdb-details { scrollbar-width: thin; scrollbar-color: var(--emdb-surface1) transparent; }
+.emdb-list::-webkit-scrollbar, .emdb-details::-webkit-scrollbar { width: 10px; height: 10px; }
+.emdb-list::-webkit-scrollbar-track, .emdb-details::-webkit-scrollbar-track { background: transparent; }
+.emdb-list::-webkit-scrollbar-thumb, .emdb-details::-webkit-scrollbar-thumb {
+  background: var(--emdb-surface1); border-radius: 6px;
+  border: 3px solid transparent; background-clip: padding-box;
+}
+.emdb-list::-webkit-scrollbar-thumb:hover, .emdb-details::-webkit-scrollbar-thumb:hover {
+  background: var(--emdb-surface2); border-width: 2px;
+}
+
+.emdb-group-head {
+  position: sticky; top: 0; z-index: 1;
+  padding: 6px 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--emdb-muted);
+  background: var(--emdb-base); border-bottom: 1px solid var(--emdb-surface0);
+}
+.emdb-empty, .emdb-details-empty { padding: 18px 14px; color: var(--emdb-muted); font-size: 12px; }
+
+.emdb-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 14px; cursor: pointer;
+  border-bottom: 1px solid rgba(49, 50, 68, 0.5);
+}
+.emdb-row:hover { background: var(--emdb-overlay); }
+.emdb-row.selected { background: rgba(137, 180, 250, 0.1); box-shadow: inset 2px 0 0 var(--emdb-blue); }
+.emdb-glyph { flex: 0 0 auto; width: 12px; text-align: center; font-size: 10px; }
+.emdb-glyph.on { color: var(--emdb-green); }
+.emdb-glyph.off { color: var(--emdb-muted); }
+.emdb-glyph.shared { color: var(--emdb-blue); }
+.emdb-name { font-weight: 600; white-space: nowrap; }
+.emdb-meta { flex: 1; color: var(--emdb-subtext); font-size: 11px; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emdb-actions { flex: 0 0 auto; min-width: 78px; text-align: right; }
+.emdb-check { color: var(--emdb-green); font-weight: 700; }
+.emdb-spinner { color: var(--emdb-blue); font-size: 11px; }
+
+.emdb-dl {
+  cursor: pointer; font-family: var(--emdb-font); font-size: 11.5px; font-weight: 600;
+  color: var(--emdb-crust); background: var(--emdb-blue); border: 0;
+  border-radius: 6px; padding: 4px 12px;
+}
+.emdb-dl:hover { filter: brightness(1.08); }
+.emdb-dl:active { transform: translateY(1px); }
+
+/* Details panel content */
+.emdb-d-title { font-size: 15px; font-weight: 700; }
+.emdb-d-sub { margin-top: 2px; font-size: 11px; color: var(--emdb-subtext); }
+.emdb-d-status { margin: 10px 0 12px; display: flex; align-items: center; gap: 10px; }
+.emdb-kind {
+  margin-left: 8px; vertical-align: middle; padding: 1px 7px; border-radius: 999px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--emdb-mauve); border: 1px solid var(--emdb-surface1);
+}
+.emdb-version {
+  margin-left: 8px; vertical-align: middle; padding: 1px 6px; border-radius: 6px;
+  font-family: var(--emdb-mono); font-size: 10.5px; font-weight: 600;
+  color: var(--emdb-subtext); background: var(--emdb-surface0);
+  border: 1px solid var(--emdb-surface1); cursor: pointer;
+}
+.emdb-version:hover { color: var(--emdb-text); }
+.emdb-d-badge { font-size: 11.5px; color: var(--emdb-subtext); }
+.emdb-d-badge.on { color: var(--emdb-green); font-weight: 600; }
+.emdb-d-badge.shared { color: var(--emdb-blue); font-weight: 600; }
+.emdb-delete {
+  cursor: pointer; font-family: var(--emdb-font); font-size: 11px; font-weight: 600;
+  color: var(--emdb-red); background: transparent;
+  border: 1px solid var(--emdb-surface1); border-radius: 6px; padding: 3px 10px;
+}
+.emdb-delete:hover { border-color: var(--emdb-red); background: rgba(243, 139, 168, 0.1); }
+.emdb-d-desc { margin: 0 0 12px; font-size: 12px; line-height: 1.5; color: var(--emdb-text); }
+.emdb-d-meta {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 5px 20px;
+}
+.emdb-kv { display: flex; gap: 8px; font-size: 11.5px; }
+.emdb-k { flex: 0 0 82px; color: var(--emdb-muted); }
+.emdb-v { flex: 1; color: var(--emdb-text); word-break: break-word; }
+
+/* Load block: copy snippet / path */
+.emdb-load-label {
+  margin: 14px 0 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--emdb-muted);
+}
+.emdb-copy {
+  display: flex; align-items: stretch; gap: 6px; margin-bottom: 6px;
+}
+.emdb-code {
+  flex: 1; min-width: 0; font-family: var(--emdb-mono); font-size: 11.5px;
+  color: var(--emdb-text); background: var(--emdb-crust);
+  border: 1px solid var(--emdb-surface0); border-radius: 6px; padding: 7px 9px;
+  white-space: pre-wrap; word-break: break-word;   /* wrap, never scroll */
+}
+.emdb-copy.path .emdb-code { color: var(--emdb-subtext); }
+.emdb-copy-btn {
+  flex: 0 0 auto; cursor: pointer; font-family: var(--emdb-font);
+  font-size: 11px; font-weight: 600; color: var(--emdb-blue);
+  background: transparent; border: 1px solid var(--emdb-surface1);
+  border-radius: 6px; padding: 0 10px;
+}
+.emdb-copy-btn:hover { border-color: var(--emdb-blue); background: rgba(137, 180, 250, 0.1); }
+.emdb-copy-btn.copied { color: var(--emdb-green); border-color: var(--emdb-green); }
+
+/* The browser's details panel stacks the description and load block above
+   the metadata. */
+.emdb-details .emdb-d-meta { margin-top: 12px; }
+
+/* Single-dataset card (display(dataset)) --------------------------- */
+.emdb-card { padding: 18px 20px; }
+/* Two columns: a wide description (+ load) on the left, metadata on the right,
+   so the description gets the space and nothing sprawls edge to edge. */
+.emdb-card .emdb-d-cols {
+  display: grid; grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 28px; align-items: start; margin-top: 4px;
+}
+.emdb-card .emdb-d-main { min-width: 0; }
+.emdb-card .emdb-d-meta { grid-template-columns: 1fr; }
+/* A card's downloads sit under its status line. */
+.emdb-card .emdb-toasts:not(:empty) { margin: 2px 0 12px; }
+
+/* Download progress ------------------------------------------------- */
+.emdb-toasts { display: flex; flex-direction: column; gap: 8px; }
+/* Along the bottom of the browser, side by side in as many columns as fit. */
+.emdb > .emdb-toasts:not(:empty) {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  padding: 10px 14px; border-top: 1px solid var(--emdb-surface0);
+}
+.emdb-toast {
+  background: var(--emdb-mantle); border: 1px solid var(--emdb-surface0);
+  border-radius: 8px; padding: 8px 10px; color: var(--emdb-text);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.emdb-toast.error { border-color: var(--emdb-red); }
+.emdb-toast.cancelling { opacity: 0.65; }
+.emdb-toast-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.emdb-toast-title { font-size: 12.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emdb-x {
+  flex: 0 0 auto; cursor: pointer; line-height: 1;
+  background: transparent; color: var(--emdb-subtext);
+  border: 1px solid var(--emdb-surface1); border-radius: 5px;
+  padding: 4px 9px; font-size: 13px;
+}
+.emdb-x:hover { color: var(--emdb-red); border-color: var(--emdb-red); background: rgba(243, 139, 168, 0.12); }
+.emdb-toast-err { font-size: 11px; color: var(--emdb-red); word-break: break-word; }
+.emdb-track { height: 6px; border-radius: 3px; background: var(--emdb-surface0); overflow: hidden; }
+.emdb-fill {
+  height: 100%; border-radius: 3px; transition: width 200ms linear;
+  background: linear-gradient(90deg, var(--emdb-blue), var(--emdb-mauve));
+}
+.emdb-fill.indet { animation: emdb-slide 1.2s ease-in-out infinite; }
+.emdb-bytes { font-size: 10.5px; color: var(--emdb-subtext); }
+
+@keyframes emdb-slide {
+  0% { margin-left: 0%; }
+  50% { margin-left: 68%; }
+  100% { margin-left: 0%; }
+}
+
+:root {
+  --emdb-base: #1e1e2e; --emdb-mantle: #181825; --emdb-crust: #11111b;
+  --emdb-surface0: #313244; --emdb-surface1: #45475a; --emdb-surface2: #585b70;
+  --emdb-overlay: #2a2a3c; --emdb-text: #cdd6f4; --emdb-subtext: #a6adc8;
+  --emdb-muted: #7f849c; --emdb-blue: #89b4fa; --emdb-mauve: #cba6f7;
+  --emdb-green: #a6e3a1; --emdb-red: #f38ba8;
+  --emdb-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --emdb-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--emdb-base); color: var(--emdb-text);
+  font-family: var(--emdb-font); font-size: 16px; line-height: 1.55; min-height: 100vh;
+}
+a { color: var(--emdb-blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Top navigation ----------------------------------------------------- */
+.app-nav {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 10px 22px; background: linear-gradient(#1c1c2b, var(--emdb-mantle));
+  border-bottom: 1px solid var(--emdb-surface0); box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+}
+.app-brand {
+  font-size: 16px; font-weight: 800; letter-spacing: 0.2px; margin-right: auto;
+  display: flex; align-items: center; gap: 8px; color: var(--emdb-text);
+}
+.app-brand:hover { text-decoration: none; }
+.app-navlink {
+  font-size: 14px; font-weight: 600; color: var(--emdb-subtext);
+  padding: 7px 15px; border-radius: 999px; border: 1px solid transparent;
+}
+.app-navlink:hover { color: var(--emdb-text); background: var(--emdb-overlay); text-decoration: none; }
+.app-navlink.active {
+  color: var(--emdb-blue); background: rgba(137, 180, 250, 0.14);
+  border-color: rgba(137, 180, 250, 0.4);
+}
+
+.app-main { max-width: 100%; margin: 0; padding: 20px 40px 60px; }
+
+/* Hero: large on the landing page, smaller (.page) on the others ------ */
+.app-hero { text-align: center; padding: 30px 0 14px; }
+.app-hero h1 {
+  margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1;
+  background: linear-gradient(135deg, #89b4fa, #cba6f7);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.app-hero.page { padding: 18px 0 4px; }
+.app-hero.page h1 { font-size: 30px; }
+.app-hero p { margin: 12px auto 0; max-width: 720px; color: var(--emdb-subtext); font-size: 16px; }
+.app-hero code {
+  font-family: var(--emdb-mono); background: var(--emdb-crust);
+  border: 1px solid var(--emdb-surface0); border-radius: 5px; padding: 1px 6px; color: var(--emdb-text);
+}
+
+.emdb { max-width: 100%; margin: 8px 0 0; font-size: 14px; }
+.emdb-body { height: 620px; }
+.emdb-list { min-width: 360px; max-width: 50%; }
+.emdb-dl-link { margin-top: 14px; }
+.emdb-dl-anchor { color: var(--emdb-blue); text-decoration: none; font-size: 14px; font-weight: 600; }
+.emdb-dl-anchor:hover { text-decoration: underline; }
+/* Bigger, more legible text on the website (the notebook widget stays compact) */
+.emdb-search { font-size: 15px; padding: 10px 13px; }
+.emdb-tab { font-size: 13.5px; padding: 5px 13px; }
+.emdb-count { font-size: 13px; }
+.emdb-group-head { font-size: 11.5px; }
+.emdb-name { font-size: 14.5px; }
+.emdb-meta { font-size: 13px; }
+.emdb-glyph { font-size: 12px; }
+.emdb-d-title { font-size: 20px; }
+.emdb-d-sub { font-size: 13.5px; }
+.emdb-d-desc { font-size: 14.5px; line-height: 1.6; max-width: 760px; }
+.emdb-kv { font-size: 13.5px; }
+.emdb-k { flex-basis: 92px; }
+.emdb-code { font-size: 13px; }
+.emdb-load-label { font-size: 12px; }
+.emdb-copy-btn { font-size: 13px; }
+/* Keep the metadata a tidy two-column block instead of sprawling edge to edge */
+.emdb-d-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 820px; gap: 6px 30px; }
+</style>
+</head>
+<body>
+<nav class="app-nav"><a class="app-brand" href="index.html">EM-Database</a><a class="app-navlink" href="examples/index.html">Examples</a><a class="app-navlink" href="reference/index.html">API</a><a class="app-navlink" href="all_data.html">All Data</a><a class="app-navlink" href="weights.html">Model Weights</a><a class="app-navlink" href="add_dataset.html">Add Dataset</a></nav>
+<main class="app-main"><div class="app-hero"><h1>EM-Database</h1><p>A curated, citable collection of electron microscopy datasets &mdash; a couple of lines of Python from your analysis. Search below, then copy the snippet to load one with <code>emdatabase.data.&lt;Name&gt;()</code>.</p></div><div id="root"></div></main>
+<script>
+const DATA = {"groups": [{"technique": "4D-STEM", "items": [{"name": "AlNanocrystals", "kind": "dataset", "technique": ["4D-STEM"], "size": "1.38 GB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D STEM dataset of Al nanocrystals on a carbon support.", "detector": "Direct Electron CeleritasXS", "microscope": "Thermo Fisher Scientific Gen 1 Titan", "voltage": "200 kV", "tags": ["Orientation Mapping", "Nanocrystals"], "authors": ["Carter Francis"], "license": "CC-BY-4.0", "doi": "", "source": "https://zenodo.org/records/15490547/files", "file": "AlNanocrystalsSmaller.zspy", "url": "https://zenodo.org/records/15490547/files/AlNanocrystalsSmaller.zspy", "archive": "", "latest_checksum": "md5:25901cc272da7d69859f520985230e98", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "alnanocrystals 4d-stem a 4d stem dataset of al nanocrystals on a carbon support. direct electron celeritasxs thermo fisher scientific gen 1 titan 200 kv cc-by-4.0 alnanocrystalssmaller.zspy orientation mapping nanocrystals carter francis university of wisconsin, madison"}, {"name": "AmorphousFilm4nm4DSTEM", "kind": "dataset", "technique": ["4D-STEM"], "size": "1.10 GB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D-STEM dataset of a 4 nm amorphous thin film acquired with a 2.5 mrad probe on a Direct Electron CeleritasXS at 49000 fps. 256 x 256 probe positions (the central quarter of a 1024 x 1024 scan) of 128 x 128 pixel diffraction patterns. Both real and reciprocal space are calibrated - 0.12325 nm per scan step and 0.12453 1/nm per detector pixel, centred on the direct beam. Suitable for fluctuation electron microscopy and angular correlation analysis. Gain- and dark-corrected intensities were divided by 2 and rounded to uint16; multiply by 2 to recover ADU (the detector records 300 ADU per electron).", "detector": "Direct Electron CeleritasXS", "microscope": "", "voltage": "", "tags": ["Amorphous", "FEM", "Angular Correlations", "Thin Film"], "authors": ["Carter Francis"], "license": "CC-BY-4.0", "doi": "10.5281/zenodo.21632101", "source": "https://zenodo.org/records/21632101/files", "file": "AmorphousFilm4nm4DSTEM.zspy", "url": "https://zenodo.org/records/21632101/files/AmorphousFilm4nm4DSTEM.zspy", "archive": "", "latest_checksum": "md5:eaa809326d134e73b2c96e6ad4a85b6a", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "amorphousfilm4nm4dstem 4d-stem a 4d-stem dataset of a 4 nm amorphous thin film acquired with a 2.5 mrad probe on a direct electron celeritasxs at 49000 fps. 256 x 256 probe positions (the central quarter of a 1024 x 1024 scan) of 128 x 128 pixel diffraction patterns. both real and reciprocal space are calibrated - 0.12325 nm per scan step and 0.12453 1/nm per detector pixel, centred on the direct beam. suitable for fluctuation electron microscopy and angular correlation analysis. gain- and dark-corrected intensities were divided by 2 and rounded to uint16; multiply by 2 to recover adu (the detector records 300 adu per electron). direct electron celeritasxs cc-by-4.0 10.5281/zenodo.21632101 amorphousfilm4nm4dstem.zspy amorphous fem angular correlations thin film carter francis direct electron"}, {"name": "BilayerWS2", "kind": "dataset", "technique": ["4D-STEM"], "size": "12.5 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "small 4-D STEM dataset of a bilayer WS2. Each Diffraction pattern is only 8x8 pixels so the dataset is quite small although for simple non iterative ptychography 8x8 pixels should be sufficient.", "detector": "Direct Electron CeleritasXS", "microscope": "Thermo Fisher Scientific Gen 1 Titan", "voltage": "200 kV", "tags": ["Orientation Mapping", "Nanocrystals"], "authors": ["Nick Hagopian"], "license": "CC-BY-4.0", "doi": "", "source": "https://zenodo.org/records/15490547/files", "file": "smallPtychography.hspy", "url": "https://zenodo.org/records/15490547/files/smallPtychography.hspy", "archive": "", "latest_checksum": "md5:df9376d5c020a23f0f7f51cfe79f303f", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "bilayerws2 4d-stem small 4-d stem dataset of a bilayer ws2. each diffraction pattern is only 8x8 pixels so the dataset is quite small although for simple non iterative ptychography 8x8 pixels should be sufficient. direct electron celeritasxs thermo fisher scientific gen 1 titan 200 kv cc-by-4.0 smallptychography.hspy orientation mapping nanocrystals nick hagopian university of wisconsin, madison"}, {"name": "FeAlStripes", "kind": "dataset", "technique": ["4D-STEM", "Lorentz"], "size": "382.1 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D STEM dataset with FeAl stripes exhibiting magnetic stripes. The dataset can be used to study the correlation between structural and magnetic properties.", "detector": "Quantum Detectors Merlin", "microscope": "JEOL", "voltage": "200 kV", "tags": ["Strain Mapping"], "authors": ["Magnus Nord"], "license": "CC-BY-4.0", "doi": "", "source": "https://zenodo.org/records/15490547/files", "file": "FeAl_stripes.zspy", "url": "https://zenodo.org/records/15490547/files/FeAl_stripes.zspy", "archive": "", "latest_checksum": "md5:702cb0c8ff75062c0cb23b3722c2f859", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "fealstripes 4d-stem lorentz a 4d stem dataset with feal stripes exhibiting magnetic stripes. the dataset can be used to study the correlation between structural and magnetic properties. quantum detectors merlin jeol 200 kv cc-by-4.0 feal_stripes.zspy strain mapping magnus nord norwegian university of science and technology"}, {"name": "LayeredCuNb4DSTEM", "kind": "dataset", "technique": ["4D-STEM"], "size": "720.9 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D-STEM dataset of a layered Cu/Nb nanolaminate, acquired with a nearly parallel 1.58 mrad probe on a Direct Electron CeleritasXS. 128 x 128 probe positions (the central quarter of a 512 x 512 raster scan) of 256 x 256 pixel diffraction patterns, each the sum of 32 camera frames at 25000 fps. Reciprocal space is calibrated at 0.0078768 1/Angstrom per pixel and centred on the direct beam; the detector half-width is 1.008 1/Angstrom (25.3 mrad at 200 kV). The real-space scan step was not recorded by the scan controller, so the navigation axes are in pixels. Gain- and dark-corrected intensities were divided by 2 and rounded to uint16; multiply by 2 to recover ADU.", "detector": "Direct Electron CeleritasXS", "microscope": "", "voltage": "200 kV", "tags": ["Nanolaminate", "Nanodiffraction", "Layered", "Orientation Mapping", "Strain"], "authors": ["Carter Francis"], "license": "CC-BY-4.0", "doi": "10.5281/zenodo.21632101", "source": "https://zenodo.org/records/21632101/files", "file": "LayeredCuNb4DSTEM.zspy", "url": "https://zenodo.org/records/21632101/files/LayeredCuNb4DSTEM.zspy", "archive": "", "latest_checksum": "md5:4507f116a29de495195b0dca652b682e", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "layeredcunb4dstem 4d-stem a 4d-stem dataset of a layered cu/nb nanolaminate, acquired with a nearly parallel 1.58 mrad probe on a direct electron celeritasxs. 128 x 128 probe positions (the central quarter of a 512 x 512 raster scan) of 256 x 256 pixel diffraction patterns, each the sum of 32 camera frames at 25000 fps. reciprocal space is calibrated at 0.0078768 1/angstrom per pixel and centred on the direct beam; the detector half-width is 1.008 1/angstrom (25.3 mrad at 200 kv). the real-space scan step was not recorded by the scan controller, so the navigation axes are in pixels. gain- and dark-corrected intensities were divided by 2 and rounded to uint16; multiply by 2 to recover adu. direct electron celeritasxs 200 kv cc-by-4.0 10.5281/zenodo.21632101 layeredcunb4dstem.zspy nanolaminate nanodiffraction layered orientation mapping strain carter francis direct electron"}, {"name": "MgONanoCrystals", "kind": "dataset", "technique": ["4D-STEM"], "size": "104.3 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D STEM dataset of various MgO nanocrystals", "detector": "Allied Vision Stingray", "microscope": "JEOL", "voltage": "300 kV", "tags": ["Virtual Imaging", "Orientation Mapping", "Nanocrystals"], "authors": ["Tina Bergh"], "license": "CC-BY-4.0", "doi": "", "source": "https://zenodo.org/records/15490547/files", "file": "mgo_nano.zspy", "url": "https://zenodo.org/records/15490547/files/mgo_nano.zspy", "archive": "", "latest_checksum": "md5:38a03c23cec147a9cffab9ea349cd15a", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "mgonanocrystals 4d-stem a 4d stem dataset of various mgo nanocrystals allied vision stingray jeol 300 kv cc-by-4.0 mgo_nano.zspy virtual imaging orientation mapping nanocrystals tina bergh norwegian university of science and technology"}, {"name": "MOSS6Fig3", "kind": "dataset", "technique": ["4D-STEM"], "size": "4.36 GB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "The MOSS-6 metal-organic framework 4D-STEM ptychography dataset shown in Fig. 3 of \"Atomically resolved imaging of radiation-sensitive metal-organic frameworks via electron ptychography\" (Nature Communications 16, 2025; doi 10.1038/s41467-025-56215-z). It downloads two files into a directory of its own: acquisition_12.xml, the EMPAD header, which is what download() hands back, and scan_x256_y256.raw beside it. Read it with quantem's read_4dstem(path, file_type=\"empad\"), or rsciio.empad, which takes the header. The scan was taken on a Cs-corrected FEI Titan at 300 kV, with a 10 mrad convergence semi-angle, a 1.05 Angstrom step, about 100 nm of defocus, and an electron dose of about 98 e/A^2.", "detector": "Thermo Fisher Scientific EMPAD", "microscope": "Thermo Fisher Scientific Titan Cubed Themis Z", "voltage": "300 kV", "tags": ["Ptychography", "Metal-Organic Framework", "Low Dose"], "authors": ["Guanxing Li", "Ming Xu", "Wen-Qi Tang", "Ying Liu", "Cailing Chen", "Daliang Zhang", "Lingmei Liu", "Shoucong Ning", "Hui Zhang", "Zhi-Yuan Gu", "Zhiping Lai", "David A. Muller", "Yu Han"], "license": "CC-BY-4.0", "doi": "10.5281/zenodo.13958144", "source": "https://zenodo.org/records/13958144/files", "file": "MOSS6Fig3/acquisition_12.xml", "url": "https://zenodo.org/records/13958144/files/RawData.7z", "archive": "RawData/ExperimentalData_MOSS-6_Fig.3/acquisition_12.xml", "latest_checksum": "md5:6f9a865545655a2d53bf887afa98c135", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "moss6fig3 4d-stem the moss-6 metal-organic framework 4d-stem ptychography dataset shown in fig. 3 of \"atomically resolved imaging of radiation-sensitive metal-organic frameworks via electron ptychography\" (nature communications 16, 2025; doi 10.1038/s41467-025-56215-z). it downloads two files into a directory of its own: acquisition_12.xml, the empad header, which is what download() hands back, and scan_x256_y256.raw beside it. read it with quantem's read_4dstem(path, file_type=\"empad\"), or rsciio.empad, which takes the header. the scan was taken on a cs-corrected fei titan at 300 kv, with a 10 mrad convergence semi-angle, a 1.05 angstrom step, about 100 nm of defocus, and an electron dose of about 98 e/a^2. thermo fisher scientific empad thermo fisher scientific titan cubed themis z 300 kv cc-by-4.0 10.5281/zenodo.13958144 moss6fig3/acquisition_12.xml ptychography metal-organic framework low dose guanxing li ming xu wen-qi tang ying liu cailing chen daliang zhang lingmei liu shoucong ning hui zhang zhi-yuan gu zhiping lai david a. muller yu han king abdullah university of science and technology nanjing normal university nanjing normal university chongqing university king abdullah university of science and technology chongqing university chongqing university university of science and technology of china south china university of technology nanjing normal university king abdullah university of science and technology cornell university south china university of technology"}, {"name": "PdCuSiCrystallization", "kind": "dataset", "technique": ["4D-STEM", "In-situ"], "size": "5.75 GB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A time resolved 4D-STEM series following the crystallization of a PdCuSi metallic glass, acquired on a Direct Electron CeleritasXS at 40000 fps with a 25 microsecond dwell time. 400 sequential scans of 47 x 39 probe positions (a 23.5 x 19.5 nm region cropped from a 256 x 256 scan) of 128 x 128 pixel diffraction patterns. Both real and reciprocal space are calibrated - 0.5 nm per scan step and 0.11 1/nm per detector pixel, centred on the direct beam. Successive scans are 1.6384 s apart and span 655.36 s of elapsed time, although the time axis is stored with a nm unit label. 24 GB of uint16 data uncompressed, chunked one time step at a time - the dataset used in the pyxem large data and lazy processing demo.", "detector": "Direct Electron CeleritasXS", "microscope": "", "voltage": "200 kV", "tags": ["Amorphous", "Metallic Glass", "Crystallization", "In-situ", "Time Series", "Large Dataset", "Tutorial"], "authors": ["Carter Francis"], "license": "CC-BY-4.0", "doi": "10.5281/zenodo.15490547", "source": "https://zenodo.org/records/15490547/files", "file": "PdCuSiCrystalization-zip.zspy", "url": "https://zenodo.org/records/15490547/files/PdCuSiCrystalization-zip.zspy", "archive": "", "latest_checksum": "md5:80ec7f95ec250106c586debf5d814325", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "pdcusicrystallization 4d-stem in-situ a time resolved 4d-stem series following the crystallization of a pdcusi metallic glass, acquired on a direct electron celeritasxs at 40000 fps with a 25 microsecond dwell time. 400 sequential scans of 47 x 39 probe positions (a 23.5 x 19.5 nm region cropped from a 256 x 256 scan) of 128 x 128 pixel diffraction patterns. both real and reciprocal space are calibrated - 0.5 nm per scan step and 0.11 1/nm per detector pixel, centred on the direct beam. successive scans are 1.6384 s apart and span 655.36 s of elapsed time, although the time axis is stored with a nm unit label. 24 gb of uint16 data uncompressed, chunked one time step at a time - the dataset used in the pyxem large data and lazy processing demo. direct electron celeritasxs 200 kv cc-by-4.0 10.5281/zenodo.15490547 pdcusicrystalization-zip.zspy amorphous metallic glass crystallization in-situ time series large dataset tutorial carter francis university of wisconsin, madison"}, {"name": "PdNiPGlass", "kind": "dataset", "technique": ["4D-STEM"], "size": "304.6 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D STEM dataset of PdNiP metallic glass thin film.", "detector": "Direct Electron DE-16", "microscope": "Thermo Fisher Scientific Gen 1 Titan", "voltage": "200 kV", "tags": ["Amorphous", "FEM", "Angular Correlations"], "authors": ["Carter Francis"], "license": "CC-BY-4.0", "doi": "", "source": "https://zenodo.org/records/15490547/files", "file": "PdNiP.zspy", "url": "https://zenodo.org/records/15490547/files/PdNiP.zspy", "archive": "", "latest_checksum": "md5:b16375d23eda3da60ea2ff36cc11c5bd", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "pdnipglass 4d-stem a 4d stem dataset of pdnip metallic glass thin film. direct electron de-16 thermo fisher scientific gen 1 titan 200 kv cc-by-4.0 pdnip.zspy amorphous fem angular correlations carter francis university of wisconsin, madison"}, {"name": "SPEDAg", "kind": "dataset", "technique": ["4D-STEM", "Diffraction"], "size": "214.0 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D STEM dataset of polycrystalline Ag including twins and grain boundaries.", "detector": "Quantum Detectors Merlin", "microscope": "JEOL", "voltage": "200 kV", "tags": ["Orientation Mapping", "Grain Boundaries", "Twins", "Precession"], "authors": ["Tina Bergh"], "license": "CC-BY-4.0", "doi": "", "source": "https://zenodo.org/records/15490547/files", "file": "SPED-Ag.zspy", "url": "https://zenodo.org/records/15490547/files/SPED-Ag.zspy", "archive": "", "latest_checksum": "md5:8556346543fc19f0ef9bdc0f4a6619b5", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "spedag 4d-stem diffraction a 4d stem dataset of polycrystalline ag including twins and grain boundaries. quantum detectors merlin jeol 200 kv cc-by-4.0 sped-ag.zspy orientation mapping grain boundaries twins precession tina bergh norwegian university of science and technology"}, {"name": "TwistedBilayerWSe2Themis", "kind": "dataset", "technique": ["4D-STEM"], "size": "1.09 GB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "Electron ptychography of a twisted bilayer WSe2, acquired at 80 kV on an uncorrected Thermo Fisher Themis with an EMPAD. From the Zenodo record for \"Achieving sub-0.5-Angstrom resolution ptychography in an uncorrected electron microscope\" (Science 384, adl2029). The  file is one member of the record's 1.9 GB Fig_01.zip and is fetched out of it directly.  It is a headerless raw: read it with  numpy.fromfile(path, dtype=\"<f4\").reshape(128, 128, 130, 128)[..., :128, :].", "detector": "Thermo Fisher Scientific EMPAD", "microscope": "Thermo Fisher Scientific Themis", "voltage": "80 kV", "tags": ["Ptychography", "2D Materials", "Twisted Bilayer"], "authors": ["Kayla X. Nguyen", "Yi Jiang", "Chia-Hao Lee", "Priti Kharel", "Yue Zhang", "Arend van der Zande", "Pinshane Huang"], "license": "", "doi": "10.5281/zenodo.10431683", "source": "https://zenodo.org/records/10431683/files", "file": "TwistedBilayerWSe2_Themis_x128_y128.raw", "url": "https://zenodo.org/records/10431683/files/Fig_01.zip", "archive": "Fig_01/Panel_g-h_Themis/scan_x128_y128.raw", "latest_checksum": "md5:6de543cc5026f3e6b8f34a2189cb2fb4", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "twistedbilayerwse2themis 4d-stem electron ptychography of a twisted bilayer wse2, acquired at 80 kv on an uncorrected thermo fisher themis with an empad. from the zenodo record for \"achieving sub-0.5-angstrom resolution ptychography in an uncorrected electron microscope\" (science 384, adl2029). the  file is one member of the record's 1.9 gb fig_01.zip and is fetched out of it directly.  it is a headerless raw: read it with  numpy.fromfile(path, dtype=\"<f4\").reshape(128, 128, 130, 128)[..., :128, :]. thermo fisher scientific empad thermo fisher scientific themis 80 kv 10.5281/zenodo.10431683 twistedbilayerwse2_themis_x128_y128.raw ptychography 2d materials twisted bilayer kayla x. nguyen yi jiang chia-hao lee priti kharel yue zhang arend van der zande pinshane huang university of illinois urbana-champaign argonne national laboratory university of illinois urbana-champaign university of illinois urbana-champaign university of illinois urbana-champaign university of illinois urbana-champaign university of illinois urbana-champaign"}, {"name": "ZrNbPrecipitate", "kind": "dataset", "technique": ["4D-STEM"], "size": "394.2 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D STEM dataset of ZrNb precipitate in ZrNb alloy.", "detector": "Direct Electron DE-16", "microscope": "Thermo Fisher Scientific Gen 1 Titan", "voltage": "200 kV", "tags": ["Strain Mapping"], "authors": ["Chenyu Zhang"], "license": "CC-BY-4.0", "doi": "", "source": "https://zenodo.org/records/15490547/files", "file": "ZrNbPercipitate.zspy", "url": "https://zenodo.org/records/15490547/files/ZrNbPercipitate.zspy", "archive": "", "latest_checksum": "md5:7012a2bdf564f4fb25299af05412723f", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "zrnbprecipitate 4d-stem a 4d stem dataset of zrnb precipitate in zrnb alloy. direct electron de-16 thermo fisher scientific gen 1 titan 200 kv cc-by-4.0 zrnbpercipitate.zspy strain mapping chenyu zhang university of wisconsin, madison"}]}, {"technique": "Cryo", "items": [{"name": "ApoferritinApollo15eps", "kind": "dataset", "technique": ["Cryo", "TEM"], "size": "483.0 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A single cryo-EM movie of apoferritin from one stage position, collected at a 15 e-/pix/s dose rate on a Direct Electron Apollo. 76 unaligned, dark-subtracted counted super-resolution frames of 8192 x 8192 pixels at 0.2995 Angstrom per pixel, totalling 56.96 e-/Angstrom^2 (0.7495 e-/Angstrom^2 per frame). The super-resolution gain reference needed for frame correction is embedded in the file at metadata.Acquisition_instrument.TEM.Detector.gain_reference. Repackaged from EMPIAR-11254; see Peng et al., J Struct Biol X 7 (2022) 100080.", "detector": "Direct Electron Apollo", "microscope": "", "voltage": "", "tags": ["Cryo-EM", "Single Particle", "Counted", "Movie", "Dose Fractionation"], "authors": ["Scott M. Stagg"], "license": "CC0-1.0", "doi": "10.5281/zenodo.21632101", "source": "https://zenodo.org/records/21632101/files", "file": "ApoferritinApollo15eps.zspy", "url": "https://zenodo.org/records/21632101/files/ApoferritinApollo15eps.zspy", "archive": "", "latest_checksum": "md5:ce63b6d28567b6a74b8c12712b6dab21", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "apoferritinapollo15eps cryo tem a single cryo-em movie of apoferritin from one stage position, collected at a 15 e-/pix/s dose rate on a direct electron apollo. 76 unaligned, dark-subtracted counted super-resolution frames of 8192 x 8192 pixels at 0.2995 angstrom per pixel, totalling 56.96 e-/angstrom^2 (0.7495 e-/angstrom^2 per frame). the super-resolution gain reference needed for frame correction is embedded in the file at metadata.acquisition_instrument.tem.detector.gain_reference. repackaged from empiar-11254; see peng et al., j struct biol x 7 (2022) 100080. direct electron apollo cc0-1.0 10.5281/zenodo.21632101 apoferritinapollo15eps.zspy cryo-em single particle counted movie dose fractionation scott m. stagg florida state university"}]}, {"technique": "Diffraction", "items": [{"name": "SPEDAg", "kind": "dataset", "technique": ["4D-STEM", "Diffraction"], "size": "214.0 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D STEM dataset of polycrystalline Ag including twins and grain boundaries.", "detector": "Quantum Detectors Merlin", "microscope": "JEOL", "voltage": "200 kV", "tags": ["Orientation Mapping", "Grain Boundaries", "Twins", "Precession"], "authors": ["Tina Bergh"], "license": "CC-BY-4.0", "doi": "", "source": "https://zenodo.org/records/15490547/files", "file": "SPED-Ag.zspy", "url": "https://zenodo.org/records/15490547/files/SPED-Ag.zspy", "archive": "", "latest_checksum": "md5:8556346543fc19f0ef9bdc0f4a6619b5", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "spedag 4d-stem diffraction a 4d stem dataset of polycrystalline ag including twins and grain boundaries. quantum detectors merlin jeol 200 kv cc-by-4.0 sped-ag.zspy orientation mapping grain boundaries twins precession tina bergh norwegian university of science and technology"}]}, {"technique": "EBSD", "items": [{"name": "HREBSDStrainPatterns", "kind": "dataset", "technique": ["EBSD"], "size": "1.28 GB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "High-resolution EBSD patterns collected on a Direct Electron DE-Meridian, centred on a deformed region suitable for cross-correlation strain analysis. 32 x 32 probe positions at a 25 nm step, each pattern the sum of 256 counted, dark- and gain-corrected frames, binned 2 x 2 from 2048 x 2048 to 1024 x 1024 pixels. The pattern-plane geometry (detector distance, pattern centre, sample tilt) and the accelerating voltage were not recorded with the raw data, so the pattern axes are in detector pixels.", "detector": "Direct Electron DE-Meridian", "microscope": "", "voltage": "", "tags": ["Strain", "Cross Correlation", "High Resolution Patterns", "Deformation"], "authors": ["Carter Francis"], "license": "CC-BY-4.0", "doi": "10.5281/zenodo.21632101", "source": "https://zenodo.org/records/21632101/files", "file": "HREBSDStrainPatterns.zspy", "url": "https://zenodo.org/records/21632101/files/HREBSDStrainPatterns.zspy", "archive": "", "latest_checksum": "md5:76ad1ba1c0730faf629f03785d49ecd9", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "hrebsdstrainpatterns ebsd high-resolution ebsd patterns collected on a direct electron de-meridian, centred on a deformed region suitable for cross-correlation strain analysis. 32 x 32 probe positions at a 25 nm step, each pattern the sum of 256 counted, dark- and gain-corrected frames, binned 2 x 2 from 2048 x 2048 to 1024 x 1024 pixels. the pattern-plane geometry (detector distance, pattern centre, sample tilt) and the accelerating voltage were not recorded with the raw data, so the pattern axes are in detector pixels. direct electron de-meridian cc-by-4.0 10.5281/zenodo.21632101 hrebsdstrainpatterns.zspy strain cross correlation high resolution patterns deformation carter francis direct electron"}, {"name": "NiEBSDLarge", "kind": "dataset", "technique": ["EBSD"], "size": "15.4 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "4125 EBSD patterns in a (55, 75) navigation shape of (60, 60) pixels from nickel, acquired on a NORDIF UF-1100 detector", "detector": "NORDIF UF-1100", "microscope": "", "voltage": "", "tags": ["Large Dataset"], "authors": ["H\u00e5kon Wiik \u00c5nes"], "license": "CC-BY-4.0", "doi": "", "source": "https://raw.githubusercontent.com/pyxem/kikuchipy-data/bcab8f7a4ffdb86a97f14e2327a4813d3156a85e/nickel_ebsd_large/", "file": "patterns_v2.h5", "url": "https://raw.githubusercontent.com/pyxem/kikuchipy-data/bcab8f7a4ffdb86a97f14e2327a4813d3156a85e/nickel_ebsd_large//patterns_v2.h5", "archive": "", "latest_checksum": "md5:51d6bc0f5ff23dcb0c1a8e1f4c52d4d4", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "niebsdlarge ebsd 4125 ebsd patterns in a (55, 75) navigation shape of (60, 60) pixels from nickel, acquired on a nordif uf-1100 detector nordif uf-1100 cc-by-4.0 patterns_v2.h5 large dataset h\u00e5kon wiik \u00e5nes norwegian university of science and technology"}]}, {"technique": "EELS", "items": [{"name": "CuZnEELSMapping", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "466.1 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "An EELS spectrum image of copper and zinc oxide deposited on carbon nanotubes, used by the eXSpy elemental mapping tutorial. 40 x 50 probe positions at 0.9214 nm with 162 energy channels covering 700-1988 eV at 8 eV dispersion, which resolves the Cu-L2,3 (~931 eV) and Zn-L2,3 (~1020 eV) edges. The Zn:Cu ratio is 3:1 and roughly 80 wt% of the sample is carbon, so the edges sit on a large plasmon background - a good test case for model-based background removal and overlapping-edge quantification. The simultaneously acquired survey image is available as CuZnHAADF. Note - the Sample.description field in the file reads \"Ta2O5 25% TiO2 CSIRO 400C\", which is stale metadata carried over from an unrelated acquisition.", "detector": "Gatan GIF Quantum ER", "microscope": "JEOL ARM200F", "voltage": "200 kV", "tags": ["Spectrum Image", "Elemental Mapping", "Core Loss", "Overlapping Edges", "Tutorial"], "authors": ["Ida Hjorth", "Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "CuZn_EELS_mapping_tutorial.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/CuZn_EELS_mapping_tutorial.hspy", "archive": "", "latest_checksum": "md5:fe46eb743e213eef7179538242b1f121", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "cuzneelsmapping eels stem an eels spectrum image of copper and zinc oxide deposited on carbon nanotubes, used by the exspy elemental mapping tutorial. 40 x 50 probe positions at 0.9214 nm with 162 energy channels covering 700-1988 ev at 8 ev dispersion, which resolves the cu-l2,3 (~931 ev) and zn-l2,3 (~1020 ev) edges. the zn:cu ratio is 3:1 and roughly 80 wt% of the sample is carbon, so the edges sit on a large plasmon background - a good test case for model-based background removal and overlapping-edge quantification. the simultaneously acquired survey image is available as cuznhaadf. note - the sample.description field in the file reads \"ta2o5 25% tio2 csiro 400c\", which is stale metadata carried over from an unrelated acquisition. gatan gif quantum er jeol arm200f 200 kv unspecified cuzn_eels_mapping_tutorial.hspy spectrum image elemental mapping core loss overlapping edges tutorial ida hjorth magnus nord norwegian university of science and technology norwegian university of science and technology"}, {"name": "LSMOLineScan", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "91.9 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A core-loss EELS line scan through a La(0.7)Sr(0.3)MnO3 thin film in which part of the film was deliberately given a very long electron beam exposure, inducing oxygen vacancies. Used by the eXSpy fine structure tutorial - the O-K and Mn-L2,3 fine structure changes measurably between the damaged and undamaged regions. 40 probe positions at 3.219 nm with 586 energy channels covering 428.5-721 eV at 0.5 eV dispersion. Acquired on a JEOL ARM200cF with a Gatan Quantum ER in DualEELS mode at 80 kV, 27.42 mrad convergence and 33.19 mrad collection angle. The matching low-loss spectrum is LSMOLineScanLowLoss.", "detector": "Gatan Quantum ER", "microscope": "JEOL ARM200cF", "voltage": "80 kV", "tags": ["Line Scan", "Core Loss", "Fine Structure", "Perovskite", "Oxygen Vacancies", "Beam Damage", "DualEELS", "Tutorial"], "authors": ["Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "LSMO_linescan.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/LSMO_linescan.hspy", "archive": "", "latest_checksum": "md5:9cfcf5fbcaac71709b69b79df12faf98", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "lsmolinescan eels stem a core-loss eels line scan through a la(0.7)sr(0.3)mno3 thin film in which part of the film was deliberately given a very long electron beam exposure, inducing oxygen vacancies. used by the exspy fine structure tutorial - the o-k and mn-l2,3 fine structure changes measurably between the damaged and undamaged regions. 40 probe positions at 3.219 nm with 586 energy channels covering 428.5-721 ev at 0.5 ev dispersion. acquired on a jeol arm200cf with a gatan quantum er in dualeels mode at 80 kv, 27.42 mrad convergence and 33.19 mrad collection angle. the matching low-loss spectrum is lsmolinescanlowloss. gatan quantum er jeol arm200cf 80 kv unspecified lsmo_linescan.hspy line scan core loss fine structure perovskite oxygen vacancies beam damage dualeels tutorial magnus nord norwegian university of science and technology"}, {"name": "LSMOLineScanLowLoss", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "138.8 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "The low-loss half of the DualEELS pair for LSMOLineScan - a La(0.7)Sr(0.3)MnO3 thin film line scan through a beam-damaged, oxygen-deficient region. 40 probe positions at 3.219 nm with 1024 energy channels covering -50 to 461.5 eV at 0.5 eV dispersion, containing the zero-loss peak and plasmon region. Use it with the core-loss spectrum for relative thickness mapping and Fourier-ratio deconvolution before fine structure analysis. Acquired on a JEOL ARM200cF with a Gatan Quantum ER at 80 kV.", "detector": "Gatan Quantum ER", "microscope": "JEOL ARM200cF", "voltage": "80 kV", "tags": ["Line Scan", "Low Loss", "Zero Loss Peak", "Perovskite", "DualEELS", "Thickness", "Tutorial"], "authors": ["Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "LSMO_linescan_low_loss.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/LSMO_linescan_low_loss.hspy", "archive": "", "latest_checksum": "md5:37881582dd337c5f233befe6b99ed58a", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "lsmolinescanlowloss eels stem the low-loss half of the dualeels pair for lsmolinescan - a la(0.7)sr(0.3)mno3 thin film line scan through a beam-damaged, oxygen-deficient region. 40 probe positions at 3.219 nm with 1024 energy channels covering -50 to 461.5 ev at 0.5 ev dispersion, containing the zero-loss peak and plasmon region. use it with the core-loss spectrum for relative thickness mapping and fourier-ratio deconvolution before fine structure analysis. acquired on a jeol arm200cf with a gatan quantum er at 80 kv. gatan quantum er jeol arm200cf 80 kv unspecified lsmo_linescan_low_loss.hspy line scan low loss zero loss peak perovskite dualeels thickness tutorial magnus nord norwegian university of science and technology"}, {"name": "LSMOSTOLineScan", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "42.5 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A core-loss EELS line scan across a La(0.7)Sr(0.3)MnO3 thin film grown on SrTiO3, used by the eXSpy perovskite oxide analysis tutorial. 10 probe positions at 3.152 nm with 512 energy channels covering 395-906 eV at 1 eV dispersion, which contains the Ti-L2,3, O-K, Mn-L2,3 and La-M4,5 edges - so a single line scan crosses the interface and shows the Ti signal give way to La and Mn. Acquired on a JEOL ARM200cF with a Gatan Quantum ER in DualEELS mode at 200 kV, 27.1 mrad convergence and 33.1 mrad collection angle. The matching low-loss spectrum needed for thickness correction and Fourier-ratio deconvolution is LSMOSTOLineScanLowLoss. Binned from the original acquisition to keep the file small.", "detector": "Gatan Quantum ER", "microscope": "JEOL ARM200cF", "voltage": "200 kV", "tags": ["Line Scan", "Core Loss", "Perovskite", "Interface", "DualEELS", "Quantification", "Tutorial"], "authors": ["Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "LSMO_STO_linescan.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/LSMO_STO_linescan.hspy", "archive": "", "latest_checksum": "md5:de31f7d7dc222727fac6e5ba92cac825", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "lsmostolinescan eels stem a core-loss eels line scan across a la(0.7)sr(0.3)mno3 thin film grown on srtio3, used by the exspy perovskite oxide analysis tutorial. 10 probe positions at 3.152 nm with 512 energy channels covering 395-906 ev at 1 ev dispersion, which contains the ti-l2,3, o-k, mn-l2,3 and la-m4,5 edges - so a single line scan crosses the interface and shows the ti signal give way to la and mn. acquired on a jeol arm200cf with a gatan quantum er in dualeels mode at 200 kv, 27.1 mrad convergence and 33.1 mrad collection angle. the matching low-loss spectrum needed for thickness correction and fourier-ratio deconvolution is lsmostolinescanlowloss. binned from the original acquisition to keep the file small. gatan quantum er jeol arm200cf 200 kv unspecified lsmo_sto_linescan.hspy line scan core loss perovskite interface dualeels quantification tutorial magnus nord norwegian university of science and technology"}, {"name": "LSMOSTOLineScanLowLoss", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "42.0 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "The low-loss half of the DualEELS pair for LSMOSTOLineScan - a La(0.7)Sr(0.3)MnO3 on SrTiO3 thin film line scan. 10 probe positions at 3.152 nm with 512 energy channels covering -50 to 461 eV at 1 eV dispersion, so it contains the zero-loss peak and the plasmon region. Use it with the core-loss spectrum for relative thickness mapping and Fourier-ratio deconvolution. Acquired on a JEOL ARM200cF with a Gatan Quantum ER at 200 kV; the low-loss dwell time is 9.44e-05 s against 0.4999 s for the core loss.", "detector": "Gatan Quantum ER", "microscope": "JEOL ARM200cF", "voltage": "200 kV", "tags": ["Line Scan", "Low Loss", "Zero Loss Peak", "Perovskite", "DualEELS", "Thickness", "Tutorial"], "authors": ["Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "LSMO_STO_linescan_low_loss.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/LSMO_STO_linescan_low_loss.hspy", "archive": "", "latest_checksum": "md5:fd6e922c73e0b1e11229acb5960370cc", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "lsmostolinescanlowloss eels stem the low-loss half of the dualeels pair for lsmostolinescan - a la(0.7)sr(0.3)mno3 on srtio3 thin film line scan. 10 probe positions at 3.152 nm with 512 energy channels covering -50 to 461 ev at 1 ev dispersion, so it contains the zero-loss peak and the plasmon region. use it with the core-loss spectrum for relative thickness mapping and fourier-ratio deconvolution. acquired on a jeol arm200cf with a gatan quantum er at 200 kv; the low-loss dwell time is 9.44e-05 s against 0.4999 s for the core loss. gatan quantum er jeol arm200cf 200 kv unspecified lsmo_sto_linescan_low_loss.hspy line scan low loss zero loss peak perovskite dualeels thickness tutorial magnus nord norwegian university of science and technology"}]}, {"technique": "In-situ", "items": [{"name": "InSituElectrochemGrowth", "kind": "dataset", "technique": ["In-situ", "TEM"], "size": "2.44 GB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "An in-situ electrochemistry TEM movie showing growth in a liquid cell, recorded at 300 kV on a Direct Electron DE-Artemis in hardware counting mode. 245 frames of 4096 x 4096 pixels - every 4th frame of a 977 frame movie - with a calibrated 0.45448 nm pixel size and a 0.26208 s interval between saved frames (1.86 x 1.86 micron field of view, 64 s of elapsed time).", "detector": "Direct Electron DE-Artemis", "microscope": "", "voltage": "300 kV", "tags": ["In-situ", "Electrochemistry", "Liquid Cell", "Time Series", "Growth"], "authors": ["Carter Francis"], "license": "CC-BY-4.0", "doi": "10.5281/zenodo.21632101", "source": "https://zenodo.org/records/21632101/files", "file": "InSituElectrochemGrowth.zspy", "url": "https://zenodo.org/records/21632101/files/InSituElectrochemGrowth.zspy", "archive": "", "latest_checksum": "md5:5f509bbecb7913387d2897bb01f66229", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "insituelectrochemgrowth in-situ tem an in-situ electrochemistry tem movie showing growth in a liquid cell, recorded at 300 kv on a direct electron de-artemis in hardware counting mode. 245 frames of 4096 x 4096 pixels - every 4th frame of a 977 frame movie - with a calibrated 0.45448 nm pixel size and a 0.26208 s interval between saved frames (1.86 x 1.86 micron field of view, 64 s of elapsed time). direct electron de-artemis 300 kv cc-by-4.0 10.5281/zenodo.21632101 insituelectrochemgrowth.zspy in-situ electrochemistry liquid cell time series growth carter francis direct electron"}, {"name": "PdCuSiCrystallization", "kind": "dataset", "technique": ["4D-STEM", "In-situ"], "size": "5.75 GB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A time resolved 4D-STEM series following the crystallization of a PdCuSi metallic glass, acquired on a Direct Electron CeleritasXS at 40000 fps with a 25 microsecond dwell time. 400 sequential scans of 47 x 39 probe positions (a 23.5 x 19.5 nm region cropped from a 256 x 256 scan) of 128 x 128 pixel diffraction patterns. Both real and reciprocal space are calibrated - 0.5 nm per scan step and 0.11 1/nm per detector pixel, centred on the direct beam. Successive scans are 1.6384 s apart and span 655.36 s of elapsed time, although the time axis is stored with a nm unit label. 24 GB of uint16 data uncompressed, chunked one time step at a time - the dataset used in the pyxem large data and lazy processing demo.", "detector": "Direct Electron CeleritasXS", "microscope": "", "voltage": "200 kV", "tags": ["Amorphous", "Metallic Glass", "Crystallization", "In-situ", "Time Series", "Large Dataset", "Tutorial"], "authors": ["Carter Francis"], "license": "CC-BY-4.0", "doi": "10.5281/zenodo.15490547", "source": "https://zenodo.org/records/15490547/files", "file": "PdCuSiCrystalization-zip.zspy", "url": "https://zenodo.org/records/15490547/files/PdCuSiCrystalization-zip.zspy", "archive": "", "latest_checksum": "md5:80ec7f95ec250106c586debf5d814325", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "pdcusicrystallization 4d-stem in-situ a time resolved 4d-stem series following the crystallization of a pdcusi metallic glass, acquired on a direct electron celeritasxs at 40000 fps with a 25 microsecond dwell time. 400 sequential scans of 47 x 39 probe positions (a 23.5 x 19.5 nm region cropped from a 256 x 256 scan) of 128 x 128 pixel diffraction patterns. both real and reciprocal space are calibrated - 0.5 nm per scan step and 0.11 1/nm per detector pixel, centred on the direct beam. successive scans are 1.6384 s apart and span 655.36 s of elapsed time, although the time axis is stored with a nm unit label. 24 gb of uint16 data uncompressed, chunked one time step at a time - the dataset used in the pyxem large data and lazy processing demo. direct electron celeritasxs 200 kv cc-by-4.0 10.5281/zenodo.15490547 pdcusicrystalization-zip.zspy amorphous metallic glass crystallization in-situ time series large dataset tutorial carter francis university of wisconsin, madison"}]}, {"technique": "Lorentz", "items": [{"name": "FeAlStripes", "kind": "dataset", "technique": ["4D-STEM", "Lorentz"], "size": "382.1 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A 4D STEM dataset with FeAl stripes exhibiting magnetic stripes. The dataset can be used to study the correlation between structural and magnetic properties.", "detector": "Quantum Detectors Merlin", "microscope": "JEOL", "voltage": "200 kV", "tags": ["Strain Mapping"], "authors": ["Magnus Nord"], "license": "CC-BY-4.0", "doi": "", "source": "https://zenodo.org/records/15490547/files", "file": "FeAl_stripes.zspy", "url": "https://zenodo.org/records/15490547/files/FeAl_stripes.zspy", "archive": "", "latest_checksum": "md5:702cb0c8ff75062c0cb23b3722c2f859", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "fealstripes 4d-stem lorentz a 4d stem dataset with feal stripes exhibiting magnetic stripes. the dataset can be used to study the correlation between structural and magnetic properties. quantum detectors merlin jeol 200 kv cc-by-4.0 feal_stripes.zspy strain mapping magnus nord norwegian university of science and technology"}]}, {"technique": "STEM", "items": [{"name": "CuZnEELSMapping", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "466.1 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "An EELS spectrum image of copper and zinc oxide deposited on carbon nanotubes, used by the eXSpy elemental mapping tutorial. 40 x 50 probe positions at 0.9214 nm with 162 energy channels covering 700-1988 eV at 8 eV dispersion, which resolves the Cu-L2,3 (~931 eV) and Zn-L2,3 (~1020 eV) edges. The Zn:Cu ratio is 3:1 and roughly 80 wt% of the sample is carbon, so the edges sit on a large plasmon background - a good test case for model-based background removal and overlapping-edge quantification. The simultaneously acquired survey image is available as CuZnHAADF. Note - the Sample.description field in the file reads \"Ta2O5 25% TiO2 CSIRO 400C\", which is stale metadata carried over from an unrelated acquisition.", "detector": "Gatan GIF Quantum ER", "microscope": "JEOL ARM200F", "voltage": "200 kV", "tags": ["Spectrum Image", "Elemental Mapping", "Core Loss", "Overlapping Edges", "Tutorial"], "authors": ["Ida Hjorth", "Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "CuZn_EELS_mapping_tutorial.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/CuZn_EELS_mapping_tutorial.hspy", "archive": "", "latest_checksum": "md5:fe46eb743e213eef7179538242b1f121", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "cuzneelsmapping eels stem an eels spectrum image of copper and zinc oxide deposited on carbon nanotubes, used by the exspy elemental mapping tutorial. 40 x 50 probe positions at 0.9214 nm with 162 energy channels covering 700-1988 ev at 8 ev dispersion, which resolves the cu-l2,3 (~931 ev) and zn-l2,3 (~1020 ev) edges. the zn:cu ratio is 3:1 and roughly 80 wt% of the sample is carbon, so the edges sit on a large plasmon background - a good test case for model-based background removal and overlapping-edge quantification. the simultaneously acquired survey image is available as cuznhaadf. note - the sample.description field in the file reads \"ta2o5 25% tio2 csiro 400c\", which is stale metadata carried over from an unrelated acquisition. gatan gif quantum er jeol arm200f 200 kv unspecified cuzn_eels_mapping_tutorial.hspy spectrum image elemental mapping core loss overlapping edges tutorial ida hjorth magnus nord norwegian university of science and technology norwegian university of science and technology"}, {"name": "CuZnHAADF", "kind": "dataset", "technique": ["STEM"], "size": "34.0 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "The HAADF survey image acquired simultaneously with the CuZnEELSMapping spectrum image - copper and zinc oxide on carbon nanotubes. 40 x 50 pixels at 0.9214 nm, uint16, on a JEOL ARM200F at 200 kV and 600000x. Pairs with CuZnEELSMapping for correlating elemental maps against the survey. Note - the Sample.description field in the file reads \"Ta2O5 25% TiO2 CSIRO 400C\", which is stale metadata carried over from an unrelated acquisition.", "detector": "Gatan", "microscope": "JEOL ARM200F", "voltage": "200 kV", "tags": ["HAADF", "Survey Image", "Tutorial"], "authors": ["Ida Hjorth", "Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "CuZn_HAADF.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/CuZn_HAADF.hspy", "archive": "", "latest_checksum": "md5:b328b4a3c78828a6c704db332fc1e0dc", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "cuznhaadf stem the haadf survey image acquired simultaneously with the cuzneelsmapping spectrum image - copper and zinc oxide on carbon nanotubes. 40 x 50 pixels at 0.9214 nm, uint16, on a jeol arm200f at 200 kv and 600000x. pairs with cuzneelsmapping for correlating elemental maps against the survey. note - the sample.description field in the file reads \"ta2o5 25% tio2 csiro 400c\", which is stale metadata carried over from an unrelated acquisition. gatan jeol arm200f 200 kv unspecified cuzn_haadf.hspy haadf survey image tutorial ida hjorth magnus nord norwegian university of science and technology norwegian university of science and technology"}, {"name": "LSMOLineScan", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "91.9 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A core-loss EELS line scan through a La(0.7)Sr(0.3)MnO3 thin film in which part of the film was deliberately given a very long electron beam exposure, inducing oxygen vacancies. Used by the eXSpy fine structure tutorial - the O-K and Mn-L2,3 fine structure changes measurably between the damaged and undamaged regions. 40 probe positions at 3.219 nm with 586 energy channels covering 428.5-721 eV at 0.5 eV dispersion. Acquired on a JEOL ARM200cF with a Gatan Quantum ER in DualEELS mode at 80 kV, 27.42 mrad convergence and 33.19 mrad collection angle. The matching low-loss spectrum is LSMOLineScanLowLoss.", "detector": "Gatan Quantum ER", "microscope": "JEOL ARM200cF", "voltage": "80 kV", "tags": ["Line Scan", "Core Loss", "Fine Structure", "Perovskite", "Oxygen Vacancies", "Beam Damage", "DualEELS", "Tutorial"], "authors": ["Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "LSMO_linescan.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/LSMO_linescan.hspy", "archive": "", "latest_checksum": "md5:9cfcf5fbcaac71709b69b79df12faf98", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "lsmolinescan eels stem a core-loss eels line scan through a la(0.7)sr(0.3)mno3 thin film in which part of the film was deliberately given a very long electron beam exposure, inducing oxygen vacancies. used by the exspy fine structure tutorial - the o-k and mn-l2,3 fine structure changes measurably between the damaged and undamaged regions. 40 probe positions at 3.219 nm with 586 energy channels covering 428.5-721 ev at 0.5 ev dispersion. acquired on a jeol arm200cf with a gatan quantum er in dualeels mode at 80 kv, 27.42 mrad convergence and 33.19 mrad collection angle. the matching low-loss spectrum is lsmolinescanlowloss. gatan quantum er jeol arm200cf 80 kv unspecified lsmo_linescan.hspy line scan core loss fine structure perovskite oxygen vacancies beam damage dualeels tutorial magnus nord norwegian university of science and technology"}, {"name": "LSMOLineScanLowLoss", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "138.8 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "The low-loss half of the DualEELS pair for LSMOLineScan - a La(0.7)Sr(0.3)MnO3 thin film line scan through a beam-damaged, oxygen-deficient region. 40 probe positions at 3.219 nm with 1024 energy channels covering -50 to 461.5 eV at 0.5 eV dispersion, containing the zero-loss peak and plasmon region. Use it with the core-loss spectrum for relative thickness mapping and Fourier-ratio deconvolution before fine structure analysis. Acquired on a JEOL ARM200cF with a Gatan Quantum ER at 80 kV.", "detector": "Gatan Quantum ER", "microscope": "JEOL ARM200cF", "voltage": "80 kV", "tags": ["Line Scan", "Low Loss", "Zero Loss Peak", "Perovskite", "DualEELS", "Thickness", "Tutorial"], "authors": ["Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "LSMO_linescan_low_loss.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/LSMO_linescan_low_loss.hspy", "archive": "", "latest_checksum": "md5:37881582dd337c5f233befe6b99ed58a", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "lsmolinescanlowloss eels stem the low-loss half of the dualeels pair for lsmolinescan - a la(0.7)sr(0.3)mno3 thin film line scan through a beam-damaged, oxygen-deficient region. 40 probe positions at 3.219 nm with 1024 energy channels covering -50 to 461.5 ev at 0.5 ev dispersion, containing the zero-loss peak and plasmon region. use it with the core-loss spectrum for relative thickness mapping and fourier-ratio deconvolution before fine structure analysis. acquired on a jeol arm200cf with a gatan quantum er at 80 kv. gatan quantum er jeol arm200cf 80 kv unspecified lsmo_linescan_low_loss.hspy line scan low loss zero loss peak perovskite dualeels thickness tutorial magnus nord norwegian university of science and technology"}, {"name": "LSMOSTOLineScan", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "42.5 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A core-loss EELS line scan across a La(0.7)Sr(0.3)MnO3 thin film grown on SrTiO3, used by the eXSpy perovskite oxide analysis tutorial. 10 probe positions at 3.152 nm with 512 energy channels covering 395-906 eV at 1 eV dispersion, which contains the Ti-L2,3, O-K, Mn-L2,3 and La-M4,5 edges - so a single line scan crosses the interface and shows the Ti signal give way to La and Mn. Acquired on a JEOL ARM200cF with a Gatan Quantum ER in DualEELS mode at 200 kV, 27.1 mrad convergence and 33.1 mrad collection angle. The matching low-loss spectrum needed for thickness correction and Fourier-ratio deconvolution is LSMOSTOLineScanLowLoss. Binned from the original acquisition to keep the file small.", "detector": "Gatan Quantum ER", "microscope": "JEOL ARM200cF", "voltage": "200 kV", "tags": ["Line Scan", "Core Loss", "Perovskite", "Interface", "DualEELS", "Quantification", "Tutorial"], "authors": ["Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "LSMO_STO_linescan.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/LSMO_STO_linescan.hspy", "archive": "", "latest_checksum": "md5:de31f7d7dc222727fac6e5ba92cac825", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "lsmostolinescan eels stem a core-loss eels line scan across a la(0.7)sr(0.3)mno3 thin film grown on srtio3, used by the exspy perovskite oxide analysis tutorial. 10 probe positions at 3.152 nm with 512 energy channels covering 395-906 ev at 1 ev dispersion, which contains the ti-l2,3, o-k, mn-l2,3 and la-m4,5 edges - so a single line scan crosses the interface and shows the ti signal give way to la and mn. acquired on a jeol arm200cf with a gatan quantum er in dualeels mode at 200 kv, 27.1 mrad convergence and 33.1 mrad collection angle. the matching low-loss spectrum needed for thickness correction and fourier-ratio deconvolution is lsmostolinescanlowloss. binned from the original acquisition to keep the file small. gatan quantum er jeol arm200cf 200 kv unspecified lsmo_sto_linescan.hspy line scan core loss perovskite interface dualeels quantification tutorial magnus nord norwegian university of science and technology"}, {"name": "LSMOSTOLineScanLowLoss", "kind": "dataset", "technique": ["EELS", "STEM"], "size": "42.0 kB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "The low-loss half of the DualEELS pair for LSMOSTOLineScan - a La(0.7)Sr(0.3)MnO3 on SrTiO3 thin film line scan. 10 probe positions at 3.152 nm with 512 energy channels covering -50 to 461 eV at 1 eV dispersion, so it contains the zero-loss peak and the plasmon region. Use it with the core-loss spectrum for relative thickness mapping and Fourier-ratio deconvolution. Acquired on a JEOL ARM200cF with a Gatan Quantum ER at 200 kV; the low-loss dwell time is 9.44e-05 s against 0.4999 s for the core loss.", "detector": "Gatan Quantum ER", "microscope": "JEOL ARM200cF", "voltage": "200 kV", "tags": ["Line Scan", "Low Loss", "Zero Loss Peak", "Perovskite", "DualEELS", "Thickness", "Tutorial"], "authors": ["Magnus Nord"], "license": "Unspecified", "doi": "", "source": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets", "file": "LSMO_STO_linescan_low_loss.hspy", "url": "https://raw.githubusercontent.com/hyperspy/exspy-demos/927d1f21b3b8aba4e2e622c2e621d3d9d5542d1c/EELS/datasets/LSMO_STO_linescan_low_loss.hspy", "archive": "", "latest_checksum": "md5:fd6e922c73e0b1e11229acb5960370cc", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "lsmostolinescanlowloss eels stem the low-loss half of the dualeels pair for lsmostolinescan - a la(0.7)sr(0.3)mno3 on srtio3 thin film line scan. 10 probe positions at 3.152 nm with 512 energy channels covering -50 to 461 ev at 1 ev dispersion, so it contains the zero-loss peak and the plasmon region. use it with the core-loss spectrum for relative thickness mapping and fourier-ratio deconvolution. acquired on a jeol arm200cf with a gatan quantum er at 200 kv; the low-loss dwell time is 9.44e-05 s against 0.4999 s for the core loss. gatan quantum er jeol arm200cf 200 kv unspecified lsmo_sto_linescan_low_loss.hspy line scan low loss zero loss peak perovskite dualeels thickness tutorial magnus nord norwegian university of science and technology"}]}, {"technique": "TEM", "items": [{"name": "ApoferritinApollo15eps", "kind": "dataset", "technique": ["Cryo", "TEM"], "size": "483.0 MB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "A single cryo-EM movie of apoferritin from one stage position, collected at a 15 e-/pix/s dose rate on a Direct Electron Apollo. 76 unaligned, dark-subtracted counted super-resolution frames of 8192 x 8192 pixels at 0.2995 Angstrom per pixel, totalling 56.96 e-/Angstrom^2 (0.7495 e-/Angstrom^2 per frame). The super-resolution gain reference needed for frame correction is embedded in the file at metadata.Acquisition_instrument.TEM.Detector.gain_reference. Repackaged from EMPIAR-11254; see Peng et al., J Struct Biol X 7 (2022) 100080.", "detector": "Direct Electron Apollo", "microscope": "", "voltage": "", "tags": ["Cryo-EM", "Single Particle", "Counted", "Movie", "Dose Fractionation"], "authors": ["Scott M. Stagg"], "license": "CC0-1.0", "doi": "10.5281/zenodo.21632101", "source": "https://zenodo.org/records/21632101/files", "file": "ApoferritinApollo15eps.zspy", "url": "https://zenodo.org/records/21632101/files/ApoferritinApollo15eps.zspy", "archive": "", "latest_checksum": "md5:ce63b6d28567b6a74b8c12712b6dab21", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "apoferritinapollo15eps cryo tem a single cryo-em movie of apoferritin from one stage position, collected at a 15 e-/pix/s dose rate on a direct electron apollo. 76 unaligned, dark-subtracted counted super-resolution frames of 8192 x 8192 pixels at 0.2995 angstrom per pixel, totalling 56.96 e-/angstrom^2 (0.7495 e-/angstrom^2 per frame). the super-resolution gain reference needed for frame correction is embedded in the file at metadata.acquisition_instrument.tem.detector.gain_reference. repackaged from empiar-11254; see peng et al., j struct biol x 7 (2022) 100080. direct electron apollo cc0-1.0 10.5281/zenodo.21632101 apoferritinapollo15eps.zspy cryo-em single particle counted movie dose fractionation scott m. stagg florida state university"}, {"name": "InSituElectrochemGrowth", "kind": "dataset", "technique": ["In-situ", "TEM"], "size": "2.44 GB", "downloaded": false, "location": null, "path": "", "user_path": "", "description": "An in-situ electrochemistry TEM movie showing growth in a liquid cell, recorded at 300 kV on a Direct Electron DE-Artemis in hardware counting mode. 245 frames of 4096 x 4096 pixels - every 4th frame of a 977 frame movie - with a calibrated 0.45448 nm pixel size and a 0.26208 s interval between saved frames (1.86 x 1.86 micron field of view, 64 s of elapsed time).", "detector": "Direct Electron DE-Artemis", "microscope": "", "voltage": "300 kV", "tags": ["In-situ", "Electrochemistry", "Liquid Cell", "Time Series", "Growth"], "authors": ["Carter Francis"], "license": "CC-BY-4.0", "doi": "10.5281/zenodo.21632101", "source": "https://zenodo.org/records/21632101/files", "file": "InSituElectrochemGrowth.zspy", "url": "https://zenodo.org/records/21632101/files/InSituElectrochemGrowth.zspy", "archive": "", "latest_checksum": "md5:5f509bbecb7913387d2897bb01f66229", "versions": [], "model_class": "", "model_framework": "", "model_quantem": "", "search": "insituelectrochemgrowth in-situ tem an in-situ electrochemistry tem movie showing growth in a liquid cell, recorded at 300 kv on a direct electron de-artemis in hardware counting mode. 245 frames of 4096 x 4096 pixels - every 4th frame of a 977 frame movie - with a calibrated 0.45448 nm pixel size and a 0.26208 s interval between saved frames (1.86 x 1.86 micron field of view, 64 s of elapsed time). direct electron de-artemis 300 kv cc-by-4.0 10.5281/zenodo.21632101 insituelectrochemgrowth.zspy in-situ electrochemistry liquid cell time series growth carter francis direct electron"}]}], "n_total": 22};
+const TABS = ["4D-STEM", "Cryo", "Diffraction", "EBSD", "EDS", "EELS", "In-situ", "Lorentz", "Simulated", "STEM", "TEM", "Tomography", "Other"];
+const LABEL = "Datasets";
+// common.js - what browser.js, card.js and the docs site's browser share.
+//
+// anywidget loads each widget's `_esm` as a single module and there is no
+// bundler, so widget.py (and docs/source/_build_docs.py) put this file in front
+// of each one rather than having them import it.
+
+const MB = 1e6;
+
+function fmtMB(bytes) {
+  const mb = bytes / MB;
+  if (mb >= 100) return mb.toFixed(0);
+  if (mb >= 10) return mb.toFixed(1);
+  return mb.toFixed(2);
+}
+
+function esc(value) {
+  return String(value).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+function el(tag, className, html) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (html != null) node.innerHTML = html;
+  return node;
+}
+
+// Copy text to the clipboard (clipboard API, with a textarea fallback for
+// non-secure contexts) and briefly flash the button so the click is felt.
+function copyText(text, btn) {
+  const done = () => {
+    const old = btn.textContent;
+    btn.textContent = "Copied!";
+    btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = old; btn.classList.remove("copied"); }, 1100);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, done) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); done(); } catch (e) { /* ignore */ }
+  ta.remove();
+}
+
+// --- a widget view -----------------------------------------------------
+
+// What one view of a widget keeps between draws. `cmd` sends a command to
+// Python through the synced `_command` trait; the nonce makes a repeated
+// action (e.g. two cancels) still register as a change.
+function newView(model, redraw) {
+  let nonce = 0;
+  return {
+    model,
+    redraw,
+    cmd(action, extra) {
+      model.set("_command", Object.assign({ action, nonce: nonce++ }, extra));
+      model.save_changes();
+    },
+    optimistic: new Set(),  // labels just clicked, before Python confirms
+    versions: {},           // name -> chosen version of a weights family ("" = latest)
+    activeSig: null,        // the running downloads at the last redraw
+  };
+}
+
+// A download is labelled "Name" or "Name@260902", as widget.py names it.
+function labelFor(name, version) {
+  return version ? name + "@" + version : name;
+}
+
+function activeLabels(view) {
+  const labels = new Set(view.optimistic);
+  for (const dl of Object.values(view.model.get("downloads"))) {
+    if (!dl.error) labels.add(dl.label);
+  }
+  return labels;
+}
+
+function startDownload(view, name, version) {
+  view.optimistic.add(labelFor(name, version));
+  view.redraw();
+  view.cmd("download", { name, version });
+}
+
+// `downloads` changed, so Python has confirmed or refused what was clicked.
+// Redraw only if the set of running downloads changed; a byte count changing
+// needs just the toasts.
+function downloadsChanged(view, stack) {
+  view.optimistic.clear();
+  const sig = [...activeLabels(view)].sort().join("|");
+  if (sig !== view.activeSig) {
+    view.activeSig = sig;
+    view.redraw();
+  }
+  drawToasts(stack, view);
+}
+
+// --- download progress -----------------------------------------------
+
+// One toast per entry of `downloads`, drawn into `stack` inside the widget:
+// progress and a cancel button while it runs, the error and a dismiss button
+// once it has failed. The toasts are rebuilt only when that set changes; a
+// byte count is updated in place, so the ✕ button is not rebuilt under the
+// cursor (which was eating cancel clicks).
+function drawToasts(stack, view) {
+  const downloads = view.model.get("downloads");
+  const cancelling = (stack.cancelling ||= new Set());
+  for (const token of cancelling) if (!(token in downloads)) cancelling.delete(token);
+  const sig = Object.keys(downloads)
+    .map((t) => t + (downloads[t].error ? ":e" : cancelling.has(t) ? ":c" : ""))
+    .sort().join("|");
+  if (stack.dataset.sig !== sig) {
+    stack.dataset.sig = sig;
+    stack.innerHTML = "";
+    for (const [token, dl] of Object.entries(downloads)) {
+      const toast = el("div", "emdb-toast"
+        + (dl.error ? " error" : cancelling.has(token) ? " cancelling" : ""));
+      toast.dataset.token = token;
+      toast.innerHTML =
+        `<div class="emdb-toast-row"><span class="emdb-toast-title">`
+        + esc((dl.error ? "Failed: " : "") + dl.label) + `</span>`
+        + `<button class="emdb-x" title="${dl.error ? "Dismiss" : "Cancel download"}">✕</button></div>`
+        + (dl.error
+          ? `<div class="emdb-toast-err">${esc(dl.error)}</div>`
+          : `<div class="emdb-track"><div class="emdb-fill"></div></div><div class="emdb-bytes"></div>`);
+      toast.querySelector(".emdb-x").addEventListener("click", () => {
+        if (dl.error) { view.cmd("dismiss", { token }); return; }
+        // Send the cancel first, so a redraw can't drop it, and keep the button
+        // clickable so a second click re-sends if the first didn't land.
+        view.cmd("cancel", { token });
+        cancelling.add(token);
+        drawToasts(stack, view);
+      });
+      stack.appendChild(toast);
+    }
+  }
+  for (const toast of stack.children) {
+    const dl = downloads[toast.dataset.token];
+    if (dl.error) continue;
+    const pct = cancelling.has(toast.dataset.token) || !(dl.total > 0)
+      ? null : Math.min(100, (100 * dl.done) / dl.total);
+    const fill = toast.querySelector(".emdb-fill");
+    fill.classList.toggle("indet", pct == null);
+    fill.style.width = pct == null ? "32%" : pct + "%";
+    toast.querySelector(".emdb-bytes").textContent =
+      cancelling.has(toast.dataset.token) ? "Cancelling…"
+        : pct == null ? `${fmtMB(dl.done)} MB`
+          : `${fmtMB(dl.done)} / ${fmtMB(dl.total)} MB · ${pct.toFixed(0)}%`;
+  }
+}
+
+// --- tabs and list -----------------------------------------------------
+
+// "All", then a tab per entry of `tabs`; picking one sets `state.tab` and
+// calls `onPick`.
+function fillTabs(tabsEl, tabs, state, onPick) {
+  tabsEl.innerHTML = "";
+  for (const tab of ["All", ...tabs]) {
+    const btn = el("button", "emdb-tab" + (state.tab === tab ? " active" : ""), esc(tab));
+    btn.addEventListener("click", () => {
+      state.tab = tab;
+      fillTabs(tabsEl, tabs, state, onPick);
+      onPick();
+    });
+    tabsEl.appendChild(btn);
+  }
+}
+
+// `drawRow(item)` for each entry of `groups` in `state.tab` that matches
+// `state.search`, under a heading per group in the All view, or `empty`.
+//
+// `item.search` is a lowercased blob of every field (name, description,
+// detector, microscope, tags, authors + affiliations, license, …), so a query
+// like "Carter Francis" matches on author, not just the name.
+// emdatabase.search() matches this same blob by this same rule; matching stays
+// here rather than in the kernel so typing never waits on a round trip.
+function fillList(listEl, groups, state, drawRow, empty) {
+  listEl.innerHTML = "";
+  const terms = state.search.toLowerCase().split(/\s+/);
+  // A dataset with several techniques is in several groups, so the All view
+  // lists it under the first one and skips it after that.
+  const drawn = new Set();
+  for (const group of groups) {
+    if (state.tab !== "All" && group.technique !== state.tab) continue;
+    const items = group.items.filter(
+      (it) => !drawn.has(it.name) && terms.every((term) => it.search.includes(term)));
+    if (!items.length) continue;
+    if (state.tab === "All") {
+      listEl.appendChild(el("div", "emdb-group-head", esc(group.technique)));
+      for (const item of items) drawn.add(item.name);
+    }
+    for (const item of items) listEl.appendChild(drawRow(item));
+  }
+  if (!listEl.children.length) listEl.appendChild(el("div", "emdb-empty", empty));
+}
+
+// --- one catalogue row -------------------------------------------------
+
+// Which version of `item` is shown: "" is latest, and is all a dataset (or a
+// family whose chosen version has gone away) ever has.
+function shownVersion(item, view) {
+  const chosen = view.versions[item.name];
+  return item.versions.some((v) => v.version === chosen) ? chosen : "";
+}
+
+// The download state of one version: an item's own fields describe latest, so
+// the same reads work for the item or for one of its `versions`.
+function versionState(item, version) {
+  if (!version) return item;
+  return item.versions.find((v) => v.version === version) || {};
+}
+
+// `location` names the location a copy was found in; "personal" is the user's
+// own directory.
+function inShared(where) {
+  return where.downloaded && where.location !== "personal";
+}
+
+// A shared copy and your own can both exist; the tooltip names each.
+function sharedTitle(where) {
+  return "from " + where.location + ": " + where.path
+    + (where.user_path ? "\nyour copy: " + where.user_path : "");
+}
+
+function copyRow(text, variant) {
+  const row = el("div", "emdb-copy" + (variant ? " " + variant : ""));
+  row.appendChild(el("code", "emdb-code", esc(text)));
+  const btn = el("button", "emdb-copy-btn", "Copy");
+  btn.addEventListener("click", () => copyText(text, btn));
+  row.appendChild(btn);
+  return row;
+}
+
+// The title and the line under it. A weights family's title has a version
+// picker - `latest`, then the dated snapshots, ● on those on disk - which
+// records the choice in `view.versions` and redraws.
+function drawHead(parent, item, version, view) {
+  const title = el("div", "emdb-d-title", esc(item.name));
+  if (item.kind === "weights") title.appendChild(el("span", "emdb-kind", "weights"));
+  if (item.versions.length) {
+    const select = el("select", "emdb-version");
+    select.title = "Which version to show";
+    for (const value of ["", ...item.versions.map((v) => v.version)]) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = (value || "latest") + (versionState(item, value).downloaded ? " ●" : "");
+      option.selected = value === version;
+      select.appendChild(option);
+    }
+    select.addEventListener("change", () => {
+      view.versions[item.name] = select.value;
+      view.redraw();
+    });
+    title.appendChild(select);
+  }
+  const sub = [item.technique.join(", "), item.size].filter(Boolean).join("  ·  ");
+  parent.append(title, el("div", "emdb-d-sub", esc(sub)));
+}
+
+// The metadata as label/value rows, then any `extra` pairs; empty values are
+// left out.
+function drawMeta(item, extra = []) {
+  const meta = el("div", "emdb-d-meta");
+  const pairs = [
+    ["Detector", item.detector], ["Microscope", item.microscope], ["Voltage", item.voltage],
+    ["Tags", item.tags.join(", ")], ["Authors", item.authors.join(", ")],
+    ["License", item.license], ["File", item.file], ["DOI", item.doi],
+    ["Versions", item.versions.map((v) => v.version).join(", ")],
+    ["Model", item.model_class], ["Framework", item.model_framework],
+    ["quantem", item.model_quantem],
+    ...extra,
+  ];
+  for (const [key, value] of pairs) {
+    if (!value) continue;
+    const kv = el("div", "emdb-kv");
+    kv.appendChild(el("span", "emdb-k", key));
+    kv.appendChild(el("span", "emdb-v", esc(value)));
+    meta.appendChild(kv);
+  }
+  return meta;
+}
+
+// Draw `item` into `parent`: what the browser's details panel and a dataset's
+// card both show. The status, the path and the load snippet follow the version
+// picked. `toasts`, if given, goes under the status line.
+function drawEntry(parent, item, view, toasts) {
+  const version = shownVersion(item, view);
+  const where = versionState(item, version);
+  parent.innerHTML = "";
+  drawHead(parent, item, version, view);
+
+  const status = el("div", "emdb-d-status");
+  const deleteButton = (text, tooltip) => {
+    const del = el("button", "emdb-delete", text);
+    del.title = tooltip;
+    del.addEventListener("click", () => view.cmd("delete", { name: item.name, version }));
+    status.appendChild(del);
+  };
+  if (activeLabels(view).has(labelFor(item.name, version))) {
+    status.appendChild(el("span", "emdb-d-badge", "downloading…"));
+  } else if (inShared(where)) {
+    const label = "● " + where.location + (where.user_path ? " + yours" : "");
+    const badge = el("span", "emdb-d-badge shared", esc(label));
+    badge.title = sharedTitle(where);
+    status.appendChild(badge);
+    if (where.user_path) {
+      deleteButton("Delete yours", "Remove your copy (" + where.user_path + "). The copy in "
+        + where.location + " is untouched.");
+    }
+  } else if (where.downloaded) {
+    status.appendChild(el("span", "emdb-d-badge on", "● downloaded"));
+    deleteButton("Delete", "Remove the downloaded file from disk");
+  } else {
+    const btn = el("button", "emdb-dl", "Download");
+    btn.addEventListener("click", () => startDownload(view, item.name, version));
+    status.appendChild(btn);
+  }
+  parent.appendChild(status);
+  if (toasts) parent.appendChild(toasts);
+
+  const main = el("div", "emdb-d-main");
+  if (item.description) main.appendChild(el("p", "emdb-d-desc", esc(item.description)));
+  main.appendChild(el("div", "emdb-load-label", "Load"));
+  main.appendChild(copyRow(`path = emdatabase.data.${item.name}().download(`
+    + (version ? `version="${version}"` : "") + ")"));
+  if (where.path) main.appendChild(copyRow(where.path, "path"));
+
+  const cols = el("div", "emdb-d-cols");
+  cols.append(main, drawMeta(item));
+  parent.appendChild(cols);
+}
+
+(() => {
+  const root = document.getElementById("root");
+  root.classList.add("emdb");
+  const what = LABEL.toLowerCase();
+  const state = { tab: "All", search: "", selected: null, hovered: null };
+  const view = { versions: {}, redraw: () => drawDetails() };
+  const allItems = DATA.groups.flatMap((g) => g.items);
+
+  const header = el("div", "emdb-header");
+  const top = el("div", "emdb-header-top", `<div class="emdb-brand">${esc(LABEL)}</div>`);
+  top.appendChild(el("div", "emdb-count", `${DATA.n_total} ${what}`));
+  const search = el("input", "emdb-search");
+  search.type = "text";
+  search.placeholder = `Search ${what}…`;
+  search.addEventListener("input", () => { state.search = search.value; drawList(); });
+  header.append(top, search);
+  const tabsEl = el("div", "emdb-tabs");
+  const listEl = el("div", "emdb-list");
+  const detailsEl = el("div", "emdb-details");
+  const body = el("div", "emdb-body");
+  body.append(listEl, detailsEl);
+  root.append(header, tabsEl, body);
+
+  function drawRow(item) {
+    const row = el("div", "emdb-row" + (state.selected === item.name ? " selected" : ""));
+    row.append(el("span", "emdb-glyph off", "•"), el("span", "emdb-name", esc(item.name)),
+      el("span", "emdb-meta", esc(item.size)));
+    row.addEventListener("mouseenter", () => { state.hovered = item.name; drawDetails(); });
+    row.addEventListener("click", () => { state.selected = item.name; drawList(); });
+    return row;
+  }
+
+  function drawList() {
+    fillList(listEl, DATA.groups, state, drawRow, `No ${what} match.`);
+    state.selected ??= allItems[0]?.name;
+    drawDetails();
+  }
+
+  // CamelCase class name -> snake_case variable, e.g. AlNanocrystals -> al_nanocrystals.
+  function toSnake(name) {
+    return name.replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").toLowerCase();
+  }
+
+  function drawDetails() {
+    const item = allItems.find((it) => it.name === (state.hovered || state.selected));
+    if (!item) {
+      detailsEl.innerHTML = `<div class="emdb-details-empty">Hover or select an entry.</div>`;
+      return;
+    }
+    const version = shownVersion(item, view);
+    const pin = versionState(item, version);  // its link, checksum and saved file name
+    detailsEl.innerHTML = "";
+    drawHead(detailsEl, item, version, view);
+    if (item.description) detailsEl.appendChild(el("p", "emdb-d-desc", esc(item.description)));
+    const md5 = item.kind === "weights" ? (version ? pin.checksum : item.latest_checksum) : "";
+    detailsEl.appendChild(drawMeta(item, [["md5", (md5 || "").replace(/^md5:/, "")]]));
+
+    detailsEl.appendChild(el("div", "emdb-load-label", "Load"));
+    const call = version ? `().download(version="${version}")` : "().download()";
+    detailsEl.appendChild(copyRow(item.kind === "weights"
+      ? `import torch\nfrom emdatabase import data\n\npath = data.${item.name}${call}\n`
+        + "checkpoint = torch.load(path, weights_only=True)"
+      : `${toSnake(item.name)} = emdatabase.data.${item.name}()`));
+    const link = el("a", "emdb-dl-anchor");
+    link.href = pin.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    // An archive entry's only link is the zip the file lives inside, so the
+    // label names the archive rather than a file the link does not serve.
+    link.textContent = item.archive
+      ? `⤓ Download ${pin.url.split("/").pop()} (archive holding ${item.archive})`
+      : `⤓ Download ${pin.file}`;
+    const wrap = el("div", "emdb-dl-link");
+    wrap.appendChild(link);
+    detailsEl.appendChild(wrap);
+  }
+
+  fillTabs(tabsEl, TABS, state, drawList);
+  drawList();
+})();
+</script>
+</body></html>
